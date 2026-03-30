@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
-import type { AppData, RoleKey, Section, Project, Provider, Task, AccountMovement, FixedExpense, GlobalMovement, QuoteComparison, Account } from "./types"
+import type { AppData, RoleKey, Section, Project, Provider, Task, AccountMovement, FixedExpense, GlobalMovement, QuoteComparison, Account, VariableExpense, NitiaIncome } from "./types"
 import { SEED_DATA } from "./seed-data"
 import { createClient } from "./supabase/client"
 import { toast } from "sonner"
@@ -64,6 +64,17 @@ interface AppContextType {
   selectQuote: (id: string) => Promise<void>
   toggleQuoteSelection: (id: string) => Promise<void>
 
+  // Personal Finance
+  addPersonalFinanceVariable: (partner: RoleKey, expense: VariableExpense) => Promise<void>
+  updatePersonalFinanceVariable: (id: string, updates: Partial<VariableExpense>) => Promise<void>
+  deletePersonalFinanceVariable: (id: string) => Promise<void>
+  addPersonalFinanceFixed: (partner: RoleKey, expense: FixedExpense) => Promise<void>
+  updatePersonalFinanceFixed: (id: string, updates: Partial<FixedExpense>) => Promise<void>
+  deletePersonalFinanceFixed: (id: string) => Promise<void>
+  addPersonalFinanceIncome: (partner: RoleKey, income: NitiaIncome) => Promise<void>
+  updatePersonalFinanceIncome: (id: string, updates: Partial<NitiaIncome>) => Promise<void>
+  deletePersonalFinanceIncome: (id: string) => Promise<void>
+
   // Reload data from DB
   refreshData: () => Promise<void>
 }
@@ -125,10 +136,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadDataFromSupabase = useCallback(async () => {
     setIsLoading(true)
     setLastSyncError(null)
-    
+
     try {
       const supabase = createClient()
-      
+
       // Load all data in parallel
       const [
         projectsRes,
@@ -139,15 +150,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         quoteComparisonsRes,
         fixedCostsRes,
         accountMovementsRes,
+        personalFinanceRes,
       ] = await Promise.all([
         supabase.from("projects").select("*").order("created_at", { ascending: false }),
         supabase.from("providers").select("*").order("name"),
         supabase.from("accounts").select("*"),
-        supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+        supabase.from("task_items").select("*").order("created_at", { ascending: false }),
         supabase.from("global_movements").select("*").order("date", { ascending: false }),
         supabase.from("quote_comparisons").select("*").order("date", { ascending: false }),
         supabase.from("nitia_fixed_costs").select("*"),
         supabase.from("account_movements").select("*").order("date", { ascending: false }),
+        supabase.from("personal_finance_movements").select("*").order("date", { ascending: false }),
       ])
 
       // Check for errors
@@ -160,12 +173,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
         quoteComparisonsRes.error,
         fixedCostsRes.error,
         accountMovementsRes.error,
+        personalFinanceRes.error,
       ].filter(Boolean)
 
       if (errors.length > 0) {
         console.error("Errors loading data:", errors)
         setLastSyncError("Error al cargar datos. Algunos datos pueden estar desactualizados.")
       }
+
+      // Process personal finance data
+      const personalFinanceMovements = (personalFinanceRes.data || []) as Array<any>
+      const personalFinanceByPartner: Record<string, any> = {
+        paula: {
+          fixedExpenses: [],
+          variableExpenses: [],
+          nitiaIncome: [],
+        },
+        cami: {
+          fixedExpenses: [],
+          variableExpenses: [],
+          nitiaIncome: [],
+        },
+      }
+
+      personalFinanceMovements.forEach((movement) => {
+        const partner = movement.owner as "paula" | "cami"
+        if (!partner || !personalFinanceByPartner[partner]) return
+
+        if (movement.type === "egreso" && movement.is_fixed) {
+          personalFinanceByPartner[partner].fixedExpenses.push({
+            id: movement.id,
+            description: movement.description,
+            amount: movement.amount,
+            category: movement.category,
+            active: movement.active,
+          })
+        } else if (movement.type === "egreso") {
+          personalFinanceByPartner[partner].variableExpenses.push({
+            id: movement.id,
+            date: movement.date,
+            description: movement.description,
+            amount: movement.amount,
+            category: movement.category,
+          })
+        } else if (movement.type === "ingreso") {
+          personalFinanceByPartner[partner].nitiaIncome.push({
+            id: movement.id,
+            date: movement.date,
+            description: movement.description,
+            amount: movement.amount,
+            note: movement.note || "",
+          })
+        }
+      })
 
       setData(prev => ({
         ...prev,
@@ -177,6 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         quoteComparisons: (quoteComparisonsRes.data || []) as QuoteComparison[],
         nitiaFixedCosts: (fixedCostsRes.data || []) as FixedExpense[],
         accountMovements: (accountMovementsRes.data || []) as AccountMovement[],
+        personalFinance: personalFinanceByPartner as any,
       }))
 
     } catch (error) {
@@ -471,7 +532,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsSyncing(true)
     try {
       const supabase = createClient()
-      const { error } = await supabase.from("tasks").insert(task)
+      const { error } = await supabase.from("task_items").insert(task)
       
       if (error) {
         console.error("Error adding task:", error)
@@ -501,7 +562,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsSyncing(true)
     try {
       const supabase = createClient()
-      const { error } = await supabase.from("tasks").update(updates).eq("id", id)
+      const { error } = await supabase.from("task_items").update(updates).eq("id", id)
       
       if (error) {
         console.error("Error updating task:", error)
@@ -531,7 +592,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsSyncing(true)
     try {
       const supabase = createClient()
-      const { error } = await supabase.from("tasks").delete().eq("id", id)
+      const { error } = await supabase.from("task_items").delete().eq("id", id)
       
       if (error) {
         console.error("Error deleting task:", error)
@@ -563,7 +624,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsSyncing(true)
     try {
       const supabase = createClient()
-      const { error } = await supabase.from("tasks").delete().in("id", ids)
+      const { error } = await supabase.from("task_items").delete().in("id", ids)
       
       if (error) {
         console.error("Error deleting tasks:", error)
@@ -1179,6 +1240,493 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [data.quoteComparisons])
 
+  // ==================== PERSONAL FINANCE ====================
+  const addPersonalFinanceVariable = useCallback(async (partner: RoleKey, expense: VariableExpense) => {
+    setData((prev) => ({
+      ...prev,
+      personalFinance: {
+        ...prev.personalFinance,
+        [partner]: {
+          ...prev.personalFinance[partner as "paula" | "cami"],
+          variableExpenses: [expense, ...prev.personalFinance[partner as "paula" | "cami"].variableExpenses],
+        },
+      },
+    }))
+
+    setIsSyncing(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("personal_finance_movements").insert({
+        id: expense.id,
+        owner: partner,
+        type: "egreso",
+        is_fixed: false,
+        category: expense.category,
+        description: expense.description,
+        amount: expense.amount,
+        date: expense.date,
+        active: true,
+        note: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+
+      if (error) {
+        console.error("Error adding variable expense:", error)
+        setData((prev) => ({
+          ...prev,
+          personalFinance: {
+            ...prev.personalFinance,
+            [partner]: {
+              ...prev.personalFinance[partner as "paula" | "cami"],
+              variableExpenses: prev.personalFinance[partner as "paula" | "cami"].variableExpenses.filter(
+                (e) => e.id !== expense.id
+              ),
+            },
+          },
+        }))
+        toast.error("Error al agregar gasto variable.")
+      } else {
+        toast.success("Gasto variable agregado")
+      }
+    } catch (error) {
+      console.error("Error adding variable expense:", error)
+      toast.error("Error de conexión.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [])
+
+  const updatePersonalFinanceVariable = useCallback(async (id: string, updates: Partial<VariableExpense>) => {
+    const previousData = data.personalFinance.paula.variableExpenses.find((e) => e.id === id) ||
+      data.personalFinance.cami.variableExpenses.find((e) => e.id === id)
+
+    // Find which partner owns this expense
+    let partner: "paula" | "cami" = "paula"
+    if (data.personalFinance.cami.variableExpenses.find((e) => e.id === id)) {
+      partner = "cami"
+    }
+
+    setData((prev) => ({
+      ...prev,
+      personalFinance: {
+        ...prev.personalFinance,
+        [partner]: {
+          ...prev.personalFinance[partner],
+          variableExpenses: prev.personalFinance[partner].variableExpenses.map((e) =>
+            e.id === id ? { ...e, ...updates } : e
+          ),
+        },
+      },
+    }))
+
+    setIsSyncing(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("personal_finance_movements").update(updates).eq("id", id)
+
+      if (error) {
+        console.error("Error updating variable expense:", error)
+        if (previousData) {
+          setData((prev) => ({
+            ...prev,
+            personalFinance: {
+              ...prev.personalFinance,
+              [partner]: {
+                ...prev.personalFinance[partner],
+                variableExpenses: prev.personalFinance[partner].variableExpenses.map((e) =>
+                  e.id === id ? previousData : e
+                ),
+              },
+            },
+          }))
+        }
+        toast.error("Error al actualizar gasto variable.")
+      }
+    } catch (error) {
+      console.error("Error updating variable expense:", error)
+      toast.error("Error de conexión.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [data.personalFinance])
+
+  const deletePersonalFinanceVariable = useCallback(async (id: string) => {
+    // Find which partner owns this expense
+    let partner: "paula" | "cami" = "paula"
+    const previousExpense = data.personalFinance.paula.variableExpenses.find((e) => e.id === id)
+    if (!previousExpense && data.personalFinance.cami.variableExpenses.find((e) => e.id === id)) {
+      partner = "cami"
+    }
+
+    const actualPreviousExpense = previousExpense || data.personalFinance.cami.variableExpenses.find((e) => e.id === id)
+
+    setData((prev) => ({
+      ...prev,
+      personalFinance: {
+        ...prev.personalFinance,
+        [partner]: {
+          ...prev.personalFinance[partner],
+          variableExpenses: prev.personalFinance[partner].variableExpenses.filter((e) => e.id !== id),
+        },
+      },
+    }))
+
+    setIsSyncing(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("personal_finance_movements").delete().eq("id", id)
+
+      if (error) {
+        console.error("Error deleting variable expense:", error)
+        if (actualPreviousExpense) {
+          setData((prev) => ({
+            ...prev,
+            personalFinance: {
+              ...prev.personalFinance,
+              [partner]: {
+                ...prev.personalFinance[partner],
+                variableExpenses: [...prev.personalFinance[partner].variableExpenses, actualPreviousExpense],
+              },
+            },
+          }))
+        }
+        toast.error("Error al eliminar gasto variable.")
+      } else {
+        toast.success("Gasto variable eliminado")
+      }
+    } catch (error) {
+      console.error("Error deleting variable expense:", error)
+      toast.error("Error de conexión.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [data.personalFinance])
+
+  const addPersonalFinanceFixed = useCallback(async (partner: RoleKey, expense: FixedExpense) => {
+    setData((prev) => ({
+      ...prev,
+      personalFinance: {
+        ...prev.personalFinance,
+        [partner]: {
+          ...prev.personalFinance[partner as "paula" | "cami"],
+          fixedExpenses: [expense, ...prev.personalFinance[partner as "paula" | "cami"].fixedExpenses],
+        },
+      },
+    }))
+
+    setIsSyncing(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("personal_finance_movements").insert({
+        id: expense.id,
+        owner: partner,
+        type: "egreso",
+        is_fixed: true,
+        category: expense.category,
+        description: expense.description,
+        amount: expense.amount,
+        date: new Date().toISOString().split("T")[0],
+        active: expense.active,
+        note: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+
+      if (error) {
+        console.error("Error adding fixed expense:", error)
+        setData((prev) => ({
+          ...prev,
+          personalFinance: {
+            ...prev.personalFinance,
+            [partner]: {
+              ...prev.personalFinance[partner as "paula" | "cami"],
+              fixedExpenses: prev.personalFinance[partner as "paula" | "cami"].fixedExpenses.filter(
+                (e) => e.id !== expense.id
+              ),
+            },
+          },
+        }))
+        toast.error("Error al agregar gasto fijo.")
+      } else {
+        toast.success("Gasto fijo agregado")
+      }
+    } catch (error) {
+      console.error("Error adding fixed expense:", error)
+      toast.error("Error de conexión.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [])
+
+  const updatePersonalFinanceFixed = useCallback(async (id: string, updates: Partial<FixedExpense>) => {
+    const previousData = data.personalFinance.paula.fixedExpenses.find((e) => e.id === id) ||
+      data.personalFinance.cami.fixedExpenses.find((e) => e.id === id)
+
+    // Find which partner owns this expense
+    let partner: "paula" | "cami" = "paula"
+    if (data.personalFinance.cami.fixedExpenses.find((e) => e.id === id)) {
+      partner = "cami"
+    }
+
+    setData((prev) => ({
+      ...prev,
+      personalFinance: {
+        ...prev.personalFinance,
+        [partner]: {
+          ...prev.personalFinance[partner],
+          fixedExpenses: prev.personalFinance[partner].fixedExpenses.map((e) =>
+            e.id === id ? { ...e, ...updates } : e
+          ),
+        },
+      },
+    }))
+
+    setIsSyncing(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("personal_finance_movements").update(updates).eq("id", id)
+
+      if (error) {
+        console.error("Error updating fixed expense:", error)
+        if (previousData) {
+          setData((prev) => ({
+            ...prev,
+            personalFinance: {
+              ...prev.personalFinance,
+              [partner]: {
+                ...prev.personalFinance[partner],
+                fixedExpenses: prev.personalFinance[partner].fixedExpenses.map((e) =>
+                  e.id === id ? previousData : e
+                ),
+              },
+            },
+          }))
+        }
+        toast.error("Error al actualizar gasto fijo.")
+      }
+    } catch (error) {
+      console.error("Error updating fixed expense:", error)
+      toast.error("Error de conexión.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [data.personalFinance])
+
+  const deletePersonalFinanceFixed = useCallback(async (id: string) => {
+    // Find which partner owns this expense
+    let partner: "paula" | "cami" = "paula"
+    const previousExpense = data.personalFinance.paula.fixedExpenses.find((e) => e.id === id)
+    if (!previousExpense && data.personalFinance.cami.fixedExpenses.find((e) => e.id === id)) {
+      partner = "cami"
+    }
+
+    const actualPreviousExpense = previousExpense || data.personalFinance.cami.fixedExpenses.find((e) => e.id === id)
+
+    setData((prev) => ({
+      ...prev,
+      personalFinance: {
+        ...prev.personalFinance,
+        [partner]: {
+          ...prev.personalFinance[partner],
+          fixedExpenses: prev.personalFinance[partner].fixedExpenses.filter((e) => e.id !== id),
+        },
+      },
+    }))
+
+    setIsSyncing(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("personal_finance_movements").delete().eq("id", id)
+
+      if (error) {
+        console.error("Error deleting fixed expense:", error)
+        if (actualPreviousExpense) {
+          setData((prev) => ({
+            ...prev,
+            personalFinance: {
+              ...prev.personalFinance,
+              [partner]: {
+                ...prev.personalFinance[partner],
+                fixedExpenses: [...prev.personalFinance[partner].fixedExpenses, actualPreviousExpense],
+              },
+            },
+          }))
+        }
+        toast.error("Error al eliminar gasto fijo.")
+      } else {
+        toast.success("Gasto fijo eliminado")
+      }
+    } catch (error) {
+      console.error("Error deleting fixed expense:", error)
+      toast.error("Error de conexión.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [data.personalFinance])
+
+  const addPersonalFinanceIncome = useCallback(async (partner: RoleKey, income: NitiaIncome) => {
+    setData((prev) => ({
+      ...prev,
+      personalFinance: {
+        ...prev.personalFinance,
+        [partner]: {
+          ...prev.personalFinance[partner as "paula" | "cami"],
+          nitiaIncome: [income, ...prev.personalFinance[partner as "paula" | "cami"].nitiaIncome],
+        },
+      },
+    }))
+
+    setIsSyncing(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("personal_finance_movements").insert({
+        id: income.id,
+        owner: partner,
+        type: "ingreso",
+        is_fixed: false,
+        category: "Ingreso",
+        description: income.description,
+        amount: income.amount,
+        date: income.date,
+        active: true,
+        note: income.note,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+
+      if (error) {
+        console.error("Error adding income:", error)
+        setData((prev) => ({
+          ...prev,
+          personalFinance: {
+            ...prev.personalFinance,
+            [partner]: {
+              ...prev.personalFinance[partner as "paula" | "cami"],
+              nitiaIncome: prev.personalFinance[partner as "paula" | "cami"].nitiaIncome.filter(
+                (i) => i.id !== income.id
+              ),
+            },
+          },
+        }))
+        toast.error("Error al agregar ingreso.")
+      } else {
+        toast.success("Ingreso agregado")
+      }
+    } catch (error) {
+      console.error("Error adding income:", error)
+      toast.error("Error de conexión.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [])
+
+  const updatePersonalFinanceIncome = useCallback(async (id: string, updates: Partial<NitiaIncome>) => {
+    const previousData = data.personalFinance.paula.nitiaIncome.find((i) => i.id === id) ||
+      data.personalFinance.cami.nitiaIncome.find((i) => i.id === id)
+
+    // Find which partner owns this income
+    let partner: "paula" | "cami" = "paula"
+    if (data.personalFinance.cami.nitiaIncome.find((i) => i.id === id)) {
+      partner = "cami"
+    }
+
+    setData((prev) => ({
+      ...prev,
+      personalFinance: {
+        ...prev.personalFinance,
+        [partner]: {
+          ...prev.personalFinance[partner],
+          nitiaIncome: prev.personalFinance[partner].nitiaIncome.map((i) =>
+            i.id === id ? { ...i, ...updates } : i
+          ),
+        },
+      },
+    }))
+
+    setIsSyncing(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("personal_finance_movements").update(updates).eq("id", id)
+
+      if (error) {
+        console.error("Error updating income:", error)
+        if (previousData) {
+          setData((prev) => ({
+            ...prev,
+            personalFinance: {
+              ...prev.personalFinance,
+              [partner]: {
+                ...prev.personalFinance[partner],
+                nitiaIncome: prev.personalFinance[partner].nitiaIncome.map((i) =>
+                  i.id === id ? previousData : i
+                ),
+              },
+            },
+          }))
+        }
+        toast.error("Error al actualizar ingreso.")
+      }
+    } catch (error) {
+      console.error("Error updating income:", error)
+      toast.error("Error de conexión.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [data.personalFinance])
+
+  const deletePersonalFinanceIncome = useCallback(async (id: string) => {
+    // Find which partner owns this income
+    let partner: "paula" | "cami" = "paula"
+    const previousIncome = data.personalFinance.paula.nitiaIncome.find((i) => i.id === id)
+    if (!previousIncome && data.personalFinance.cami.nitiaIncome.find((i) => i.id === id)) {
+      partner = "cami"
+    }
+
+    const actualPreviousIncome = previousIncome || data.personalFinance.cami.nitiaIncome.find((i) => i.id === id)
+
+    setData((prev) => ({
+      ...prev,
+      personalFinance: {
+        ...prev.personalFinance,
+        [partner]: {
+          ...prev.personalFinance[partner],
+          nitiaIncome: prev.personalFinance[partner].nitiaIncome.filter((i) => i.id !== id),
+        },
+      },
+    }))
+
+    setIsSyncing(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("personal_finance_movements").delete().eq("id", id)
+
+      if (error) {
+        console.error("Error deleting income:", error)
+        if (actualPreviousIncome) {
+          setData((prev) => ({
+            ...prev,
+            personalFinance: {
+              ...prev.personalFinance,
+              [partner]: {
+                ...prev.personalFinance[partner],
+                nitiaIncome: [...prev.personalFinance[partner].nitiaIncome, actualPreviousIncome],
+              },
+            },
+          }))
+        }
+        toast.error("Error al eliminar ingreso.")
+      } else {
+        toast.success("Ingreso eliminado")
+      }
+    } catch (error) {
+      console.error("Error deleting income:", error)
+      toast.error("Error de conexión.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [data.personalFinance])
+
   return (
     <AppContext.Provider
       value={{
@@ -1225,6 +1773,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteQuoteComparisons,
         selectQuote,
         toggleQuoteSelection,
+        addPersonalFinanceVariable,
+        updatePersonalFinanceVariable,
+        deletePersonalFinanceVariable,
+        addPersonalFinanceFixed,
+        updatePersonalFinanceFixed,
+        deletePersonalFinanceFixed,
+        addPersonalFinanceIncome,
+        updatePersonalFinanceIncome,
+        deletePersonalFinanceIncome,
         refreshData,
       }}
     >
