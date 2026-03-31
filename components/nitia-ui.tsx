@@ -240,7 +240,7 @@ export function Stat({ label, value, change, changeType }: StatProps) {
       <p className="text-2xl font-bold text-foreground">{value}</p>
       {change && (
         <p className={cn("text-xs mt-2", changeType === "up" ? "text-green-600" : "text-red-600")}>
-          {changeType === "up" ? "↑" : "↓"} {change}
+          {changeType === "up" ? "â" : "â"} {change}
         </p>
       )}
     </div>
@@ -311,8 +311,8 @@ export function PeriodFilter({ value, onChange }: PeriodFilterProps) {
     { label: "Hoy", value: "hoy" },
     { label: "Esta semana", value: "semana" },
     { label: "Este mes", value: "mes" },
-    { label: "Últimos 3 meses", value: "3meses" },
-    { label: "Este año", value: "ano" },
+    { label: "Ãltimos 3 meses", value: "3meses" },
+    { label: "Este aÃ±o", value: "ano" },
     { label: "Todos", value: "all" },
   ]
 
@@ -409,6 +409,7 @@ export function BulkActionsBar({ selectedCount, onDelete, onClearSelection }: Bu
 
 // Confirm Delete Modal
 interface ConfirmDeleteModalProps {
+  isOpen?: boolean
   title?: string
   message: string
   itemCount?: number
@@ -418,13 +419,16 @@ interface ConfirmDeleteModalProps {
 }
 
 export function ConfirmDeleteModal({
-  title = "Confirmar eliminación",
+  isOpen = true,
+  title = "Confirmar eliminaciÃ³n",
   message,
   itemCount,
   onConfirm,
   onCancel,
   isLoading = false,
 }: ConfirmDeleteModalProps) {
+  if (!isOpen) return null
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
@@ -432,7 +436,7 @@ export function ConfirmDeleteModal({
         <p className="text-sm text-[#76746A] mb-6">
           {message}
           {itemCount && itemCount > 1 && (
-            <span className="block mt-2 font-medium text-[#DC2626]">Se eliminarán {itemCount} elementos.</span>
+            <span className="block mt-2 font-medium text-[#DC2626]">Se eliminarÃ¡n {itemCount} elementos.</span>
           )}
         </p>
 
