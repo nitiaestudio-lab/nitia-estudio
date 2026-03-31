@@ -878,7 +878,7 @@ function NewProjectModal({
   }
 
   return (
-    <Modal title="Nuevo Proyecto" onClose={onClose}>
+    <Modal isOpen={true} title="Nuevo Proyecto" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormInput label="Nombre del proyecto" value={name} onChange={setName} />
         <FormInput label="Cliente" value={client} onChange={setClient} />
@@ -1155,7 +1155,7 @@ function NewMovementModal({
   }
 
   return (
-    <Modal title="Nuevo Movimiento" onClose={onClose}>
+    <Modal isOpen={true} title="Nuevo Movimiento" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Fecha" type="date" value={date} onChange={setDate} />
@@ -1362,7 +1362,7 @@ function AddFileModal({
   }
   
   return (
-    <Modal title="Adjuntar Archivo" onClose={onClose}>
+    <Modal isOpen={true} title="Adjuntar Archivo" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* File Input */}
         <div>
@@ -1505,7 +1505,7 @@ function EditProjectModal({
   }
 
   return (
-    <Modal title="Editar Proyecto" onClose={onClose}>
+    <Modal isOpen={true} title="Editar Proyecto" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormInput label="Nombre del proyecto" value={name} onChange={setName} />
         
@@ -1611,7 +1611,7 @@ function AddDesgloseItemModal({
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal isOpen={true} title={title} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormInput
           label="Descripcion"
@@ -1721,7 +1721,7 @@ function AddProjectQuoteModal({
   }
 
   return (
-    <Modal title="Nueva Cotizacion" onClose={onClose}>
+    <Modal isOpen={true} title="Nueva Cotizacion" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <FormSelect
@@ -1817,7 +1817,7 @@ function AddProjectTaskModal({
   }
 
   return (
-    <Modal title="Nueva Tarea" onClose={onClose}>
+    <Modal isOpen={true} title="Nueva Tarea" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormInput
           label="Titulo de la tarea"
