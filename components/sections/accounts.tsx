@@ -35,7 +35,7 @@ export function Accounts() {
   const sortedMovements = [...filteredMovements]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  // Hook de selección masiva
+  // Hook de selecciÃ³n masiva
   const selection = useSelection({ items: sortedMovements })
 
   const getAccountName = (id: string) => {
@@ -67,7 +67,7 @@ export function Accounts() {
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Cuentas</h1>
           <p className="text-sm text-[#76746A] mt-1">
-            Gestión de cuentas y movimientos del estudio
+            GestiÃ³n de cuentas y movimientos del estudio
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-end gap-3">
@@ -139,11 +139,11 @@ export function Accounts() {
         </div>
       </div>
 
-      {/* Búsqueda */}
+      {/* BÃºsqueda */}
       <SearchInput
         value={searchQuery}
         onChange={setSearchQuery}
-        placeholder="Buscar movimientos por descripción o categoría..."
+        placeholder="Buscar movimientos por descripciÃ³n o categorÃ­a..."
         className="max-w-md"
       />
 
@@ -164,9 +164,9 @@ export function Accounts() {
                   />
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">Fecha</th>
-                <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">Descripción</th>
+                <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">DescripciÃ³n</th>
                 <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">Cuenta</th>
-                <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">Categoría</th>
+                <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">CategorÃ­a</th>
                 <th className="px-4 py-3 text-right font-medium text-[#1C1A12]">Importe</th>
                 <th className="px-4 py-3 w-10"></th>
               </tr>
@@ -204,12 +204,12 @@ export function Accounts() {
                       <InlineEditField
                         value={mov.description}
                         onSave={async (value) => {
-                          // Actualizar descripción del movimiento
+                          // Actualizar descripciÃ³n del movimiento
                           const updated = { ...mov, description: String(value) }
                           await deleteAccountMovement(mov.id)
                           await addAccountMovement(updated)
                         }}
-                        fieldName="descripción"
+                        fieldName="descripciÃ³n"
                       />
                     </div>
                   </td>
@@ -244,13 +244,13 @@ export function Accounts() {
         {sortedMovements.length === 0 && (
           <Empty
             title="Sin movimientos"
-            description={searchQuery ? "Intenta con otra búsqueda" : "Registra tu primer movimiento"}
+            description={searchQuery ? "Intenta con otra bÃºsqueda" : "Registra tu primer movimiento"}
             action={!searchQuery && <Btn onClick={() => setShowNewMovement(true)}>Agregar</Btn>}
           />
         )}
       </div>
 
-      {/* Barra de selección masiva */}
+      {/* Barra de selecciÃ³n masiva */}
       <SelectionBar
         selectedCount={selection.selectedCount}
         onDelete={handleDeleteSelected}
@@ -306,7 +306,7 @@ function AccountMovementModal({
   }
 
   return (
-    <Modal title="Nuevo Movimiento" onClose={onClose}>
+    <Modal isOpen={true} title="Nuevo Movimiento" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormSelect
           label="Cuenta"
