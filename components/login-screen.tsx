@@ -569,7 +569,9 @@ export function LoginScreen() {
                     setShow2FAPrompt(false)
                     setTotp2FACode("")
                     setPendingRole(null)
+                    setPin("")
                     setError("")
+                    setIsLoading(false)
                   }}
                   className="flex-1 py-3 rounded-xl bg-[#F7F5ED] text-[#5F5A46] text-sm font-semibold uppercase tracking-wide hover:bg-[#E0DDD0]"
                   disabled={isLoading}
