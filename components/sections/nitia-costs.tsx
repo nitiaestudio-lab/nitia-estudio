@@ -209,7 +209,7 @@ function CostModal({
   }
 
   return (
-    <Modal title={cost ? "Editar Costo" : "Nuevo Costo"} onClose={onClose}>
+    <Modal isOpen={true} title={cost ? "Editar Costo" : "Nuevo Costo"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormInput label="Descripcion" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-4">
