@@ -652,7 +652,7 @@ function DocumentModal({
   }
 
   return (
-    <Modal title="Adjuntar Documento" onClose={onClose}>
+    <Modal isOpen={true} title="Adjuntar Documento" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* File Input */}
         <div>
@@ -832,7 +832,7 @@ function ProviderModal({
   }
 
   return (
-    <Modal title={provider ? "Editar Proveedor" : "Nuevo Proveedor"} onClose={onClose}>
+    <Modal isOpen={true} title={provider ? "Editar Proveedor" : "Nuevo Proveedor"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormInput label="Nombre" value={name} onChange={setName} required />
         <div className="grid grid-cols-2 gap-4">
@@ -942,7 +942,7 @@ function PaymentModal({
   const projects = data.projects.filter((p) => provider.projectIds.includes(p.id))
 
   return (
-    <Modal title="Registrar Pago" onClose={onClose}>
+    <Modal isOpen={true} title="Registrar Pago" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormSelect
           label="Proyecto"
