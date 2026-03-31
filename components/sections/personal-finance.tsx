@@ -23,7 +23,7 @@ export function PersonalFinance() {
     addPersonalFinanceIncome, updatePersonalFinanceIncome, deletePersonalFinanceIncome } = useApp()
   const partner = partnerKey(role)
   const [activeTab, setActiveTab] = useState<"paula" | "cami">(partner ?? "paula")
-  const [period, setPeriod] = useState<PeriodValue>("month")
+  const [period, setPeriod] = useState<PeriodValue>("hoy")
 
   // Dialog states
   const [showFixedDialog, setShowFixedDialog] = useState(false)
