@@ -1,4 +1,4 @@
-// Nitia Estudio - Types v2.0
+// Nitia Estudio - Types v3.0
 
 export type RoleKey = string
 
@@ -39,6 +39,11 @@ export interface Project {
   margin?: number
   honorarios_cost?: number
   honorarios_client_price?: number
+  iva_cliente_pct?: number
+  iva_ganancia_pct?: number
+  sena_proveedor_pct?: number
+  sena_cliente_pct?: number
+  partner_count?: number
   notes?: string | null
   created_at?: string
   updated_at?: string
@@ -186,6 +191,7 @@ export interface QuoteComparison {
   project_id?: string | null
   category: string
   item: string
+  type: 'mano_de_obra' | 'material' | 'mobiliario'
   provider_id?: string | null
   provider_name: string
   cost: number
@@ -194,6 +200,7 @@ export interface QuoteComparison {
   ganancia_x14: number
   ganancia_x16: number
   selected: boolean
+  selected_multiplier?: number | null
 }
 
 export interface AppData {
