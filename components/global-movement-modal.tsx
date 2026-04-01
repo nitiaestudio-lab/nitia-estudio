@@ -3,11 +3,11 @@
 import { useState } from "react"
 import { useApp } from "@/lib/app-context"
 import { generateId, today } from "@/lib/helpers"
-import { Modal, FormInput, FormSelect, Btn } from "@/components/nitia-ui"
+import { Modal, FormInput, FormSelect, Btn, EditableSelect } from "@/components/nitia-ui"
 import type { Movement } from "@/lib/types"
 
 export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
-  const { data, addMovement } = useApp()
+  const { data, addMovement, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [date, setDate] = useState(today())
   const [description, setDescription] = useState("")
   const [amount, setAmount] = useState("")
@@ -26,7 +26,8 @@ export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
       amount: parseFloat(amount), type, category: category || null,
       account_id: accountId || null, project_id: projectId || null,
       provider_id: providerId || null, medio_pago: medioPago || null,
-      auto_split: autoSplit, split_percentage: 50,
+      auto_split: type === "ingreso" ? autoSplit : false,
+      split_percentage: 50,
       created_at: new Date().toISOString(),
     }
     await addMovement(movement)
@@ -36,45 +37,35 @@ export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal isOpen={true} title="Nuevo Movimiento" onClose={onClose} size="lg">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <FormInput label="Fecha" type="date" value={date} onChange={setDate} />
           <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)}
             options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} />
         </div>
-        <FormInput label={`Descripción`} value={description} onChange={setDescription} />
-        <div className="grid grid-cols-2 gap-4">
+        <FormInput label="Descripción" value={description} onChange={setDescription} />
+        <div className="grid grid-cols-2 gap-3">
           <FormInput label="Monto" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
           <FormSelect label="Cuenta" value={accountId} onChange={setAccountId}
-            options={data.accounts.map(a => ({ value: a.id, label: a.name }))} />
+            options={data.accounts.map(a => ({ value: a.id, label: `${a.name}${a.type === "dolares" ? " (U$D)" : ""}` }))} />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <FormSelect label={`Categoría`} value={category} onChange={setCategory}
-            options={[
-              { value: "Proyecto", label: "Proyecto" }, { value: "Honorarios", label: "Honorarios" },
-              { value: "Proveedor", label: "Proveedor" }, { value: "Gastos fijos", label: "Gastos fijos" },
-              { value: "Varios", label: "Varios" },
-            ]} />
+        <div className="grid grid-cols-2 gap-3">
+          <EditableSelect label="Categoría" value={category} onChange={setCategory}
+            options={getCategoriesFor("movimiento_cuenta").map(c => ({ value: c.name, label: c.name }))}
+            onAddNew={n => addCategory("movimiento_cuenta", n)} onDelete={deleteCategory} />
           <FormSelect label="Medio de pago" value={medioPago} onChange={setMedioPago}
-            options={[
-              { value: "efectivo", label: "Efectivo" }, { value: "transferencia", label: "Transferencia" },
-              { value: "cheque", label: "Cheque" }, { value: "tarjeta", label: "Tarjeta" },
-              { value: "mercadopago", label: "Mercado Pago" },
-            ]} />
+            options={[{ value: "", label: "—" }, { value: "efectivo", label: "Efectivo" }, { value: "transferencia", label: "Transferencia" },
+              { value: "cheque", label: "Cheque" }, { value: "tarjeta", label: "Tarjeta" }, { value: "mercadopago", label: "Mercado Pago" }]} />
         </div>
-        {category === "Proyecto" && (
-          <FormSelect label="Proyecto" value={projectId} onChange={setProjectId}
-            options={data.projects.map(p => ({ value: p.id, label: p.name }))} />
-        )}
-        {category === "Proveedor" && (
-          <FormSelect label="Proveedor" value={providerId} onChange={setProviderId}
-            options={data.providers.map(p => ({ value: p.id, label: p.name }))} />
-        )}
+        <FormSelect label="Proyecto (opcional)" value={projectId} onChange={setProjectId}
+          options={[{ value: "", label: "Sin proyecto" }, ...data.projects.map(p => ({ value: p.id, label: p.name }))]} />
+        <FormSelect label="Proveedor (opcional)" value={providerId} onChange={setProviderId}
+          options={[{ value: "", label: "Sin proveedor" }, ...data.providers.map(p => ({ value: p.id, label: p.name }))]} />
         {type === "ingreso" && (
           <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg">
             <input type="checkbox" checked={autoSplit} onChange={e => setAutoSplit(e.target.checked)} className="w-4 h-4" />
             <div>
               <p className="text-sm font-medium text-green-800">Distribuir 50/50 a socias</p>
-              <p className="text-xs text-green-600">{`Se calculará en Finanzas Personales`}</p>
+              <p className="text-xs text-green-600">Se calculará en Finanzas Personales</p>
             </div>
           </div>
         )}
