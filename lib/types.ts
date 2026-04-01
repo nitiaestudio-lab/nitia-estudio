@@ -21,6 +21,7 @@ export interface Category {
   name: string
   active: boolean
   sort_order: number
+  has_multiplier?: boolean
 }
 
 export interface Project {

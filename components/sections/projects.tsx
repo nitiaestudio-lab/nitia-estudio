@@ -17,20 +17,17 @@ import {
   Stat, HR, PeriodFilter, type PeriodValue, ConfirmDeleteModal, EditableSelect,
 } from "@/components/nitia-ui"
 import { canSee } from "@/lib/seed-data"
-import type { Project, ProjectItem, ProjectFile, Movement, QuoteComparison } from "@/lib/types"
+import type { Project, ProjectItem, ProjectFile, Movement, QuoteComparison, Category } from "@/lib/types"
 import {
   Plus, ArrowLeft, Trash2, Pencil, Download, Upload, FileText, Check,
   Search, FolderOpen, Eye, Star, X, FileSpreadsheet, ChevronDown, ChevronUp,
+  Lightbulb, ToggleLeft, ToggleRight, TrendingUp, AlertCircle, CheckCircle2,
+  Settings2,
 } from "lucide-react"
 
-// =================== TAB TYPES ===================
 type ProjectTab = "desglose" | "comparador" | "movimientos" | "archivos"
 const TAB_LABELS: Record<ProjectTab, string> = {
   desglose: "Desglose", comparador: "Comparador", movimientos: "Movimientos", archivos: "Archivos",
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  mano_de_obra: "Mano de Obra", material: "Material", mobiliario: "Mobiliario",
 }
 
 // =================== PROJECTS LIST ===================
@@ -39,88 +36,64 @@ export function Projects() {
   const isFull = canSee(role)
   const [showNew, setShowNew] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-
   const projects = data.projects.filter(p =>
     !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.client.toLowerCase().includes(searchQuery.toLowerCase())
   )
-
   if (selectedProjectId) {
     const project = data.projects.find(p => p.id === selectedProjectId)
     if (project) return <ProjectDetail project={project} onBack={() => setSelectedProjectId(null)} isFull={isFull} />
   }
-
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Proyectos</h1>
-          <p className="text-sm text-[#76746A] mt-1">Gestión de proyectos del estudio</p>
-        </div>
+        <div><h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Proyectos</h1>
+        <p className="text-sm text-[#76746A] mt-1">Gestión de proyectos del estudio</p></div>
         <Btn onClick={() => setShowNew(true)}><Plus size={14} className="mr-1 inline" />Nuevo Proyecto</Btn>
       </div>
-
-      <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-        placeholder="Buscar proyectos..." className="max-w-md w-full px-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
-
+      <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar proyectos..." className="max-w-md w-full px-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="Proyectos Activos" value={data.projects.filter(p => p.status === "activo").length} />
         <Stat label="Total Presupuestado" value={formatCurrency(data.projects.reduce((s, p) => s + projectTotalClientPrice(p, data.projectItems, data.quoteComparisons), 0))} highlight />
         <Stat label="Total Cobrado" value={formatCurrency(data.movements.filter(m => m.project_id && m.type === "ingreso").reduce((s, m) => s + m.amount, 0))} />
         <Stat label="Pausados" value={data.projects.filter(p => p.status === "pausado").length} />
       </div>
-
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map(project => {
           const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
           const income = projectIncome(data.movements, project.id)
-          return (
-            <div key={project.id} onClick={() => setSelectedProjectId(project.id)}
-              className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
-                <Tag label={project.status || "activo"} color={project.status === "activo" ? "green" : project.status === "pausado" ? "yellow" : "gray"} />
-              </div>
-              <p className="text-sm text-muted-foreground mb-3">{project.client}</p>
-              {isFull && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Presup: {formatCurrency(totalClient)}</span>
-                  <span className="text-green-600">Cobrado: {formatCurrency(income)}</span>
-                </div>
-              )}
+          return (<div key={project.id} onClick={() => setSelectedProjectId(project.id)}
+            className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
+              <Tag label={project.status || "activo"} color={project.status === "activo" ? "green" : project.status === "pausado" ? "yellow" : "gray"} />
             </div>
-          )
+            <p className="text-sm text-muted-foreground mb-3">{project.client}</p>
+            {isFull && <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Presup: {formatCurrency(totalClient)}</span>
+              <span className="text-green-600">Cobrado: {formatCurrency(income)}</span>
+            </div>}
+          </div>)
         })}
       </div>
-
       {projects.length === 0 && <Empty title="Sin proyectos" description="Creá tu primer proyecto" action={<Btn onClick={() => setShowNew(true)}>Crear</Btn>} />}
-
-      {showNew && <ProjectFormModal onClose={() => setShowNew(false)} onSave={async (p) => {
-        await addRow("projects", p, "projects"); setShowNew(false)
-      }} />}
+      {showNew && <ProjectFormModal onClose={() => setShowNew(false)} onSave={async (p) => { await addRow("projects", p, "projects"); setShowNew(false) }} />}
     </div>
   )
 }
 
 // =================== PROJECT DETAIL ===================
 function ProjectDetail({ project, onBack, isFull }: { project: Project; onBack: () => void; isFull: boolean }) {
-  const { data, updateRow, addRow, deleteRow, addMovement, deleteMovement, uploadFile } = useApp()
+  const { data, updateRow, deleteRow } = useApp()
   const [tab, setTab] = useState<ProjectTab>("desglose")
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteProject, setShowDeleteProject] = useState(false)
-
-  const items = data.projectItems.filter(i => i.project_id === project.id)
-  const selectedQuotes = getSelectedQuotes(data.quoteComparisons, project.id)
-  const totalCost = projectTotalCost(project, data.projectItems, data.quoteComparisons)
   const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
   const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
   const income = projectIncome(data.movements, project.id)
   const expenses = projectExpenses(data.movements, project.id)
-  const partnerCount = project.partner_count ?? 2
-
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <button onClick={onBack} className="p-2 hover:bg-accent rounded-lg self-start"><ArrowLeft size={20} /></button>
         <div className="flex-1 min-w-0">
@@ -135,450 +108,419 @@ function ProjectDetail({ project, onBack, isFull }: { project: Project; onBack: 
           <Btn variant="ghost" size="sm" onClick={() => setShowDeleteProject(true)}><Trash2 size={14} className="text-red-500" /></Btn>
         </div>
       </div>
-
-      {/* Stats */}
-      {isFull && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat label="Presupuesto" value={formatCurrency(totalClient)} />
-          <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />
-          <Stat label="Cobrado" value={formatCurrency(income)} sub={formatCurrency(totalClient - income) + " pendiente"} />
-          <Stat label="Pagado proveedores" value={formatCurrency(expenses)} />
-        </div>
-      )}
-
-      {/* Tabs */}
+      {isFull && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Stat label="Presupuesto" value={formatCurrency(totalClient)} />
+        <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />
+        <Stat label="Cobrado" value={formatCurrency(income)} sub={formatCurrency(totalClient - income) + " pendiente"} />
+        <Stat label="Pagado proveedores" value={formatCurrency(expenses)} />
+      </div>}
       <div className="flex gap-1 overflow-x-auto border-b border-border pb-0">
         {(Object.keys(TAB_LABELS) as ProjectTab[]).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-              tab === t ? "border-[#5F5A46] text-[#1C1A12]" : "border-transparent text-[#76746A] hover:text-[#1C1A12]"
-            }`}>
-            {TAB_LABELS[t]}
-          </button>
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${tab === t ? "border-[#5F5A46] text-[#1C1A12]" : "border-transparent text-[#76746A] hover:text-[#1C1A12]"}`}>{TAB_LABELS[t]}</button>
         ))}
       </div>
-
-      {/* Tab Content */}
-      {tab === "desglose" && <DesgloseTab project={project} items={items} selectedQuotes={selectedQuotes} isFull={isFull} />}
+      {tab === "desglose" && <DesgloseTab project={project} isFull={isFull} />}
       {tab === "comparador" && <ComparadorTab project={project} />}
       {tab === "movimientos" && <MovimientosTab project={project} />}
       {tab === "archivos" && <ArchivosTab project={project} />}
+      {showEdit && <ProjectFormModal project={project} onClose={() => setShowEdit(false)} onSave={async (p) => { await updateRow("projects", project.id, p, "projects"); setShowEdit(false) }} />}
+      {showDeleteProject && <ConfirmDeleteModal message={`¿Eliminar "${project.name}"?`} onConfirm={async () => { await deleteRow("projects", project.id, "projects"); onBack() }} onCancel={() => setShowDeleteProject(false)} />}
+    </div>
+  )
+}
 
-      {/* Modals */}
-      {showEdit && <ProjectFormModal project={project} onClose={() => setShowEdit(false)} onSave={async (p) => {
-        await updateRow("projects", project.id, p, "projects"); setShowEdit(false)
-      }} />}
-      {showDeleteProject && <ConfirmDeleteModal message={`¿Eliminar el proyecto "${project.name}"?`}
-        onConfirm={async () => { await deleteRow("projects", project.id, "projects"); onBack() }}
-        onCancel={() => setShowDeleteProject(false)} />}
+// =================== BALANCE PANEL ===================
+function BalancePanel({ project }: { project: Project }) {
+  const { data } = useApp()
+  const totalCost = projectTotalCost(project, data.projectItems, data.quoteComparisons)
+  const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
+  const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
+  const income = projectIncome(data.movements, project.id)
+  const expenses = projectExpenses(data.movements, project.id)
+  const pc = project.partner_count ?? 2
+  const ivaCli = project.iva_cliente_pct ?? 21
+  const ivaGan = project.iva_ganancia_pct ?? 10.5
+  const sProvPct = project.sena_proveedor_pct ?? 60
+  const sCliPct = project.sena_cliente_pct ?? 50
+
+  const ivaCliente = calcIVACliente(totalClient, ivaCli)
+  const totalConIVA = totalClient + ivaCliente
+  const clienteDebe = totalConIVA - income
+  const provDebe = totalCost - expenses
+  const ivaGanancia = calcIVAGanancia(totalGanancia, ivaGan)
+  const gananciaNeta = totalGanancia - ivaGanancia
+  const gananciaIndiv = calcGananciaIndividual(gananciaNeta, pc)
+  const sProv = calcSenaProveedor(totalCost, sProvPct)
+  const sCli = calcSenaCliente(totalClient, sCliPct)
+  const sCliIVA = sCli + calcIVACliente(sCli, ivaCli)
+
+  const Bar = ({ value, max, color }: { value: number; max: number; color: string }) => {
+    const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
+    const c: Record<string, string> = { green: "bg-green-500", red: "bg-red-500", amber: "bg-amber-500" }
+    return <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${c[color]||c.green}`} style={{ width: `${pct}%` }} /></div>
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          {clienteDebe > 0 ? <AlertCircle size={18} className="text-amber-500" /> : <CheckCircle2 size={18} className="text-green-600" />}
+          <h4 className="font-semibold text-sm">Balance Cliente</h4>
+        </div>
+        <Bar value={income} max={totalConIVA} color={income >= totalConIVA ? "green" : "amber"} />
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div><span className="text-muted-foreground">Total c/IVA:</span> <span className="font-medium">{formatCurrency(totalConIVA)}</span></div>
+          <div><span className="text-muted-foreground">Cobrado:</span> <span className="font-medium text-green-600">{formatCurrency(income)}</span></div>
+        </div>
+        <div className={`text-sm font-bold ${clienteDebe > 0 ? "text-amber-600" : "text-green-600"}`}>
+          {clienteDebe > 0 ? `Cliente debe: ${formatCurrency(clienteDebe)}` : clienteDebe < 0 ? `Cobrado de más: ${formatCurrency(Math.abs(clienteDebe))}` : "Al día ✓"}
+        </div>
+        <div className="border-t border-border pt-2 text-xs text-muted-foreground space-y-1">
+          <div className="flex justify-between"><span>Seña ({sCliPct}% c/IVA):</span><span className="font-medium text-foreground">{formatCurrency(sCliIVA)}</span></div>
+          <div className="flex justify-between"><span>Saldo restante:</span><span className="font-medium text-foreground">{formatCurrency(totalConIVA - sCliIVA)}</span></div>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          {provDebe > 0 ? <AlertCircle size={18} className="text-red-500" /> : <CheckCircle2 size={18} className="text-green-600" />}
+          <h4 className="font-semibold text-sm">Balance Proveedores</h4>
+        </div>
+        <Bar value={expenses} max={totalCost} color={expenses >= totalCost ? "green" : "red"} />
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div><span className="text-muted-foreground">Total costo:</span> <span className="font-medium">{formatCurrency(totalCost)}</span></div>
+          <div><span className="text-muted-foreground">Pagado:</span> <span className="font-medium text-red-600">{formatCurrency(expenses)}</span></div>
+        </div>
+        <div className={`text-sm font-bold ${provDebe > 0 ? "text-red-600" : "text-green-600"}`}>
+          {provDebe > 0 ? `Debemos a proveedores: ${formatCurrency(provDebe)}` : provDebe < 0 ? `Pagado de más: ${formatCurrency(Math.abs(provDebe))}` : "Al día ✓"}
+        </div>
+        <div className="border-t border-border pt-2 text-xs text-muted-foreground space-y-1">
+          <div className="flex justify-between"><span>Seña proveedores ({sProvPct}%):</span><span className="font-medium text-foreground">{formatCurrency(sProv)}</span></div>
+          <div className="flex justify-between"><span>Saldo restante:</span><span className="font-medium text-foreground">{formatCurrency(totalCost - sProv)}</span></div>
+        </div>
+      </div>
+
+      <div className="bg-[#295E29] text-white rounded-xl p-4 space-y-2 lg:col-span-2">
+        <h4 className="font-semibold text-sm text-white/80">Ganancia Neta</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div><p className="text-xs text-white/60">Bruta</p><p className="text-lg font-bold">{formatCurrency(totalGanancia)}</p></div>
+          <div><p className="text-xs text-white/60">IVA {ivaGan}% (RI)</p><p className="text-lg font-bold">-{formatCurrency(ivaGanancia)}</p></div>
+          <div><p className="text-xs text-white/60">Neta</p><p className="text-xl font-bold">{formatCurrency(gananciaNeta)}</p></div>
+          <div><p className="text-xs text-white/60">Por socia (÷{pc})</p><p className="text-xl font-bold">{formatCurrency(gananciaIndiv)}</p></div>
+        </div>
+        <div className="flex justify-between text-xs text-white/50 pt-2 border-t border-white/20">
+          <span>Margen: {totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(1) : 0}%</span>
+          <span>Diferencia seña: {formatCurrency(sCli - sProv)}</span>
+        </div>
+      </div>
     </div>
   )
 }
 
 // =================== TAB: DESGLOSE ===================
-function DesgloseTab({ project, items, selectedQuotes, isFull }: {
-  project: Project; items: ProjectItem[]; selectedQuotes: QuoteComparison[]; isFull: boolean
-}) {
-  const { data, updateRow, addRow, deleteRow, deleteMovement } = useApp()
-  const [showAddItem, setShowAddItem] = useState<"mano_de_obra" | "material" | "mobiliario" | null>(null)
+function DesgloseTab({ project, isFull }: { project: Project; isFull: boolean }) {
+  const { data, updateRow, addRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
+  const [showAddItem, setShowAddItem] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ProjectItem | null>(null)
+  const [showManageSections, setShowManageSections] = useState(false)
+  const [newSectionName, setNewSectionName] = useState("")
+  const [newSectionMult, setNewSectionMult] = useState(true)
 
-  const manoDeObra = items.filter(i => i.type === "mano_de_obra")
-  const materiales = items.filter(i => i.type === "material")
-  const mobiliario = items.filter(i => i.type === "mobiliario")
+  const items = data.projectItems.filter(i => i.project_id === project.id)
+  const selectedQuotes = getSelectedQuotes(data.quoteComparisons, project.id)
+  const itemTypeCats = getCategoriesFor("item_type")
+  const sections = itemTypeCats.length > 0 ? itemTypeCats.sort((a, b) => a.sort_order - b.sort_order)
+    : [{ id: "d1", type: "item_type", name: "Mano de Obra", active: true, sort_order: 1, has_multiplier: true },
+       { id: "d2", type: "item_type", name: "Material", active: true, sort_order: 2, has_multiplier: false },
+       { id: "d3", type: "item_type", name: "Mobiliario", active: true, sort_order: 3, has_multiplier: true }]
 
-  // Quotes selected grouped by type
-  const quoteMano = selectedQuotes.filter(q => q.type === "mano_de_obra")
-  const quoteMat = selectedQuotes.filter(q => q.type === "material")
-  const quoteMob = selectedQuotes.filter(q => q.type === "mobiliario")
-
-  const totalCost = projectTotalCost(project, data.projectItems, data.quoteComparisons)
-  const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
-  const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
-  const partnerCount = project.partner_count ?? 2
-  const ivaClientePct = project.iva_cliente_pct ?? 21
-  const ivaGananciaPct = project.iva_ganancia_pct ?? 10.5
-  const senaProvPct = project.sena_proveedor_pct ?? 60
-  const senaCliPct = project.sena_cliente_pct ?? 50
-
-  const ivaCliente = calcIVACliente(totalClient, ivaClientePct)
-  const ivaGanancia = calcIVAGanancia(totalGanancia, ivaGananciaPct)
-  const senaProveedor = calcSenaProveedor(totalCost, senaProvPct)
-  const senaCliente = calcSenaCliente(totalClient, senaCliPct)
-  const gananciaIndiv = calcGananciaIndividual(totalGanancia, partnerCount)
-
-  const handleExportXLSX = () => {
-    const allItems = items.map(i => ({
-      type: i.type, description: i.description, cost: i.cost,
-      clientPrice: i.client_price, ganancia: i.type === "material" ? 0 : i.client_price - i.cost,
-      provider: data.providers.find(p => p.id === i.provider_id)?.name,
-    }))
-    const allQuotes = selectedQuotes.map(q => ({
-      category: q.category, item: q.item, provider: q.provider_name,
-      cost: q.cost, clientPrice: quoteClientPrice(q), ganancia: quoteGanancia(q),
-    }))
-    const summary = [
-      { label: "Total Costo", value: totalCost },
-      { label: "Total Precio Cliente", value: totalClient },
-      { label: "Total Ganancia", value: totalGanancia },
-      { label: `IVA ${ivaClientePct}% s/Precio Cliente`, value: ivaCliente },
-      { label: `IVA ${ivaGananciaPct}% s/Ganancia (RI)`, value: ivaGanancia },
-      { label: "Precio c/IVA", value: totalClient + ivaCliente },
-      { label: `Seña Proveedor (${senaProvPct}%)`, value: senaProveedor },
-      { label: `Seña Cliente (${senaCliPct}%)`, value: senaCliente },
-      { label: "Diferencia Seña", value: senaCliente - senaProveedor },
-      { label: `Ganancia Individual (÷${partnerCount})`, value: gananciaIndiv },
-    ]
-    exportProjectDesgloseXLSX(project.name, allItems, allQuotes, summary)
+  const handleExport = () => {
+    const tc = projectTotalCost(project, data.projectItems, data.quoteComparisons)
+    const tp = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
+    const tg = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
+    const pc = project.partner_count ?? 2
+    exportProjectDesgloseXLSX(project.name,
+      items.map(i => ({ type: i.type, description: i.description, cost: i.cost, clientPrice: i.client_price, ganancia: i.client_price - i.cost, provider: data.providers.find(p => p.id === i.provider_id)?.name })),
+      selectedQuotes.map(q => ({ category: q.category, item: q.item, provider: q.provider_name, cost: q.cost, clientPrice: quoteClientPrice(q), ganancia: quoteGanancia(q) })),
+      [{ label: "Total Costo", value: tc }, { label: "Precio Cliente", value: tp }, { label: "Ganancia", value: tg }, { label: `Indiv (÷${pc})`, value: tg / pc }])
   }
 
   return (
     <div className="space-y-6">
-      {/* Export button */}
-      <div className="flex justify-end">
-        <Btn variant="soft" size="sm" onClick={handleExportXLSX}>
-          <FileSpreadsheet size={14} className="mr-1 inline" />Exportar XLSX
-        </Btn>
+      {isFull && <BalancePanel project={project} />}
+      <div className="flex items-center justify-between">
+        <Btn variant="soft" size="sm" onClick={() => setShowManageSections(true)}><Settings2 size={14} className="mr-1 inline" />Secciones</Btn>
+        <Btn variant="soft" size="sm" onClick={handleExport}><FileSpreadsheet size={14} className="mr-1 inline" />Exportar XLSX</Btn>
       </div>
 
       {/* Honorarios */}
       <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
         <h4 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Honorarios</h4>
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-muted-foreground">Costo</label>
-            <input type="number" value={project.honorarios_cost || 0}
-              onChange={e => updateRow("projects", project.id, { honorarios_cost: parseFloat(e.target.value) || 0 }, "projects")}
-              className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Precio cliente</label>
-            <input type="number" value={project.honorarios_client_price || 0}
-              onChange={e => updateRow("projects", project.id, { honorarios_client_price: parseFloat(e.target.value) || 0 }, "projects")}
-              className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" />
-          </div>
+          <div><label className="text-xs text-muted-foreground">Costo</label>
+            <input type="number" value={project.honorarios_cost || 0} onChange={e => updateRow("projects", project.id, { honorarios_cost: parseFloat(e.target.value) || 0 }, "projects")} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" /></div>
+          <div><label className="text-xs text-muted-foreground">Precio cliente</label>
+            <input type="number" value={project.honorarios_client_price || 0} onChange={e => updateRow("projects", project.id, { honorarios_client_price: parseFloat(e.target.value) || 0 }, "projects")} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" /></div>
         </div>
       </div>
 
-      {/* Items sections */}
-      {(["mano_de_obra", "material", "mobiliario"] as const).map(type => {
-        const typeItems = items.filter(i => i.type === type)
-        const typeQuotes = selectedQuotes.filter(q => q.type === type)
-        const isMaterial = type === "material"
+      {/* Dynamic Sections */}
+      {sections.map(sec => {
+        const si = items.filter(i => i.type === sec.name)
+        const sq = selectedQuotes.filter(q => q.type === sec.name)
+        const hm = sec.has_multiplier !== false
         return (
-          <div key={type} className="bg-card border border-border rounded-xl p-4 sm:p-6">
+          <div key={sec.id} className="bg-card border border-border rounded-xl p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-semibold text-muted-foreground uppercase">{TYPE_LABELS[type]}</h4>
-              <Btn size="sm" variant="soft" onClick={() => setShowAddItem(type)}>
-                <Plus size={12} className="mr-1 inline" />Agregar
-              </Btn>
+              <div className="flex items-center gap-2"><h4 className="text-sm font-semibold text-muted-foreground uppercase">{sec.name}</h4>
+                {!hm && <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">sin ganancia</span>}
+              </div>
+              <Btn size="sm" variant="soft" onClick={() => setShowAddItem(sec.name)}><Plus size={12} className="mr-1 inline" />Agregar</Btn>
             </div>
-
-            {/* Direct items */}
-            {typeItems.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-xs text-muted-foreground border-b border-border">
-                      <th className="text-left py-2 pr-2">Descripción</th>
-                      <th className="text-right py-2 px-2">Costo</th>
-                      {!isMaterial && <th className="text-right py-2 px-2 hidden sm:table-cell">Mult</th>}
-                      <th className="text-right py-2 px-2">Precio Cli</th>
-                      {!isMaterial && <th className="text-right py-2 px-2 hidden sm:table-cell">Ganancia</th>}
-                      <th className="w-16 py-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {typeItems.map(item => (
-                      <tr key={item.id} className="border-b border-border/50 last:border-0 group">
-                        <td className="py-2 pr-2">
-                          <div className="flex items-center gap-1.5">
-                            {item.paid && <Check size={12} className="text-green-600 shrink-0" />}
-                            <span className={`${item.paid ? "line-through text-muted-foreground" : ""} truncate max-w-[200px]`}>{item.description}</span>
-                          </div>
-                        </td>
-                        <td className="text-right py-2 px-2">{formatCurrency(item.cost)}</td>
-                        {!isMaterial && <td className="text-right py-2 px-2 hidden sm:table-cell text-muted-foreground">x{item.multiplier}</td>}
-                        <td className="text-right py-2 px-2 font-medium">{formatCurrency(item.client_price)}</td>
-                        {!isMaterial && <td className="text-right py-2 px-2 text-green-600 hidden sm:table-cell">{formatCurrency(item.client_price - item.cost)}</td>}
-                        <td className="py-2 text-right">
-                          <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 sm:opacity-100">
-                            <button onClick={() => setEditingItem(item)} className="p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
-                            <button onClick={() => deleteRow("project_items", item.id, "projectItems")}
-                              className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Selected quotes for this type */}
-            {typeQuotes.length > 0 && (
-              <div className="mt-2">
-                <p className="text-xs text-muted-foreground mb-1">Desde Comparador:</p>
-                {typeQuotes.map(q => (
-                  <div key={q.id} className="flex items-center justify-between py-1.5 text-sm border-b border-border/30 last:border-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Star size={12} className="text-amber-500 shrink-0" />
-                      <span className="truncate">{q.item}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">({q.provider_name})</span>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-muted-foreground">{formatCurrency(q.cost)}</span>
-                      <span className="font-medium">{formatCurrency(quoteClientPrice(q))}</span>
-                      {!isMaterial && <span className="text-green-600 hidden sm:inline">{formatCurrency(quoteGanancia(q))}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {typeItems.length === 0 && typeQuotes.length === 0 && (
-              <p className="text-sm text-muted-foreground">Sin ítems</p>
-            )}
-
-            {/* Subtotal */}
-            {(typeItems.length > 0 || typeQuotes.length > 0) && (
-              <div className="flex justify-between pt-3 mt-2 border-t border-border text-sm">
-                <span className="font-semibold text-muted-foreground">Subtotal</span>
-                <span className="font-semibold">
-                  {formatCurrency(
-                    typeItems.reduce((s, i) => s + i.client_price, 0) +
-                    typeQuotes.reduce((s, q) => s + quoteClientPrice(q), 0)
-                  )}
-                </span>
-              </div>
-            )}
+            {si.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-xs text-muted-foreground border-b border-border">
+              <th className="text-left py-2 pr-2">Descripción</th><th className="text-right py-2 px-2">Costo</th>
+              {hm && <th className="text-right py-2 px-2 hidden sm:table-cell">Mult</th>}
+              <th className="text-right py-2 px-2">Precio</th>{hm && <th className="text-right py-2 px-2 hidden sm:table-cell">Ganancia</th>}
+              <th className="w-16 py-2"></th></tr></thead>
+              <tbody>{si.map(item => (
+                <tr key={item.id} className="border-b border-border/50 last:border-0 group">
+                  <td className="py-2 pr-2"><div className="flex items-center gap-1.5">
+                    {item.paid && <Check size={12} className="text-green-600 shrink-0" />}
+                    <span className={`${item.paid ? "line-through text-muted-foreground" : ""} truncate max-w-[200px]`}>{item.description}</span>
+                  </div></td>
+                  <td className="text-right py-2 px-2">{formatCurrency(item.cost)}</td>
+                  {hm && <td className="text-right py-2 px-2 hidden sm:table-cell text-muted-foreground">x{item.multiplier}</td>}
+                  <td className="text-right py-2 px-2 font-medium">{formatCurrency(item.client_price)}</td>
+                  {hm && <td className="text-right py-2 px-2 text-green-600 hidden sm:table-cell">{formatCurrency(item.client_price - item.cost)}</td>}
+                  <td className="py-2 text-right"><div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 sm:opacity-100">
+                    <button onClick={() => setEditingItem(item)} className="p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
+                    <button onClick={() => deleteRow("project_items", item.id, "projectItems")} className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
+                  </div></td>
+                </tr>))}</tbody></table></div>}
+            {sq.length > 0 && <div className="mt-2"><p className="text-xs text-muted-foreground mb-1">Desde Comparador:</p>
+              {sq.map(q => (<div key={q.id} className="flex items-center justify-between py-1.5 text-sm border-b border-border/30 last:border-0">
+                <div className="flex items-center gap-2 min-w-0"><Star size={12} className="text-amber-500 shrink-0" /><span className="truncate">{q.item}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">({q.provider_name})</span></div>
+                <div className="flex items-center gap-3 shrink-0"><span className="text-muted-foreground">{formatCurrency(q.cost)}</span><span className="font-medium">{formatCurrency(quoteClientPrice(q))}</span></div>
+              </div>))}</div>}
+            {si.length === 0 && sq.length === 0 && <p className="text-sm text-muted-foreground">Sin ítems</p>}
+            {(si.length > 0 || sq.length > 0) && <div className="flex justify-between pt-3 mt-2 border-t border-border text-sm">
+              <span className="font-semibold text-muted-foreground">Subtotal</span>
+              <span className="font-semibold">{formatCurrency(si.reduce((s, i) => s + i.client_price, 0) + sq.reduce((s, q) => s + quoteClientPrice(q), 0))}</span>
+            </div>}
           </div>
         )
       })}
 
-      {/* Financial Summary */}
-      {isFull && (
-        <div className="bg-[#F0EDE4] rounded-xl p-4 sm:p-6 space-y-3">
-          <h4 className="text-sm font-semibold uppercase text-[#5F5A46]">Resumen Financiero</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-            <SummaryRow label="Total Costo" value={totalCost} />
-            <SummaryRow label="Total Precio Cliente" value={totalClient} bold />
-            <SummaryRow label="Total Ganancia" value={totalGanancia} color="green" bold />
-            <SummaryRow label={`Ganancia Individual (÷${partnerCount})`} value={gananciaIndiv} color="green" />
-            <HR />
-            <SummaryRow label={`IVA ${ivaClientePct}% s/Precio`} value={ivaCliente} />
-            <SummaryRow label="Precio c/IVA" value={totalClient + ivaCliente} bold />
-            <SummaryRow label={`IVA ${ivaGananciaPct}% s/Ganancia (RI)`} value={ivaGanancia} />
-            <SummaryRow label="Ganancia Neta (post IVA)" value={totalGanancia - ivaGanancia} color="green" bold />
-            <HR />
-            <SummaryRow label={`Seña Proveedor (${senaProvPct}%)`} value={senaProveedor} />
-            <SummaryRow label={`Seña Cliente (${senaCliPct}%)`} value={senaCliente} />
-            <SummaryRow label="Diferencia Seña" value={senaCliente - senaProveedor} color={senaCliente - senaProveedor >= 0 ? "green" : "red"} bold />
-            <SummaryRow label={`IVA ${ivaClientePct}% s/Seña Cliente`} value={calcIVACliente(senaCliente, ivaClientePct)} />
-            <SummaryRow label="Seña Cliente c/IVA" value={senaCliente + calcIVACliente(senaCliente, ivaClientePct)} bold />
-          </div>
-
-          {/* Editable config */}
-          <details className="mt-4">
-            <summary className="text-xs text-[#76746A] cursor-pointer hover:text-[#5F5A46]">Configuración financiera</summary>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-              <MiniInput label="IVA Cliente %" value={ivaClientePct} onChange={v => updateRow("projects", project.id, { iva_cliente_pct: v }, "projects")} />
-              <MiniInput label="IVA Ganancia %" value={ivaGananciaPct} onChange={v => updateRow("projects", project.id, { iva_ganancia_pct: v }, "projects")} />
-              <MiniInput label="Seña Prov %" value={senaProvPct} onChange={v => updateRow("projects", project.id, { sena_proveedor_pct: v }, "projects")} />
-              <MiniInput label="Seña Cli %" value={senaCliPct} onChange={v => updateRow("projects", project.id, { sena_cliente_pct: v }, "projects")} />
-              <MiniInput label="Socias" value={partnerCount} onChange={v => updateRow("projects", project.id, { partner_count: v }, "projects")} />
-            </div>
-          </details>
+      {/* Config financiera */}
+      {isFull && <details className="bg-[#F0EDE4] rounded-xl p-4">
+        <summary className="text-sm font-semibold text-[#5F5A46] cursor-pointer">Configuración financiera</summary>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3">
+          {[["IVA Cliente %", project.iva_cliente_pct ?? 21, "iva_cliente_pct"], ["IVA Ganancia %", project.iva_ganancia_pct ?? 10.5, "iva_ganancia_pct"],
+            ["Seña Prov %", project.sena_proveedor_pct ?? 60, "sena_proveedor_pct"], ["Seña Cli %", project.sena_cliente_pct ?? 50, "sena_cliente_pct"],
+            ["Socias", project.partner_count ?? 2, "partner_count"]].map(([l, v, k]) => (
+            <div key={k as string}><label className="text-xs text-[#76746A]">{l as string}</label>
+              <input type="number" value={v as number} step="0.5" onChange={e => updateRow("projects", project.id, { [k as string]: parseFloat(e.target.value) || 0 }, "projects")}
+                className="w-full px-2 py-1 rounded border border-[#E0DDD0] text-sm bg-white" /></div>))}
         </div>
-      )}
+      </details>}
 
-      {/* Modals */}
-      {showAddItem && (
-        <AddItemModal type={showAddItem} defaultMultiplier={project.margin || 1.4} providers={data.providers}
-          onClose={() => setShowAddItem(null)}
-          onSave={async (item) => {
-            await addRow("project_items", { ...item, project_id: project.id }, "projectItems")
-            setShowAddItem(null)
-          }} />
-      )}
-      {editingItem && (
-        <EditItemModal item={editingItem} providers={data.providers}
-          onClose={() => setEditingItem(null)}
-          onSave={async (updates) => {
-            await updateRow("project_items", editingItem.id, updates, "projectItems")
-            setEditingItem(null)
-          }} />
-      )}
+      {/* Manage Sections Modal */}
+      {showManageSections && <Modal isOpen={true} title="Gestionar Secciones" onClose={() => setShowManageSections(false)}>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">Agregá, eliminá o configurá las secciones de ítems.</p>
+          <div className="space-y-2">{sections.map(s => (
+            <div key={s.id} className="flex items-center justify-between p-3 bg-[#F7F5ED] rounded-lg">
+              <div className="flex items-center gap-3"><span className="font-medium text-sm">{s.name}</span>
+                <button onClick={() => { const cat = data.categories.find(c => c.id === s.id); if (cat) updateRow("categories", cat.id, { has_multiplier: !s.has_multiplier }, "categories") }}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                  {s.has_multiplier !== false ? <ToggleRight size={16} className="text-green-600" /> : <ToggleLeft size={16} />}
+                  {s.has_multiplier !== false ? "Con ganancia" : "Sin ganancia"}</button></div>
+              <button onClick={() => deleteCategory(s.name)} className="p-1 hover:bg-red-50 rounded"><Trash2 size={14} className="text-red-500" /></button>
+            </div>))}</div>
+          <div className="flex gap-2">
+            <input value={newSectionName} onChange={e => setNewSectionName(e.target.value)} placeholder="Nueva sección..." className="flex-1 px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm" />
+            <button onClick={() => setNewSectionMult(!newSectionMult)} className="flex items-center gap-1 px-3 py-2 rounded-lg border border-[#E0DDD0] text-xs">
+              {newSectionMult ? <ToggleRight size={14} className="text-green-600" /> : <ToggleLeft size={14} />}Ganancia</button>
+            <Btn size="sm" onClick={async () => { if (newSectionName.trim()) { await addCategory("item_type", newSectionName.trim(), newSectionMult); setNewSectionName("") } }} disabled={!newSectionName.trim()}>Agregar</Btn>
+          </div>
+        </div>
+      </Modal>}
+
+      {showAddItem && <AddItemModal type={showAddItem} hasMultiplier={sections.find(s => s.name === showAddItem)?.has_multiplier !== false}
+        defaultMultiplier={project.margin || 1.4} providers={data.providers} onClose={() => setShowAddItem(null)}
+        onSave={async (item) => { await addRow("project_items", { ...item, project_id: project.id }, "projectItems"); setShowAddItem(null) }} />}
+      {editingItem && <EditItemModal item={editingItem} hasMultiplier={sections.find(s => s.name === editingItem.type)?.has_multiplier !== false}
+        providers={data.providers} onClose={() => setEditingItem(null)}
+        onSave={async (u) => { await updateRow("project_items", editingItem.id, u, "projectItems"); setEditingItem(null) }} />}
     </div>
   )
 }
 
 // =================== TAB: COMPARADOR ===================
 function ComparadorTab({ project }: { project: Project }) {
-  const { data, addRow, updateRow, deleteRow } = useApp()
+  const { data, addRow, updateRow, deleteRow, getCategoriesFor } = useApp()
   const [showNew, setShowNew] = useState(false)
   const [searchQ, setSearchQ] = useState("")
-  const partnerCount = project.partner_count ?? 2
-
+  const [viewMode, setViewMode] = useState<"item" | "proveedor">("item")
+  const [showSuggestion, setShowSuggestion] = useState(false)
+  const pc = project.partner_count ?? 2
   const quotes = data.quoteComparisons.filter(q => q.project_id === project.id)
-  const filtered = quotes.filter(q =>
-    !searchQ || q.item.toLowerCase().includes(searchQ.toLowerCase()) ||
-    q.category.toLowerCase().includes(searchQ.toLowerCase()) ||
-    q.provider_name.toLowerCase().includes(searchQ.toLowerCase())
-  )
+  const filtered = quotes.filter(q => !searchQ || q.item.toLowerCase().includes(searchQ.toLowerCase()) || q.category.toLowerCase().includes(searchQ.toLowerCase()) || q.provider_name.toLowerCase().includes(searchQ.toLowerCase()))
+  const itemTypeCats = getCategoriesFor("item_type")
+  const secHasMult = (t: string) => { const c = itemTypeCats.find(x => x.name === t); return c ? c.has_multiplier !== false : t !== "Material" && t !== "material" }
 
-  // Group by category::item
-  const grouped = useMemo(() => {
-    const acc: Record<string, QuoteComparison[]> = {}
-    for (const q of filtered) {
-      const key = `${q.category}::${q.item}`
-      if (!acc[key]) acc[key] = []
-      acc[key].push(q)
+  const groupedByItem = useMemo(() => { const a: Record<string, QuoteComparison[]> = {}; for (const q of filtered) { const k = `${q.category}::${q.item}`; if (!a[k]) a[k] = []; a[k].push(q) }; return a }, [filtered])
+  const groupedByProv = useMemo(() => { const a: Record<string, QuoteComparison[]> = {}; for (const q of filtered) { if (!a[q.provider_name]) a[q.provider_name] = []; a[q.provider_name].push(q) }; return a }, [filtered])
+
+  // Optimization algorithm
+  const optimization = useMemo(() => {
+    const ig: Record<string, QuoteComparison[]> = {}
+    for (const q of quotes) { const k = `${q.category}::${q.item}`; if (!ig[k]) ig[k] = []; ig[k].push(q) }
+    const bestPicks: { item: string; category: string; best: QuoteComparison; mult: number; gan: number }[] = []
+    for (const [, group] of Object.entries(ig)) {
+      let best: QuoteComparison | null = null, bm = 1.4, bg = -Infinity
+      for (const q of group) {
+        if (!secHasMult(q.type || "mobiliario")) { if (q.cost < (best?.cost ?? Infinity)) { best = q; bm = 1; bg = 0 } }
+        else { const g = q.cost * 0.6; if (g > bg) { best = q; bm = 1.6; bg = g } }
+      }
+      if (best) bestPicks.push({ item: best.item, category: best.category, best, mult: bm, gan: bg })
     }
-    return acc
-  }, [filtered])
+    const provs = [...new Set(quotes.map(q => q.provider_name))]
+    const byProv = provs.map(p => {
+      let t = 0; for (const [, g] of Object.entries(ig)) { const q = g.find(x => x.provider_name === p); if (q && secHasMult(q.type || "mobiliario")) t += q.cost * 0.6 }
+      return { provider: p, ganancia: t }
+    }).sort((a, b) => b.ganancia - a.ganancia)
+    return { bestPicks, byProv, optTotal: bestPicks.reduce((s, p) => s + p.gan, 0) }
+  }, [quotes, itemTypeCats])
 
-  const toggleSelect = async (q: QuoteComparison, multiplier: number) => {
-    // Deselect others in same group
-    const groupQuotes = quotes.filter(x => x.category === q.category && x.item === q.item)
-    for (const gq of groupQuotes) {
-      if (gq.id === q.id) {
-        const newSelected = !gq.selected
-        await updateRow("quote_comparisons", gq.id, {
-          selected: newSelected, selected_multiplier: newSelected ? multiplier : null
-        }, "quoteComparisons")
-      } else if (gq.selected) {
-        await updateRow("quote_comparisons", gq.id, { selected: false, selected_multiplier: null }, "quoteComparisons")
+  const toggleSelect = async (q: QuoteComparison, m: number) => {
+    const gq = quotes.filter(x => x.category === q.category && x.item === q.item)
+    for (const g of gq) {
+      if (g.id === q.id) { const ns = !g.selected; await updateRow("quote_comparisons", g.id, { selected: ns, selected_multiplier: ns ? m : null }, "quoteComparisons") }
+      else if (g.selected) await updateRow("quote_comparisons", g.id, { selected: false, selected_multiplier: null }, "quoteComparisons")
+    }
+  }
+
+  const applySuggestion = async () => {
+    for (const p of optimization.bestPicks) {
+      const gq = quotes.filter(q => q.category === p.category && q.item === p.item)
+      for (const g of gq) {
+        if (g.id === p.best.id) await updateRow("quote_comparisons", g.id, { selected: true, selected_multiplier: p.mult }, "quoteComparisons")
+        else if (g.selected) await updateRow("quote_comparisons", g.id, { selected: false, selected_multiplier: null }, "quoteComparisons")
       }
     }
+    setShowSuggestion(false)
   }
 
-  const handleExport = () => {
-    exportComparadorXLSX(project.name, quotes.map(q => ({
-      category: q.category, item: q.item, type: q.type,
-      provider: q.provider_name, cost: q.cost,
-      priceX14: q.price_x14, priceX16: q.price_x16,
-      gananciaX14: q.ganancia_x14, gananciaX16: q.ganancia_x16,
-      selected: q.selected,
-    })))
-  }
+  const SelBtns = ({ q, hm }: { q: QuoteComparison; hm: boolean }) => hm ? (
+    <div className="flex gap-1 justify-center">
+      <button onClick={() => toggleSelect(q, 1.4)} className={`px-2 py-1 rounded text-xs font-medium ${q.selected && q.selected_multiplier === 1.4 ? "bg-green-600 text-white" : "bg-[#F0EDE4] hover:bg-[#E0DDD0]"}`}>x1.4</button>
+      <button onClick={() => toggleSelect(q, 1.6)} className={`px-2 py-1 rounded text-xs font-medium ${q.selected && q.selected_multiplier === 1.6 ? "bg-green-600 text-white" : "bg-[#F0EDE4] hover:bg-[#E0DDD0]"}`}>x1.6</button>
+    </div>
+  ) : <button onClick={() => toggleSelect(q, 1)} className={`px-3 py-1 rounded text-xs font-medium ${q.selected ? "bg-green-600 text-white" : "bg-[#F0EDE4] hover:bg-[#E0DDD0]"}`}>{q.selected ? "✓" : "Elegir"}</button>
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-            placeholder="Buscar ítems, categorías, proveedores..."
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
-        </div>
-        <div className="flex gap-2">
-          <Btn variant="soft" size="sm" onClick={handleExport}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
+        <div className="flex-1 relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar..." className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" /></div>
+        <div className="flex gap-2 flex-wrap">
+          <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+            <button onClick={() => setViewMode("item")} className={`px-3 py-1.5 text-sm ${viewMode === "item" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>Por Ítem</button>
+            <button onClick={() => setViewMode("proveedor")} className={`px-3 py-1.5 text-sm ${viewMode === "proveedor" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>Por Proveedor</button>
+          </div>
+          {quotes.length > 1 && <Btn variant="soft" size="sm" onClick={() => setShowSuggestion(true)}><Lightbulb size={14} className="mr-1 inline" />Sugerir óptimo</Btn>}
+          <Btn variant="soft" size="sm" onClick={() => exportComparadorXLSX(project.name, quotes.map(q => ({ category: q.category, item: q.item, type: q.type || "mobiliario", provider: q.provider_name, cost: q.cost, priceX14: q.price_x14, priceX16: q.price_x16, gananciaX14: q.ganancia_x14, gananciaX16: q.ganancia_x16, selected: q.selected })))}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
           <Btn size="sm" onClick={() => setShowNew(true)}><Plus size={14} className="mr-1 inline" />Cotización</Btn>
         </div>
       </div>
 
-      {/* Grouped items */}
-      {Object.entries(grouped).map(([key, items]) => {
-        const [category, item] = key.split("::")
-        const isMaterial = items[0]?.type === "material"
-        return (
-          <div key={key} className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 bg-[#F0EDE4] border-b border-border">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-sm">{category}</span>
-                <span className="text-muted-foreground">—</span>
-                <span className="text-sm">{item}</span>
-                <Tag label={TYPE_LABELS[items[0]?.type || "mobiliario"]} color={isMaterial ? "blue" : "green"} />
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-[#FAFAF9]">
-                  <tr className="text-xs text-muted-foreground">
-                    <th className="px-3 py-2 text-left w-8"></th>
-                    <th className="px-3 py-2 text-left">Proveedor</th>
-                    <th className="px-3 py-2 text-right">Costo</th>
-                    {!isMaterial && (
-                      <>
-                        <th className="px-3 py-2 text-right">P. x1.4</th>
-                        <th className="px-3 py-2 text-right">P. x1.6</th>
-                        <th className="px-3 py-2 text-right hidden md:table-cell">G. x1.4</th>
-                        <th className="px-3 py-2 text-right hidden md:table-cell">G. x1.6</th>
-                        <th className="px-3 py-2 text-right hidden lg:table-cell">G.Indiv x1.4</th>
-                        <th className="px-3 py-2 text-right hidden lg:table-cell">G.Indiv x1.6</th>
-                      </>
-                    )}
-                    <th className="px-3 py-2 text-center">Elegir</th>
-                    <th className="px-3 py-2 w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map(q => (
-                    <tr key={q.id} className={`border-b last:border-0 ${q.selected ? "bg-green-50" : "hover:bg-[#FAFAF9]"}`}>
-                      <td className="px-3 py-2.5">
-                        {q.selected && <Check size={14} className="text-green-600" />}
-                      </td>
-                      <td className="px-3 py-2.5 font-medium">{q.provider_name}</td>
-                      <td className="px-3 py-2.5 text-right">{formatCurrency(q.cost)}</td>
-                      {!isMaterial && (
-                        <>
-                          <td className="px-3 py-2.5 text-right">{formatCurrency(q.price_x14)}</td>
-                          <td className="px-3 py-2.5 text-right">{formatCurrency(q.price_x16)}</td>
-                          <td className="px-3 py-2.5 text-right text-green-600 hidden md:table-cell">{formatCurrency(q.ganancia_x14)}</td>
-                          <td className="px-3 py-2.5 text-right text-green-600 hidden md:table-cell">{formatCurrency(q.ganancia_x16)}</td>
-                          <td className="px-3 py-2.5 text-right text-green-700 hidden lg:table-cell">{formatCurrency(q.ganancia_x14 / partnerCount)}</td>
-                          <td className="px-3 py-2.5 text-right text-green-700 hidden lg:table-cell">{formatCurrency(q.ganancia_x16 / partnerCount)}</td>
-                        </>
-                      )}
-                      <td className="px-3 py-2.5 text-center">
-                        {isMaterial ? (
-                          <button onClick={() => toggleSelect(q, 1)}
-                            className={`px-3 py-1 rounded text-xs font-medium ${q.selected ? "bg-green-600 text-white" : "bg-[#F0EDE4] hover:bg-[#E0DDD0]"}`}>
-                            {q.selected ? "✓" : "Elegir"}
-                          </button>
-                        ) : (
-                          <div className="flex gap-1 justify-center">
-                            <button onClick={() => toggleSelect(q, 1.4)}
-                              className={`px-2 py-1 rounded text-xs font-medium ${q.selected && q.selected_multiplier === 1.4 ? "bg-green-600 text-white" : "bg-[#F0EDE4] hover:bg-[#E0DDD0]"}`}>
-                              x1.4
-                            </button>
-                            <button onClick={() => toggleSelect(q, 1.6)}
-                              className={`px-2 py-1 rounded text-xs font-medium ${q.selected && q.selected_multiplier === 1.6 ? "bg-green-600 text-white" : "bg-[#F0EDE4] hover:bg-[#E0DDD0]"}`}>
-                              x1.6
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <button onClick={() => deleteRow("quote_comparisons", q.id, "quoteComparisons")}
-                          className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
+      {/* By Item */}
+      {viewMode === "item" && Object.entries(groupedByItem).map(([key, its]) => {
+        const [cat, itm] = key.split("::"); const hm = secHasMult(its[0]?.type || "mobiliario")
+        return (<div key={key} className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-[#F0EDE4] border-b border-border"><span className="font-semibold text-sm">{cat} — {itm}</span>
+            {!hm && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">sin ganancia</span>}</div>
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#FAFAF9]"><tr className="text-xs text-muted-foreground">
+            <th className="px-3 py-2 text-left w-8"></th><th className="px-3 py-2 text-left">Proveedor</th><th className="px-3 py-2 text-right">Costo</th>
+            {hm && <><th className="px-3 py-2 text-right">P.x1.4</th><th className="px-3 py-2 text-right">P.x1.6</th>
+            <th className="px-3 py-2 text-right hidden md:table-cell">G.x1.4</th><th className="px-3 py-2 text-right hidden md:table-cell">G.x1.6</th>
+            <th className="px-3 py-2 text-right hidden lg:table-cell">Indiv x1.4</th><th className="px-3 py-2 text-right hidden lg:table-cell">Indiv x1.6</th></>}
+            <th className="px-3 py-2 text-center">Elegir</th><th className="px-3 py-2 w-10"></th>
+          </tr></thead><tbody>{its.map(q => (
+            <tr key={q.id} className={`border-b last:border-0 ${q.selected ? "bg-green-50" : "hover:bg-[#FAFAF9]"}`}>
+              <td className="px-3 py-2.5">{q.selected && <Check size={14} className="text-green-600" />}</td>
+              <td className="px-3 py-2.5 font-medium">{q.provider_name}</td><td className="px-3 py-2.5 text-right">{formatCurrency(q.cost)}</td>
+              {hm && <><td className="px-3 py-2.5 text-right">{formatCurrency(q.price_x14)}</td><td className="px-3 py-2.5 text-right">{formatCurrency(q.price_x16)}</td>
+              <td className="px-3 py-2.5 text-right text-green-600 hidden md:table-cell">{formatCurrency(q.ganancia_x14)}</td>
+              <td className="px-3 py-2.5 text-right text-green-600 hidden md:table-cell">{formatCurrency(q.ganancia_x16)}</td>
+              <td className="px-3 py-2.5 text-right text-green-700 hidden lg:table-cell">{formatCurrency(q.ganancia_x14 / pc)}</td>
+              <td className="px-3 py-2.5 text-right text-green-700 hidden lg:table-cell">{formatCurrency(q.ganancia_x16 / pc)}</td></>}
+              <td className="px-3 py-2.5 text-center"><SelBtns q={q} hm={hm} /></td>
+              <td className="px-3 py-2.5"><button onClick={() => deleteRow("quote_comparisons", q.id, "quoteComparisons")} className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button></td>
+            </tr>))}</tbody></table></div></div>)
       })}
 
-      {/* Summary */}
-      {quotes.filter(q => q.selected).length > 0 && (
-        <div className="bg-[#F0EDE4] rounded-xl p-4 text-sm">
-          <h4 className="font-semibold mb-2">Seleccionados — Total</h4>
-          <div className="flex flex-wrap gap-4">
-            <span>Costo: <strong>{formatCurrency(quotes.filter(q => q.selected).reduce((s, q) => s + q.cost, 0))}</strong></span>
-            <span>Precio: <strong>{formatCurrency(quotes.filter(q => q.selected).reduce((s, q) => s + quoteClientPrice(q), 0))}</strong></span>
-            <span className="text-green-700">Ganancia: <strong>{formatCurrency(quotes.filter(q => q.selected).reduce((s, q) => s + quoteGanancia(q), 0))}</strong></span>
+      {/* By Provider */}
+      {viewMode === "proveedor" && Object.entries(groupedByProv).map(([pn, pqs]) => {
+        const tc = pqs.reduce((s, q) => s + q.cost, 0)
+        const tg14 = pqs.reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? q.ganancia_x14 : 0), 0)
+        const tg16 = pqs.reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? q.ganancia_x16 : 0), 0)
+        return (<div key={pn} className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-[#F0EDE4] border-b border-border flex items-center justify-between">
+            <span className="font-semibold text-sm">{pn}</span>
+            <div className="flex gap-3 text-xs text-muted-foreground">
+              <span>Costo: <strong className="text-foreground">{formatCurrency(tc)}</strong></span>
+              <span>G.x1.4: <strong className="text-green-600">{formatCurrency(tg14)}</strong></span>
+              <span className="hidden sm:inline">G.x1.6: <strong className="text-green-600">{formatCurrency(tg16)}</strong></span>
+            </div>
           </div>
-        </div>
-      )}
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#FAFAF9]"><tr className="text-xs text-muted-foreground">
+            <th className="px-3 py-2 text-left w-8"></th><th className="px-3 py-2 text-left">Ítem</th><th className="px-3 py-2 text-right">Costo</th>
+            <th className="px-3 py-2 text-right">P.x1.4</th><th className="px-3 py-2 text-right hidden md:table-cell">G.x1.4</th>
+            <th className="px-3 py-2 text-right hidden md:table-cell">G.x1.6</th><th className="px-3 py-2 text-center">Elegir</th>
+          </tr></thead><tbody>{pqs.map(q => { const hm = secHasMult(q.type || "mobiliario"); return (
+            <tr key={q.id} className={`border-b last:border-0 ${q.selected ? "bg-green-50" : "hover:bg-[#FAFAF9]"}`}>
+              <td className="px-3 py-2">{q.selected && <Check size={14} className="text-green-600" />}</td>
+              <td className="px-3 py-2"><span className="font-medium">{q.item}</span><span className="text-xs text-muted-foreground ml-1">({q.category})</span></td>
+              <td className="px-3 py-2 text-right">{formatCurrency(q.cost)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrency(hm ? q.price_x14 : q.cost)}</td>
+              <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{formatCurrency(hm ? q.ganancia_x14 : 0)}</td>
+              <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{formatCurrency(hm ? q.ganancia_x16 : 0)}</td>
+              <td className="px-3 py-2 text-center"><SelBtns q={q} hm={hm} /></td>
+            </tr>) })}</tbody></table></div></div>)
+      })}
 
       {quotes.length === 0 && <Empty title="Sin cotizaciones" description="Agregá cotizaciones para comparar proveedores" action={<Btn onClick={() => setShowNew(true)}>Agregar</Btn>} />}
 
-      {showNew && <QuoteModal projectId={project.id} providers={data.providers}
-        onClose={() => setShowNew(false)}
+      {/* Suggestion Modal */}
+      {showSuggestion && <Modal isOpen={true} title="Sugerencia Óptima" onClose={() => setShowSuggestion(false)} size="lg">
+        <div className="space-y-4">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2"><Lightbulb size={18} className="text-green-600" /><h4 className="font-semibold text-green-800">Mix Óptimo — Ganancia máxima</h4></div>
+            <p className="text-2xl font-bold text-green-700 mb-3">{formatCurrency(optimization.optTotal)}</p>
+            <div className="space-y-1.5">{optimization.bestPicks.map((p, i) => (
+              <div key={i} className="flex items-center justify-between text-sm bg-white/60 rounded px-3 py-1.5">
+                <span><strong>{p.item}</strong> <span className="text-muted-foreground">→ {p.best.provider_name}</span></span>
+                <span className="text-green-600 font-medium">{p.gan > 0 ? `+${formatCurrency(p.gan)} (x${p.mult})` : "Sin ganancia"}</span>
+              </div>))}</div>
+          </div>
+          {optimization.byProv.length > 1 && <div><h4 className="font-semibold text-sm mb-2">Todo con un solo proveedor</h4>
+            <div className="space-y-2">{optimization.byProv.map((p, i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-[#F7F5ED] rounded-lg">
+                <span className="font-medium text-sm">{p.provider}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`font-bold ${i === 0 ? "text-green-600" : "text-muted-foreground"}`}>{formatCurrency(p.ganancia)}</span>
+                  {p.ganancia < optimization.optTotal && <span className="text-xs text-red-500">-{formatCurrency(optimization.optTotal - p.ganancia)}</span>}
+                </div>
+              </div>))}</div></div>}
+          <div className="flex justify-end gap-3 pt-2"><Btn variant="ghost" onClick={() => setShowSuggestion(false)}>Cerrar</Btn>
+            <Btn onClick={applySuggestion}><Check size={14} className="mr-1 inline" />Aplicar sugerencia</Btn></div>
+        </div>
+      </Modal>}
+
+      {showNew && <QuoteModal projectId={project.id} providers={data.providers} onClose={() => setShowNew(false)}
         onSave={async (q) => { await addRow("quote_comparisons", q, "quoteComparisons"); setShowNew(false) }} />}
     </div>
   )
@@ -587,598 +529,214 @@ function ComparadorTab({ project }: { project: Project }) {
 // =================== TAB: MOVIMIENTOS ===================
 function MovimientosTab({ project }: { project: Project }) {
   const { data, addMovement, deleteMovement, updateRow } = useApp()
-  const [showAddMovement, setShowAddMovement] = useState(false)
-  const [editingMov, setEditingMov] = useState<Movement | null>(null)
-  const [movPeriod, setMovPeriod] = useState<PeriodValue>("all")
-  const [customStart, setCustomStart] = useState("")
-  const [customEnd, setCustomEnd] = useState("")
-  const [searchQ, setSearchQ] = useState("")
-
-  const allMovements = data.movements.filter(m => m.project_id === project.id)
-  const dateFiltered = filterByDateRange(allMovements, movPeriod, customStart, customEnd)
-  const movements = dateFiltered
-    .filter(m => !searchQ || m.description.toLowerCase().includes(searchQ.toLowerCase()))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-
-  const handleExport = () => {
-    exportProjectMovementsXLSX(project.name, movements.map(m => ({
-      date: m.date, description: m.description, amount: m.amount,
-      type: m.type, category: m.category || undefined,
-      provider: data.providers.find(p => p.id === m.provider_id)?.name,
-    })))
-  }
-
+  const [showAdd, setShowAdd] = useState(false); const [editingMov, setEditingMov] = useState<Movement | null>(null)
+  const [movPeriod, setMovPeriod] = useState<PeriodValue>("all"); const [cStart, setCStart] = useState(""); const [cEnd, setCEnd] = useState(""); const [searchQ, setSearchQ] = useState("")
+  const all = data.movements.filter(m => m.project_id === project.id)
+  const df = filterByDateRange(all, movPeriod, cStart, cEnd)
+  const movs = df.filter(m => !searchQ || m.description.toLowerCase().includes(searchQ.toLowerCase())).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-            placeholder="Buscar movimientos..."
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
-        </div>
+        <div className="flex-1 relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar..." className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" /></div>
         <div className="flex flex-wrap gap-2">
-          <PeriodFilter value={movPeriod} onChange={setMovPeriod}
-            onCustomRange={(s, e) => { setCustomStart(s); setCustomEnd(e) }} />
-          <Btn variant="soft" size="sm" onClick={handleExport}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
-          <Btn size="sm" onClick={() => setShowAddMovement(true)}><Plus size={14} className="mr-1 inline" />Movimiento</Btn>
+          <PeriodFilter value={movPeriod} onChange={setMovPeriod} onCustomRange={(s, e) => { setCStart(s); setCEnd(e) }} />
+          <Btn variant="soft" size="sm" onClick={() => exportProjectMovementsXLSX(project.name, movs.map(m => ({ date: m.date, description: m.description, amount: m.amount, type: m.type, category: m.category || undefined, provider: data.providers.find(p => p.id === m.provider_id)?.name })))}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
+          <Btn size="sm" onClick={() => setShowAdd(true)}><Plus size={14} className="mr-1 inline" />Movimiento</Btn>
         </div>
       </div>
-
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        {movements.length > 0 ? (
-          <div className="divide-y divide-border">
-            {movements.map(mov => (
-              <div key={mov.id} className="flex items-center justify-between px-4 py-3 group hover:bg-[#FAFAF9]">
-                <div className="min-w-0 flex-1">
-                  <span className={`text-sm font-medium ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>{mov.description}</span>
-                  <span className="text-xs text-muted-foreground ml-2">{formatDate(mov.date)}</span>
-                  {mov.category && <span className="text-xs text-muted-foreground ml-2">· {mov.category}</span>}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`font-medium text-sm ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>
-                    {mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}
-                  </span>
-                  <button onClick={() => setEditingMov(mov)}
-                    className="p-1 hover:bg-accent rounded opacity-0 group-hover:opacity-100 sm:opacity-100"><Pencil size={12} /></button>
-                  <button onClick={() => deleteMovement(mov.id)}
-                    className="p-1 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 sm:opacity-100"><Trash2 size={12} className="text-red-600" /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : <Empty title="Sin movimientos" description={movPeriod !== "all" ? "Probá con otro rango de fechas" : undefined} />}
+        {movs.length > 0 ? <div className="divide-y divide-border">{movs.map(mov => (
+          <div key={mov.id} className="flex items-center justify-between px-4 py-3 group hover:bg-[#FAFAF9]">
+            <div className="min-w-0 flex-1"><span className={`text-sm font-medium ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>{mov.description}</span>
+              <span className="text-xs text-muted-foreground ml-2">{formatDate(mov.date)}</span></div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={`font-medium text-sm ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>{mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}</span>
+              <button onClick={() => setEditingMov(mov)} className="p-1 hover:bg-accent rounded opacity-0 group-hover:opacity-100 sm:opacity-100"><Pencil size={12} /></button>
+              <button onClick={() => deleteMovement(mov.id)} className="p-1 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 sm:opacity-100"><Trash2 size={12} className="text-red-600" /></button>
+            </div>
+          </div>))}</div> : <Empty title="Sin movimientos" />}
       </div>
-
-      {/* Totals */}
-      {movements.length > 0 && (
-        <div className="flex gap-4 text-sm">
-          <span className="text-green-700">Ingresos: <strong>{formatCurrency(movements.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0))}</strong></span>
-          <span className="text-red-700">Egresos: <strong>{formatCurrency(movements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0))}</strong></span>
-        </div>
-      )}
-
-      {showAddMovement && (
-        <AddProjectMovementModal project={project} accounts={data.accounts} providers={data.providers}
-          onClose={() => setShowAddMovement(false)}
-          onSave={async (mov) => { await addMovement(mov); setShowAddMovement(false) }} />
-      )}
-      {editingMov && (
-        <EditMovementModal movement={editingMov} accounts={data.accounts} providers={data.providers}
-          onClose={() => setEditingMov(null)}
-          onSave={async (updates) => {
-            await updateRow("movements", editingMov.id, updates, "movements")
-            setEditingMov(null)
-          }} />
-      )}
+      {movs.length > 0 && <div className="flex gap-4 text-sm">
+        <span className="text-green-700">Ingresos: <strong>{formatCurrency(movs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0))}</strong></span>
+        <span className="text-red-700">Egresos: <strong>{formatCurrency(movs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0))}</strong></span>
+      </div>}
+      {showAdd && <AddMovModal project={project} accounts={data.accounts} providers={data.providers} onClose={() => setShowAdd(false)} onSave={async (m) => { await addMovement(m); setShowAdd(false) }} />}
+      {editingMov && <EditMovModal movement={editingMov} accounts={data.accounts} providers={data.providers} onClose={() => setEditingMov(null)} onSave={async (u) => { await updateRow("movements", editingMov.id, u, "movements"); setEditingMov(null) }} />}
     </div>
   )
 }
 
 // =================== TAB: ARCHIVOS ===================
 function ArchivosTab({ project }: { project: Project }) {
-  const { data, addRow, deleteRow, uploadFile } = useApp()
-  const [showUpload, setShowUpload] = useState(false)
-  const [searchQ, setSearchQ] = useState("")
-  const [filterCat, setFilterCat] = useState("")
-  const [previewFile, setPreviewFile] = useState<ProjectFile | null>(null)
-
+  const { data, addRow, deleteRow, uploadFile, getCategoriesFor, addCategory, deleteCategory } = useApp()
+  const [showUpload, setShowUpload] = useState(false); const [searchQ, setSearchQ] = useState(""); const [filterCat, setFilterCat] = useState(""); const [preview, setPreview] = useState<ProjectFile | null>(null)
   const files = data.projectFiles.filter(f => f.project_id === project.id)
-  const filtered = files.filter(f => {
-    if (filterCat && f.category !== filterCat) return false
-    if (searchQ && !f.name.toLowerCase().includes(searchQ.toLowerCase())) return false
-    return true
-  })
-
-  const categories = [...new Set(files.map(f => f.category))].sort()
-
-  const isImage = (mime?: string | null) => mime?.startsWith("image/")
-  const isPDF = (mime?: string | null) => mime === "application/pdf"
-
+  const filtered = files.filter(f => { if (filterCat && f.category !== filterCat) return false; if (searchQ && !f.name.toLowerCase().includes(searchQ.toLowerCase())) return false; return true })
+  const cats = [...new Set(files.map(f => f.category))].sort()
+  const isImg = (m?: string | null) => m?.startsWith("image/"); const isPDF = (m?: string | null) => m === "application/pdf"
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-            placeholder="Buscar archivos..."
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
-        </div>
-        <div className="flex gap-2">
-          {categories.length > 0 && (
-            <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white">
-              <option value="">Todas las categorías</option>
-              {categories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
-          <Btn size="sm" onClick={() => setShowUpload(true)}>
-            <Upload size={14} className="mr-1 inline" />Subir
-          </Btn>
-        </div>
+        <div className="flex-1 relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar archivos..." className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" /></div>
+        <div className="flex gap-2">{cats.length > 0 && <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white">
+          <option value="">Todas</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>}
+          <Btn size="sm" onClick={() => setShowUpload(true)}><Upload size={14} className="mr-1 inline" />Subir</Btn></div>
       </div>
-
-      {/* Category folders view */}
-      {!filterCat && categories.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {categories.map(cat => (
-            <button key={cat} onClick={() => setFilterCat(cat)}
-              className="flex items-center gap-2 px-3 py-2 bg-card border border-border rounded-lg hover:bg-[#F0EDE4] text-sm">
-              <FolderOpen size={16} className="text-[#5F5A46]" />
-              <span>{cat}</span>
-              <span className="text-xs text-muted-foreground">({files.filter(f => f.category === cat).length})</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Files grid */}
-      {filtered.length > 0 ? (
-        <div className="grid sm:grid-cols-2 gap-3">
-          {filtered.map(file => (
-            <div key={file.id} className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg group">
-              {isImage(file.mime_type) && file.url ? (
-                <img src={file.url} alt={file.name} className="w-10 h-10 rounded object-cover shrink-0 cursor-pointer"
-                  onClick={() => setPreviewFile(file)} />
-              ) : (
-                <FileText size={20} className="text-[#5F5A46] shrink-0" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{file.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {file.category}
-                  {file.file_size && ` · ${(file.file_size / 1024 / 1024).toFixed(1)} MB`}
-                  {file.created_at && ` · ${formatDate(file.created_at.split("T")[0])}`}
-                </p>
-              </div>
-              <div className="flex gap-1 shrink-0">
-                {file.url && (
-                  <button onClick={() => setPreviewFile(file)} className="p-1 hover:bg-accent rounded"><Eye size={14} /></button>
-                )}
-                {file.url && (
-                  <a href={file.url} target="_blank" rel="noopener" className="p-1 hover:bg-accent rounded"><Download size={14} /></a>
-                )}
-                <button onClick={() => deleteRow("project_files", file.id, "projectFiles")}
-                  className="p-1 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 sm:opacity-100">
-                  <Trash2 size={12} className="text-red-600" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : <Empty title="Sin archivos" />}
-
-      {/* File Preview Modal */}
-      {previewFile && (
-        <Modal isOpen={true} title={previewFile.name} onClose={() => setPreviewFile(null)} size="xl">
-          {isImage(previewFile.mime_type) && previewFile.url ? (
-            <img src={previewFile.url} alt={previewFile.name} className="w-full rounded-lg" />
-          ) : isPDF(previewFile.mime_type) && previewFile.url ? (
-            <iframe src={previewFile.url} className="w-full h-[60vh] rounded-lg border" />
-          ) : (
-            <div className="text-center py-8">
-              <FileText size={48} className="mx-auto text-muted-foreground mb-4" />
-              <p className="text-sm text-muted-foreground">Vista previa no disponible</p>
-              {previewFile.url && (
-                <a href={previewFile.url} target="_blank" rel="noopener" className="text-sm text-blue-600 hover:underline mt-2 inline-block">
-                  Abrir en nueva pestaña
-                </a>
-              )}
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {showUpload && (
-        <UploadFileModal projectId={project.id} onClose={() => setShowUpload(false)}
-          onUpload={async (file, meta) => {
-            const result = await uploadFile("documents", `projects/${project.id}/${Date.now()}_${file.name}`, file)
-            if (result) {
-              await addRow("project_files", {
-                id: generateId(), project_id: project.id,
-                name: meta.name || file.name, category: meta.category,
-                description: meta.description, url: result.url,
-                storage_path: result.path, file_size: file.size,
-                mime_type: file.type,
-              }, "projectFiles")
-            }
-            setShowUpload(false)
-          }} />
-      )}
-    </div>
-  )
-}
-
-// =================== HELPER COMPONENTS ===================
-function SummaryRow({ label, value, color, bold }: { label: string; value: number; color?: string; bold?: boolean }) {
-  const colorCls = color === "green" ? "text-green-700" : color === "red" ? "text-red-700" : "text-[#1C1A12]"
-  return (
-    <div className="flex justify-between py-1">
-      <span className="text-[#5F5A46]">{label}</span>
-      <span className={`${colorCls} ${bold ? "font-bold" : "font-medium"}`}>{formatCurrency(value)}</span>
-    </div>
-  )
-}
-
-function MiniInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <div>
-      <label className="text-xs text-[#76746A]">{label}</label>
-      <input type="number" value={value} step="0.5"
-        onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        className="w-full px-2 py-1 rounded border border-[#E0DDD0] text-sm bg-white" />
+      {!filterCat && cats.length > 1 && <div className="flex flex-wrap gap-2">{cats.map(c => <button key={c} onClick={() => setFilterCat(c)}
+        className="flex items-center gap-2 px-3 py-2 bg-card border border-border rounded-lg hover:bg-[#F0EDE4] text-sm"><FolderOpen size={16} className="text-[#5F5A46]" />{c} <span className="text-xs text-muted-foreground">({files.filter(f => f.category === c).length})</span></button>)}</div>}
+      {filtered.length > 0 ? <div className="grid sm:grid-cols-2 gap-3">{filtered.map(f => (
+        <div key={f.id} className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg group">
+          {isImg(f.mime_type) && f.url ? <img src={f.url} alt={f.name} className="w-10 h-10 rounded object-cover shrink-0 cursor-pointer" onClick={() => setPreview(f)} /> : <FileText size={20} className="text-[#5F5A46] shrink-0" />}
+          <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{f.name}</p><p className="text-xs text-muted-foreground">{f.category}{f.file_size && ` · ${(f.file_size / 1024 / 1024).toFixed(1)} MB`}</p></div>
+          <div className="flex gap-1 shrink-0">{f.url && <button onClick={() => setPreview(f)} className="p-1 hover:bg-accent rounded"><Eye size={14} /></button>}
+            {f.url && <a href={f.url} target="_blank" rel="noopener" className="p-1 hover:bg-accent rounded"><Download size={14} /></a>}
+            <button onClick={() => deleteRow("project_files", f.id, "projectFiles")} className="p-1 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 sm:opacity-100"><Trash2 size={12} className="text-red-600" /></button></div>
+        </div>))}</div> : <Empty title="Sin archivos" />}
+      {preview && <Modal isOpen={true} title={preview.name} onClose={() => setPreview(null)} size="xl">
+        {isImg(preview.mime_type) && preview.url ? <img src={preview.url} alt={preview.name} className="w-full rounded-lg" />
+          : isPDF(preview.mime_type) && preview.url ? <iframe src={preview.url} className="w-full h-[60vh] rounded-lg border" />
+          : <div className="text-center py-8"><FileText size={48} className="mx-auto text-muted-foreground mb-4" /><p className="text-sm text-muted-foreground">Vista previa no disponible</p>
+            {preview.url && <a href={preview.url} target="_blank" rel="noopener" className="text-sm text-blue-600 hover:underline mt-2 inline-block">Abrir</a>}</div>}
+      </Modal>}
+      {showUpload && <UploadModal projectId={project.id} onClose={() => setShowUpload(false)} onUpload={async (file, meta) => {
+        const r = await uploadFile("documents", `projects/${project.id}/${Date.now()}_${file.name}`, file)
+        if (r) await addRow("project_files", { id: generateId(), project_id: project.id, name: meta.name || file.name, category: meta.category, description: meta.description, url: r.url, storage_path: r.path, file_size: file.size, mime_type: file.type }, "projectFiles")
+        setShowUpload(false)
+      }} />}
     </div>
   )
 }
 
 // =================== MODALS ===================
-function ProjectFormModal({ project, onClose, onSave }: {
-  project?: Project; onClose: () => void; onSave: (p: Project) => void
-}) {
-  const [name, setName] = useState(project?.name ?? "")
-  const [client, setClient] = useState(project?.client ?? "")
-  const [address, setAddress] = useState(project?.address ?? "")
-  const [type, setType] = useState(project?.type ?? "interiorismo")
-  const [status, setStatus] = useState(project?.status ?? "activo")
-  const [margin, setMargin] = useState(String(project?.margin ?? "1.4"))
-  const [clientEmail, setClientEmail] = useState(project?.client_email ?? "")
-  const [clientPhone, setClientPhone] = useState(project?.client_phone ?? "")
-  const [partnerCount, setPartnerCount] = useState(String(project?.partner_count ?? "2"))
-
-  return (
-    <Modal isOpen={true} title={project ? "Editar Proyecto" : "Nuevo Proyecto"} onClose={onClose} size="lg">
-      <form onSubmit={e => { e.preventDefault(); onSave({
-        id: project?.id ?? generateId(), name, client, address, type, status,
-        margin: parseFloat(margin) || 1.4, client_email: clientEmail || null,
-        client_phone: clientPhone || null, partner_count: parseInt(partnerCount) || 2,
-        iva_cliente_pct: project?.iva_cliente_pct ?? 21,
-        iva_ganancia_pct: project?.iva_ganancia_pct ?? 10.5,
-        sena_proveedor_pct: project?.sena_proveedor_pct ?? 60,
-        sena_cliente_pct: project?.sena_cliente_pct ?? 50,
-        created_at: project?.created_at ?? new Date().toISOString(),
-      })}} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormInput label="Nombre del proyecto" value={name} onChange={setName} />
-          <FormInput label="Cliente" value={client} onChange={setClient} />
-        </div>
-        <FormInput label="Dirección" value={address} onChange={setAddress} />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <FormSelect label="Tipo" value={type || ""} onChange={setType}
-            options={[{ value: "arquitectura", label: "Arquitectura" }, { value: "interiorismo", label: "Interiorismo" }, { value: "ambos", label: "Ambos" }]} />
-          <FormSelect label="Estado" value={status || ""} onChange={setStatus}
-            options={[{ value: "activo", label: "Activo" }, { value: "pausado", label: "Pausado" }, { value: "finalizado", label: "Finalizado" }]} />
-          <FormInput label="Multiplicador" type="number" value={margin} onChange={setMargin} step="0.1" />
-          <FormInput label="Socias" type="number" value={partnerCount} onChange={setPartnerCount} />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormInput label="Email cliente" type="email" value={clientEmail} onChange={setClientEmail} />
-          <FormInput label="Teléfono cliente" value={clientPhone} onChange={setClientPhone} />
-        </div>
-        <div className="flex justify-end gap-3 pt-4">
-          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn type="submit" disabled={!name || !client}>{project ? "Guardar" : "Crear"}</Btn>
-        </div>
-      </form>
-    </Modal>
-  )
+function ProjectFormModal({ project, onClose, onSave }: { project?: Project; onClose: () => void; onSave: (p: Project) => void }) {
+  const [name, setName] = useState(project?.name ?? ""); const [client, setClient] = useState(project?.client ?? ""); const [address, setAddress] = useState(project?.address ?? "")
+  const [type, setType] = useState(project?.type ?? "interiorismo"); const [status, setStatus] = useState(project?.status ?? "activo"); const [margin, setMargin] = useState(String(project?.margin ?? "1.4"))
+  const [email, setEmail] = useState(project?.client_email ?? ""); const [phone, setPhone] = useState(project?.client_phone ?? ""); const [pc, setPc] = useState(String(project?.partner_count ?? "2"))
+  return (<Modal isOpen={true} title={project ? "Editar Proyecto" : "Nuevo Proyecto"} onClose={onClose} size="lg">
+    <form onSubmit={e => { e.preventDefault(); onSave({ id: project?.id ?? generateId(), name, client, address, type, status, margin: parseFloat(margin) || 1.4,
+      client_email: email || null, client_phone: phone || null, partner_count: parseInt(pc) || 2,
+      iva_cliente_pct: project?.iva_cliente_pct ?? 21, iva_ganancia_pct: project?.iva_ganancia_pct ?? 10.5,
+      sena_proveedor_pct: project?.sena_proveedor_pct ?? 60, sena_cliente_pct: project?.sena_cliente_pct ?? 50,
+      created_at: project?.created_at ?? new Date().toISOString() })}} className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><FormInput label="Nombre" value={name} onChange={setName} /><FormInput label="Cliente" value={client} onChange={setClient} /></div>
+      <FormInput label="Dirección" value={address} onChange={setAddress} />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <FormSelect label="Tipo" value={type || ""} onChange={setType} options={[{ value: "arquitectura", label: "Arquitectura" }, { value: "interiorismo", label: "Interiorismo" }, { value: "ambos", label: "Ambos" }]} />
+        <FormSelect label="Estado" value={status || ""} onChange={setStatus} options={[{ value: "activo", label: "Activo" }, { value: "pausado", label: "Pausado" }, { value: "finalizado", label: "Finalizado" }]} />
+        <FormInput label="Multiplicador" type="number" value={margin} onChange={setMargin} step="0.1" /><FormInput label="Socias" type="number" value={pc} onChange={setPc} /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><FormInput label="Email" type="email" value={email} onChange={setEmail} /><FormInput label="Teléfono" value={phone} onChange={setPhone} /></div>
+      <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!name || !client}>{project ? "Guardar" : "Crear"}</Btn></div>
+    </form>
+  </Modal>)
 }
 
-function AddItemModal({ type, defaultMultiplier, providers, onClose, onSave }: {
-  type: string; defaultMultiplier: number; providers: { id: string; name: string }[]
-  onClose: () => void; onSave: (item: ProjectItem) => void
+function AddItemModal({ type, hasMultiplier, defaultMultiplier, providers, onClose, onSave }: {
+  type: string; hasMultiplier: boolean; defaultMultiplier: number; providers: { id: string; name: string }[]; onClose: () => void; onSave: (item: ProjectItem) => void
 }) {
-  const isMaterial = type === "material"
-  const [description, setDescription] = useState("")
-  const [cost, setCost] = useState("")
-  const [multiplier, setMultiplier] = useState(isMaterial ? "1" : String(defaultMultiplier))
-  const [providerId, setProviderId] = useState("")
-
-  const costNum = parseFloat(cost) || 0
-  const multNum = isMaterial ? 1 : (parseFloat(multiplier) || defaultMultiplier)
-  const clientPrice = costNum * multNum
-
-  return (
-    <Modal isOpen={true} title={`Agregar ${TYPE_LABELS[type] || type}`} onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); onSave({
-        id: generateId(), project_id: "", type: type as any,
-        description, cost: costNum, client_price: isMaterial ? costNum : clientPrice,
-        multiplier: multNum, provider_id: providerId || null,
-        paid: false, sort_order: 0,
-      })}} className="space-y-4">
-        <FormInput label="Descripción" value={description} onChange={setDescription} />
-        <FormSelect label="Proveedor (opcional)" value={providerId} onChange={setProviderId}
-          options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Costo proveedor" type="number" value={cost} onChange={setCost} inputMode="decimal" />
-          {!isMaterial && <FormInput label="Multiplicador" type="number" value={multiplier} onChange={setMultiplier} step="0.1" inputMode="decimal" />}
-        </div>
-        <div className="bg-[#F0EDE4] rounded-lg p-4">
-          <div className="flex justify-between"><span className="text-sm text-muted-foreground">Precio al cliente:</span>
-            <span className="text-lg font-semibold">{formatCurrency(clientPrice)}</span></div>
-          {!isMaterial && <p className="text-xs text-muted-foreground mt-1">Ganancia: {formatCurrency(clientPrice - costNum)}</p>}
-          {isMaterial && <p className="text-xs text-muted-foreground mt-1">Materiales no generan ganancia</p>}
-        </div>
-        <div className="flex justify-end gap-3 pt-4">
-          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn type="submit" disabled={!description || !cost}>Agregar</Btn>
-        </div>
-      </form>
-    </Modal>
-  )
+  const [desc, setDesc] = useState(""); const [cost, setCost] = useState(""); const [mult, setMult] = useState(hasMultiplier ? String(defaultMultiplier) : "1"); const [prov, setProv] = useState("")
+  const c = parseFloat(cost) || 0; const m = hasMultiplier ? (parseFloat(mult) || defaultMultiplier) : 1; const cp = c * m
+  return (<Modal isOpen={true} title={`Agregar ${type}`} onClose={onClose}>
+    <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), project_id: "", type: type as any, description: desc, cost: c, client_price: hasMultiplier ? cp : c, multiplier: m, provider_id: prov || null, paid: false, sort_order: 0 })}} className="space-y-4">
+      <FormInput label="Descripción" value={desc} onChange={setDesc} />
+      <FormSelect label="Proveedor" value={prov} onChange={setProv} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
+      <div className="grid grid-cols-2 gap-4"><FormInput label="Costo" type="number" value={cost} onChange={setCost} inputMode="decimal" />{hasMultiplier && <FormInput label="Multiplicador" type="number" value={mult} onChange={setMult} step="0.1" />}</div>
+      <div className="bg-[#F0EDE4] rounded-lg p-4"><div className="flex justify-between"><span className="text-sm text-muted-foreground">Precio cliente:</span><span className="text-lg font-semibold">{formatCurrency(cp)}</span></div>
+        {hasMultiplier ? <p className="text-xs text-muted-foreground mt-1">Ganancia: {formatCurrency(cp - c)}</p> : <p className="text-xs text-muted-foreground mt-1">Sin ganancia</p>}</div>
+      <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !cost}>Agregar</Btn></div>
+    </form>
+  </Modal>)
 }
 
-function EditItemModal({ item, providers, onClose, onSave }: {
-  item: ProjectItem; providers: { id: string; name: string }[]
-  onClose: () => void; onSave: (updates: Partial<ProjectItem>) => void
+function EditItemModal({ item, hasMultiplier, providers, onClose, onSave }: {
+  item: ProjectItem; hasMultiplier: boolean; providers: { id: string; name: string }[]; onClose: () => void; onSave: (u: Partial<ProjectItem>) => void
 }) {
-  const isMaterial = item.type === "material"
-  const [description, setDescription] = useState(item.description)
-  const [cost, setCost] = useState(String(item.cost))
-  const [multiplier, setMultiplier] = useState(String(item.multiplier))
-  const [providerId, setProviderId] = useState(item.provider_id ?? "")
-  const [paid, setPaid] = useState(item.paid)
-
-  const costNum = parseFloat(cost) || 0
-  const multNum = isMaterial ? 1 : (parseFloat(multiplier) || 1.4)
-  const clientPrice = costNum * multNum
-
-  return (
-    <Modal isOpen={true} title={`Editar ${TYPE_LABELS[item.type]}`} onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); onSave({
-        description, cost: costNum,
-        client_price: isMaterial ? costNum : clientPrice,
-        multiplier: multNum, provider_id: providerId || null, paid,
-      })}} className="space-y-4">
-        <FormInput label="Descripción" value={description} onChange={setDescription} />
-        <FormSelect label="Proveedor" value={providerId} onChange={setProviderId}
-          options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Costo" type="number" value={cost} onChange={setCost} inputMode="decimal" />
-          {!isMaterial && <FormInput label="Multiplicador" type="number" value={multiplier} onChange={setMultiplier} step="0.1" inputMode="decimal" />}
-        </div>
-        <div className="flex items-center gap-3">
-          <input type="checkbox" checked={paid} onChange={e => setPaid(e.target.checked)} className="w-4 h-4" />
-          <label className="text-sm">Pagado al proveedor</label>
-        </div>
-        <div className="bg-[#F0EDE4] rounded-lg p-4">
-          <div className="flex justify-between"><span className="text-sm text-muted-foreground">Precio al cliente:</span>
-            <span className="text-lg font-semibold">{formatCurrency(clientPrice)}</span></div>
-          {!isMaterial && <p className="text-xs text-muted-foreground mt-1">Ganancia: {formatCurrency(clientPrice - costNum)}</p>}
-        </div>
-        <div className="flex justify-end gap-3 pt-4">
-          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn type="submit" disabled={!description || !cost}>Guardar</Btn>
-        </div>
-      </form>
-    </Modal>
-  )
+  const [desc, setDesc] = useState(item.description); const [cost, setCost] = useState(String(item.cost)); const [mult, setMult] = useState(String(item.multiplier))
+  const [prov, setProv] = useState(item.provider_id ?? ""); const [paid, setPaid] = useState(item.paid)
+  const c = parseFloat(cost) || 0; const m = hasMultiplier ? (parseFloat(mult) || 1.4) : 1; const cp = c * m
+  return (<Modal isOpen={true} title={`Editar ${item.type}`} onClose={onClose}>
+    <form onSubmit={e => { e.preventDefault(); onSave({ description: desc, cost: c, client_price: hasMultiplier ? cp : c, multiplier: m, provider_id: prov || null, paid })}} className="space-y-4">
+      <FormInput label="Descripción" value={desc} onChange={setDesc} />
+      <FormSelect label="Proveedor" value={prov} onChange={setProv} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
+      <div className="grid grid-cols-2 gap-4"><FormInput label="Costo" type="number" value={cost} onChange={setCost} />{hasMultiplier && <FormInput label="Mult" type="number" value={mult} onChange={setMult} step="0.1" />}</div>
+      <div className="flex items-center gap-3"><input type="checkbox" checked={paid} onChange={e => setPaid(e.target.checked)} className="w-4 h-4" /><label className="text-sm">Pagado</label></div>
+      <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !cost}>Guardar</Btn></div>
+    </form>
+  </Modal>)
 }
 
-function QuoteModal({ projectId, providers, onClose, onSave }: {
-  projectId: string; providers: any[]; onClose: () => void; onSave: (q: QuoteComparison) => void
-}) {
+function QuoteModal({ projectId, providers, onClose, onSave }: { projectId: string; providers: any[]; onClose: () => void; onSave: (q: QuoteComparison) => void }) {
   const { getCategoriesFor, addCategory, deleteCategory } = useApp()
-  const [category, setCategory] = useState("")
-  const [item, setItem] = useState("")
-  const [itemType, setItemType] = useState<"mano_de_obra" | "material" | "mobiliario">("mobiliario")
-  const [providerName, setProviderName] = useState("")
-  const [providerId, setProviderId] = useState("")
-  const [cost, setCost] = useState("")
-
-  const costNum = parseFloat(cost) || 0
-  const isMaterial = itemType === "material"
-
-  const quoteCats = getCategoriesFor("quote_category")
-
-  return (
-    <Modal isOpen={true} title="Nueva Cotización" onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); onSave({
-        id: generateId(), date: today(), project_id: projectId,
-        category, item, type: itemType,
-        provider_id: providerId || null,
-        provider_name: providerName || providers.find(p => p.id === providerId)?.name || "",
-        cost: costNum,
-        price_x14: costNum * 1.4, price_x16: costNum * 1.6,
-        ganancia_x14: costNum * 0.4, ganancia_x16: costNum * 0.6,
-        selected: false, selected_multiplier: null,
-      })}} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <EditableSelect label="Categoría" value={category} onChange={setCategory}
-            options={quoteCats.map(c => ({ value: c.name, label: c.name }))}
-            onAddNew={(name) => addCategory("quote_category", name)}
-            onDelete={(name) => deleteCategory(name)}
-            placeholder="Ej: Carpintería" />
-          <FormInput label="Ítem" value={item} onChange={setItem} placeholder="Ej: Mueble de TV" />
-        </div>
-        <FormSelect label="Tipo de ítem" value={itemType} onChange={v => setItemType(v as any)}
-          options={[
-            { value: "mobiliario", label: "Mobiliario (con multiplicador)" },
-            { value: "mano_de_obra", label: "Mano de Obra (con multiplicador)" },
-            { value: "material", label: "Material (sin ganancia)" },
-          ]} />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormSelect label="Proveedor" value={providerId} onChange={v => {
-            setProviderId(v); setProviderName(providers.find(p => p.id === v)?.name || "")
-          }} options={providers.map(p => ({ value: p.id, label: p.name }))} />
-          <FormInput label="Costo" type="number" value={cost} onChange={setCost} inputMode="decimal" />
-        </div>
-        {costNum > 0 && (
-          <div className="bg-[#F0EDE4] rounded-lg p-4 text-sm">
-            {isMaterial ? (
-              <p className="text-muted-foreground">Material — Precio = Costo ({formatCurrency(costNum)}), sin ganancia</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div><span className="text-muted-foreground">x1.4:</span> <span className="font-semibold">{formatCurrency(costNum * 1.4)}</span> <span className="text-green-600">(+{formatCurrency(costNum * 0.4)})</span></div>
-                <div><span className="text-muted-foreground">x1.6:</span> <span className="font-semibold">{formatCurrency(costNum * 1.6)}</span> <span className="text-green-600">(+{formatCurrency(costNum * 0.6)})</span></div>
-              </div>
-            )}
-          </div>
-        )}
-        <div className="flex justify-end gap-3 pt-4">
-          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn type="submit" disabled={!item || !cost || !category}>Agregar</Btn>
-        </div>
-      </form>
-    </Modal>
-  )
+  const [cat, setCat] = useState(""); const [item, setItem] = useState(""); const [pn, setPn] = useState(""); const [pid, setPid] = useState(""); const [cost, setCost] = useState("")
+  const itcs = getCategoriesFor("item_type"); const [it, setIt] = useState(itcs[0]?.name || "Mobiliario")
+  const hm = itcs.find(c => c.name === it)?.has_multiplier !== false; const cn = parseFloat(cost) || 0; const qcs = getCategoriesFor("quote_category")
+  return (<Modal isOpen={true} title="Nueva Cotización" onClose={onClose}>
+    <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), date: today(), project_id: projectId, category: cat, item, type: it as any,
+      provider_id: pid || null, provider_name: pn || providers.find(p => p.id === pid)?.name || "", cost: cn,
+      price_x14: cn * 1.4, price_x16: cn * 1.6, ganancia_x14: cn * 0.4, ganancia_x16: cn * 0.6, selected: false, selected_multiplier: null })}} className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <EditableSelect label="Categoría" value={cat} onChange={setCat} options={qcs.map(c => ({ value: c.name, label: c.name }))} onAddNew={n => addCategory("quote_category", n)} onDelete={n => deleteCategory(n)} placeholder="Ej: Carpintería" />
+        <FormInput label="Ítem" value={item} onChange={setItem} placeholder="Ej: Mueble de TV" /></div>
+      <FormSelect label="Sección" value={it} onChange={setIt} options={itcs.map(c => ({ value: c.name, label: `${c.name} ${c.has_multiplier !== false ? "(con ganancia)" : "(sin ganancia)"}` }))} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormSelect label="Proveedor" value={pid} onChange={v => { setPid(v); setPn(providers.find(p => p.id === v)?.name || "") }} options={providers.map(p => ({ value: p.id, label: p.name }))} />
+        <FormInput label="Costo" type="number" value={cost} onChange={setCost} inputMode="decimal" /></div>
+      {cn > 0 && <div className="bg-[#F0EDE4] rounded-lg p-4 text-sm">{!hm ? <p className="text-muted-foreground">Sin ganancia</p>
+        : <div className="grid grid-cols-2 gap-3"><div>x1.4: <strong>{formatCurrency(cn * 1.4)}</strong> <span className="text-green-600">+{formatCurrency(cn * 0.4)}</span></div>
+          <div>x1.6: <strong>{formatCurrency(cn * 1.6)}</strong> <span className="text-green-600">+{formatCurrency(cn * 0.6)}</span></div></div>}</div>}
+      <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!item || !cost || !cat}>Agregar</Btn></div>
+    </form>
+  </Modal>)
 }
 
-function AddProjectMovementModal({ project, accounts, providers, onClose, onSave }: {
-  project: Project; accounts: any[]; providers: any[]
-  onClose: () => void; onSave: (m: Movement) => void
-}) {
-  const [date, setDate] = useState(today())
-  const [description, setDescription] = useState("")
-  const [amount, setAmount] = useState("")
-  const [type, setType] = useState<"ingreso" | "egreso">("ingreso")
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "")
-  const [providerId, setProviderId] = useState("")
-  const [autoSplit, setAutoSplit] = useState(true)
-
-  return (
-    <Modal isOpen={true} title="Movimiento del Proyecto" onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); onSave({
-        id: generateId(), date, description, amount: parseFloat(amount),
-        type, project_id: project.id, account_id: accountId || null,
-        provider_id: providerId || null, category: "Proyecto",
-        auto_split: type === "ingreso" ? autoSplit : false, split_percentage: 50,
-      })}} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Fecha" type="date" value={date} onChange={setDate} />
-          <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)}
-            options={[{ value: "ingreso", label: "Ingreso (cobro)" }, { value: "egreso", label: "Egreso (pago)" }]} />
-        </div>
-        <FormInput label="Descripción" value={description} onChange={setDescription} />
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Monto" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
-          <FormSelect label="Cuenta" value={accountId} onChange={setAccountId}
-            options={accounts.map(a => ({ value: a.id, label: a.name }))} />
-        </div>
-        {type === "egreso" && (
-          <FormSelect label="Proveedor (si aplica)" value={providerId} onChange={setProviderId}
-            options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
-        )}
-        {type === "ingreso" && (
-          <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg">
-            <input type="checkbox" checked={autoSplit} onChange={e => setAutoSplit(e.target.checked)} className="w-4 h-4" />
-            <div>
-              <p className="text-sm font-medium text-green-800">Distribuir 50/50 a socias</p>
-              <p className="text-xs text-green-600">Se calculará automáticamente en Finanzas Personales</p>
-            </div>
-          </div>
-        )}
-        <div className="flex justify-end gap-3 pt-4">
-          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn type="submit" disabled={!description || !amount}>Registrar</Btn>
-        </div>
-      </form>
-    </Modal>
-  )
+function AddMovModal({ project, accounts, providers, onClose, onSave }: { project: Project; accounts: any[]; providers: any[]; onClose: () => void; onSave: (m: Movement) => void }) {
+  const [date, setDate] = useState(today()); const [desc, setDesc] = useState(""); const [amt, setAmt] = useState("")
+  const [type, setType] = useState<"ingreso" | "egreso">("ingreso"); const [aid, setAid] = useState(accounts[0]?.id ?? ""); const [pid, setPid] = useState(""); const [split, setSplit] = useState(true)
+  return (<Modal isOpen={true} title="Movimiento" onClose={onClose}>
+    <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), date, description: desc, amount: parseFloat(amt), type, project_id: project.id, account_id: aid || null, provider_id: pid || null, category: "Proyecto", auto_split: type === "ingreso" ? split : false, split_percentage: 50 })}} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4"><FormInput label="Fecha" type="date" value={date} onChange={setDate} />
+        <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)} options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} /></div>
+      <FormInput label="Descripción" value={desc} onChange={setDesc} />
+      <div className="grid grid-cols-2 gap-4"><FormInput label="Monto" type="number" value={amt} onChange={setAmt} inputMode="decimal" />
+        <FormSelect label="Cuenta" value={aid} onChange={setAid} options={accounts.map(a => ({ value: a.id, label: a.name }))} /></div>
+      {type === "egreso" && <FormSelect label="Proveedor" value={pid} onChange={setPid} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />}
+      {type === "ingreso" && <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-green-800">Distribuir 50/50</p></div>}
+      <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !amt}>Registrar</Btn></div>
+    </form>
+  </Modal>)
 }
 
-function EditMovementModal({ movement, accounts, providers, onClose, onSave }: {
-  movement: Movement; accounts: any[]; providers: any[]
-  onClose: () => void; onSave: (updates: Partial<Movement>) => void
-}) {
-  const [date, setDate] = useState(movement.date)
-  const [description, setDescription] = useState(movement.description)
-  const [amount, setAmount] = useState(String(movement.amount))
-  const [type, setType] = useState(movement.type)
-  const [accountId, setAccountId] = useState(movement.account_id ?? "")
-  const [providerId, setProviderId] = useState(movement.provider_id ?? "")
-
-  return (
-    <Modal isOpen={true} title="Editar Movimiento" onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); onSave({
-        date, description, amount: parseFloat(amount) || 0,
-        type, account_id: accountId || null, provider_id: providerId || null,
-      })}} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Fecha" type="date" value={date} onChange={setDate} />
-          <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)}
-            options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} />
-        </div>
-        <FormInput label="Descripción" value={description} onChange={setDescription} />
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Monto" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
-          <FormSelect label="Cuenta" value={accountId} onChange={setAccountId}
-            options={[{ value: "", label: "Sin cuenta" }, ...accounts.map(a => ({ value: a.id, label: a.name }))]} />
-        </div>
-        {type === "egreso" && (
-          <FormSelect label="Proveedor" value={providerId} onChange={setProviderId}
-            options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
-        )}
-        <div className="flex justify-end gap-3 pt-4">
-          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn type="submit" disabled={!description || !amount}>Guardar</Btn>
-        </div>
-      </form>
-    </Modal>
-  )
+function EditMovModal({ movement, accounts, providers, onClose, onSave }: { movement: Movement; accounts: any[]; providers: any[]; onClose: () => void; onSave: (u: Partial<Movement>) => void }) {
+  const [date, setDate] = useState(movement.date); const [desc, setDesc] = useState(movement.description); const [amt, setAmt] = useState(String(movement.amount))
+  const [type, setType] = useState(movement.type); const [aid, setAid] = useState(movement.account_id ?? ""); const [pid, setPid] = useState(movement.provider_id ?? "")
+  return (<Modal isOpen={true} title="Editar Movimiento" onClose={onClose}>
+    <form onSubmit={e => { e.preventDefault(); onSave({ date, description: desc, amount: parseFloat(amt) || 0, type, account_id: aid || null, provider_id: pid || null })}} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4"><FormInput label="Fecha" type="date" value={date} onChange={setDate} />
+        <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)} options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} /></div>
+      <FormInput label="Descripción" value={desc} onChange={setDesc} />
+      <div className="grid grid-cols-2 gap-4"><FormInput label="Monto" type="number" value={amt} onChange={setAmt} />
+        <FormSelect label="Cuenta" value={aid} onChange={setAid} options={[{ value: "", label: "Sin cuenta" }, ...accounts.map(a => ({ value: a.id, label: a.name }))]} /></div>
+      <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !amt}>Guardar</Btn></div>
+    </form>
+  </Modal>)
 }
 
-function UploadFileModal({ projectId, onClose, onUpload }: {
-  projectId: string; onClose: () => void
-  onUpload: (file: File, meta: { name: string; category: string; description: string }) => void
-}) {
+function UploadModal({ projectId, onClose, onUpload }: { projectId: string; onClose: () => void; onUpload: (file: File, meta: { name: string; category: string; description: string }) => void }) {
   const { getCategoriesFor, addCategory, deleteCategory } = useApp()
-  const [name, setName] = useState("")
-  const [category, setCategory] = useState("otro")
-  const [description, setDescription] = useState("")
-  const [file, setFile] = useState<File | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const fileCats = getCategoriesFor("file_category")
-  const defaultCats = [
-    { value: "contrato", label: "Contrato" }, { value: "plano", label: "Plano" },
-    { value: "presupuesto", label: "Presupuesto" }, { value: "factura", label: "Factura" },
-    { value: "foto", label: "Foto" }, { value: "render", label: "Render" }, { value: "otro", label: "Otro" },
-  ]
-  const allCats = [...defaultCats, ...fileCats.filter(c => !defaultCats.some(d => d.value === c.name)).map(c => ({ value: c.name, label: c.name }))]
-
-  return (
-    <Modal isOpen={true} title="Subir Archivo" onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); if (file) onUpload(file, { name: name || file.name, category, description }) }} className="space-y-4">
-        <div className="border-2 border-dashed border-[#E0DDD0] rounded-lg p-6 text-center cursor-pointer hover:border-[#5F5A46]"
-          onClick={() => fileRef.current?.click()}>
-          <input ref={fileRef} type="file" className="hidden" onChange={e => {
-            const f = e.target.files?.[0]
-            if (f) { setFile(f); if (!name) setName(f.name) }
-          }} accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" />
-          {file ? <p className="text-sm font-medium">{file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)</p>
-            : <p className="text-sm text-muted-foreground">Click para seleccionar archivo</p>}
-        </div>
-        <FormInput label="Nombre" value={name} onChange={setName} />
-        <EditableSelect label="Categoría" value={category} onChange={setCategory}
-          options={allCats}
-          onAddNew={(name) => addCategory("file_category", name)}
-          onDelete={(name) => deleteCategory(name)} />
-        <FormInput label="Descripción (opcional)" value={description} onChange={setDescription} />
-        <div className="flex justify-end gap-3 pt-4">
-          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn type="submit" disabled={!file}>Subir</Btn>
-        </div>
-      </form>
-    </Modal>
-  )
+  const [name, setName] = useState(""); const [cat, setCat] = useState("otro"); const [desc, setDesc] = useState(""); const [file, setFile] = useState<File | null>(null); const ref = useRef<HTMLInputElement>(null)
+  const fcs = getCategoriesFor("file_category")
+  const dcs = [{ value: "contrato", label: "Contrato" }, { value: "plano", label: "Plano" }, { value: "presupuesto", label: "Presupuesto" }, { value: "factura", label: "Factura" }, { value: "foto", label: "Foto" }, { value: "render", label: "Render" }, { value: "otro", label: "Otro" }]
+  const acs = [...dcs, ...fcs.filter(c => !dcs.some(d => d.value === c.name)).map(c => ({ value: c.name, label: c.name }))]
+  return (<Modal isOpen={true} title="Subir Archivo" onClose={onClose}>
+    <form onSubmit={e => { e.preventDefault(); if (file) onUpload(file, { name: name || file.name, category: cat, description: desc }) }} className="space-y-4">
+      <div className="border-2 border-dashed border-[#E0DDD0] rounded-lg p-6 text-center cursor-pointer hover:border-[#5F5A46]" onClick={() => ref.current?.click()}>
+        <input ref={ref} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); if (!name) setName(f.name) } }} />
+        {file ? <p className="text-sm font-medium">{file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)</p> : <p className="text-sm text-muted-foreground">Click para seleccionar</p>}</div>
+      <FormInput label="Nombre" value={name} onChange={setName} />
+      <EditableSelect label="Categoría" value={cat} onChange={setCat} options={acs} onAddNew={n => addCategory("file_category", n)} onDelete={n => deleteCategory(n)} />
+      <FormInput label="Descripción" value={desc} onChange={setDesc} />
+      <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!file}>Subir</Btn></div>
+    </form>
+  </Modal>)
 }

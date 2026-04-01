@@ -50,7 +50,7 @@ interface AppContextType {
 
   // Categories
   getCategoriesFor: (type: string) => Category[]
-  addCategory: (type: string, name: string) => Promise<void>
+  addCategory: (type: string, name: string, has_multiplier?: boolean) => Promise<void>
   deleteCategory: (name: string) => Promise<void>
 }
 
@@ -328,7 +328,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return data.categories.filter(c => c.type === type && c.active)
   }, [data.categories])
 
-  const addCategory = useCallback(async (type: string, name: string) => {
+  const addCategory = useCallback(async (type: string, name: string, has_multiplier?: boolean) => {
     const maxOrder = data.categories
       .filter(c => c.type === type)
       .reduce((max, c) => Math.max(max, c.sort_order), 0)
@@ -336,6 +336,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: crypto.randomUUID(),
       type, name, active: true,
       sort_order: maxOrder + 1,
+      has_multiplier: has_multiplier ?? true,
     }
     await addRow("categories", cat as any, "categories")
   }, [data.categories, addRow])
