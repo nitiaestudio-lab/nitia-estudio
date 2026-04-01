@@ -3,325 +3,107 @@
 import { useState } from "react"
 import { useApp } from "@/lib/app-context"
 import { formatDate, generateId, today } from "@/lib/helpers"
-import { Tag, Btn, Empty, Modal, FormInput, FormSelect } from "@/components/nitia-ui"
+import { SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect } from "@/components/nitia-ui"
 import type { Task } from "@/lib/types"
-import { Plus, CheckCircle, Circle, Clock, Download, Info } from "lucide-react"
-import { exportTareas } from "@/lib/export-utils"
-import { useSelection } from "@/hooks/use-selection"
-import { SelectionBar } from "@/components/selection-bar"
-import { SearchInput } from "@/components/search-input"
-import { TableCheckbox, TableHeaderCheckbox } from "@/components/table-checkbox"
-import { InlineEditField } from "@/components/inline-edit-field"
+import { Plus, Trash2, Pencil } from "lucide-react"
 
 export function Tasks() {
-  const { data, addTask, updateTask, deleteTask, deleteTasks } = useApp()
+  const { data, addRow, updateRow, deleteRow, deleteRows } = useApp()
   const [showNew, setShowNew] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [filter, setFilter] = useState<"all" | "pendiente" | "en-curso" | "completada">("all")
-  const [selectedProject, setSelectedProject] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [filterProject, setFilterProject] = useState("all")
 
-  // Filter by search, project, and status
-  const filteredTasks = data.tasks.filter((t) => {
-    const matchesSearch = !searchQuery || 
-      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.assignee?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesProject = !selectedProject || t.projectId === selectedProject
-    const matchesStatus = filter === "all" || t.status === filter
-    return matchesSearch && matchesProject && matchesStatus
-  })
+  const tasks = data.tasks
+    .filter(t => filterStatus === "all" || t.status === filterStatus)
+    .filter(t => filterProject === "all" || t.project_id === filterProject)
+    .sort((a, b) => {
+      const prio = { alta: 0, media: 1, baja: 2 }
+      return (prio[a.priority as keyof typeof prio] ?? 1) - (prio[b.priority as keyof typeof prio] ?? 1)
+    })
 
-  // Hook de selección masiva
-  const selection = useSelection({ items: filteredTasks })
+  const getProjectName = (id?: string | null) =>
+    data.projects.find(p => p.id === id)?.name ?? "Sin proyecto"
 
-  // Group tasks by project for the sidebar
-  const tasksByProject = data.projects.map((project) => ({
-    project,
-    tasks: data.tasks.filter((t) => t.projectId === project.id),
-    pendingCount: data.tasks.filter((t) => t.projectId === project.id && t.status !== "completada").length,
-  }))
-
-  const editingTask = editingId ? data.tasks.find((t) => t.id === editingId) : null
-
-  const getProjectName = (projectId: string) => {
-    return data.projects.find((p) => p.id === projectId)?.name ?? "Sin proyecto"
-  }
-
-  const getStatusIcon = (status: Task["status"]) => {
-    switch (status) {
-      case "completada":
-        return <CheckCircle size={16} className="text-[var(--green)]" />
-      case "en-curso":
-        return <Clock size={16} className="text-blue-600" />
-      default:
-        return <Circle size={16} className="text-muted-foreground" />
-    }
-  }
-
-  const toggleStatus = async (task: Task) => {
-    const nextStatus: Record<Task["status"], Task["status"]> = {
-      pendiente: "en-curso",
-      "en-curso": "completada",
-      completada: "pendiente",
-    }
-    await updateTask(task.id, { status: nextStatus[task.status] })
-  }
-
-  // Handler para eliminar seleccionados
-  const handleDeleteSelected = async () => {
-    await deleteTasks(selection.selectedIds)
-    selection.clearSelection()
-  }
-
-  // Handler para exportar seleccionados
-  const handleExportSelected = () => {
-    const selectedTasks = selection.selectedItems
-    exportTareas(selectedTasks.map(t => ({
-      title: t.title,
-      status: t.status,
-      priority: t.priority || "media",
-      dueDate: t.dueDate,
-      assignee: getProjectName(t.projectId),
-    })), "seleccionadas")
-  }
+  const prioColor = (p: string) => p === "alta" ? "red" : p === "media" ? "yellow" : "gray"
+  const statusColor = (s: string) => s === "completada" ? "green" : s === "en-curso" ? "blue" : "gray"
 
   return (
     <div className="p-6 lg:p-8 space-y-8">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Tareas</h1>
-          <p className="text-sm text-[#76746A] mt-1">
-            Vista general de todas las tareas. Gestionalas dentro de cada proyecto.
-          </p>
+          <p className="text-sm text-[#76746A] mt-1">Gesti{"\u00f3"}n de tareas por proyecto</p>
         </div>
-        <div className="flex gap-2">
-          {data.tasks.length > 0 && (
-            <Btn variant="ghost" onClick={() => exportTareas(data.tasks.map(t => ({
-              title: t.title,
-              status: t.status,
-              priority: t.priority || "media",
-              dueDate: t.dueDate,
-              assignee: getProjectName(t.projectId),
-            })), "todas")}>
-              <Download size={14} className="mr-1.5 inline" />
-              Excel
-            </Btn>
-          )}
-          <Btn onClick={() => setShowNew(true)}>
-            <Plus size={14} className="mr-1.5 inline" />
-            Nueva Tarea
-          </Btn>
-        </div>
+        <Btn onClick={() => { setEditingTask(null); setShowNew(true) }}>
+          <Plus size={14} className="mr-1 inline" />Nueva Tarea
+        </Btn>
       </div>
 
-      {/* Búsqueda */}
-      <SearchInput
-        value={searchQuery}
-        onChange={setSearchQuery}
-        placeholder="Buscar por título o asignada a..."
-        className="max-w-md"
-      />
-
-      {/* Info Note */}
-      <div className="bg-[#E0F2FE] border border-[#7DD3FC] rounded-lg p-4 flex items-start gap-3">
-        <Info size={18} className="text-[#0284C7] mt-0.5 flex-shrink-0" />
-        <div>
-          <p className="text-sm text-[#0369A1]">
-            <strong>Tip:</strong> Las tareas ahora se gestionan dentro de cada proyecto. 
-            Ve a <strong>Proyectos → [Proyecto] → Tareas</strong> para agregar y gestionar tareas de ese cliente.
-          </p>
-        </div>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <FormSelect value={filterStatus} onChange={setFilterStatus}
+          options={[{ value: "all", label: "Todos los estados" }, { value: "pendiente", label: "Pendiente" },
+            { value: "en-curso", label: "En curso" }, { value: "completada", label: "Completada" }]} />
+        <FormSelect value={filterProject} onChange={setFilterProject}
+          options={[{ value: "all", label: "Todos los proyectos" },
+            ...data.projects.map(p => ({ value: p.id, label: p.name }))]} />
       </div>
 
-      {/* Project Filter */}
-      <div className="space-y-3">
-        <p className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">Por Proyecto</p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedProject(null)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              !selectedProject
-                ? "bg-[#5F5A46] text-white"
-                : "bg-[#F0EDE4] text-[#76746A] hover:bg-[#E0DDD0]"
-            }`}
-          >
-            Todos ({data.tasks.length})
-          </button>
-          {tasksByProject.map(({ project, pendingCount }) => (
-            <button
-              key={project.id}
-              onClick={() => setSelectedProject(project.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                selectedProject === project.id
-                  ? "bg-[#5F5A46] text-white"
-                  : "bg-[#F0EDE4] text-[#76746A] hover:bg-[#E0DDD0]"
-              }`}
-            >
-              {project.name} {pendingCount > 0 && <span className="ml-1 text-red-600">({pendingCount})</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Status Filter */}
-      <div className="space-y-3">
-        <p className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">Por Estado</p>
-        <div className="flex gap-2">
-          {(["all", "pendiente", "en-curso", "completada"] as const).map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilter(status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide uppercase transition-colors ${
-                filter === status
-                  ? "bg-[#2A4A6A] text-white"
-                  : "bg-card border border-border text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              {status === "all" ? "Todas" : status === "en-curso" ? "En curso" : status}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tasks List con selección */}
+      {/* Tasks Table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="w-10 px-4 py-3">
-                <TableHeaderCheckbox
-                  isAllSelected={selection.isAllSelected}
-                  isSomeSelected={selection.isSomeSelected}
-                  onToggleAll={selection.toggleAll}
-                />
-              </th>
-              <th className="w-10 px-4 py-3" />
-              <th className="text-left text-[9px] font-semibold tracking-[0.1em] uppercase text-muted-foreground px-4 py-3">
-                Tarea
-              </th>
-              <th className="text-left text-[9px] font-semibold tracking-[0.1em] uppercase text-muted-foreground px-4 py-3">
-                Proyecto
-              </th>
-              <th className="text-left text-[9px] font-semibold tracking-[0.1em] uppercase text-muted-foreground px-4 py-3">
-                Vencimiento
-              </th>
-              <th className="text-left text-[9px] font-semibold tracking-[0.1em] uppercase text-muted-foreground px-4 py-3">
-                Prioridad
-              </th>
-              <th className="text-left text-[9px] font-semibold tracking-[0.1em] uppercase text-muted-foreground px-4 py-3">
-                Estado
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTasks.map((task) => (
-              <tr
-                key={task.id}
-                className={`border-b border-border last:border-0 hover:bg-accent/50 transition-colors ${
-                  selection.isSelected(task.id) ? "bg-[#F7F5ED]" : ""
-                }`}
-              >
-                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                  <TableCheckbox
-                    checked={selection.isSelected(task.id)}
-                    onChange={() => selection.toggleItem(task.id)}
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => toggleStatus(task)}
-                    className="hover:scale-110 transition-transform"
-                  >
-                    {getStatusIcon(task.status)}
-                  </button>
-                </td>
-                <td className="px-4 py-3 text-sm font-medium text-foreground">
-                  <InlineEditField
-                    value={task.title}
-                    onSave={async (value) => {
-                      await updateTask(task.id, { title: String(value) })
-                    }}
-                    fieldName="título"
-                  />
-                </td>
-                <td className="px-4 py-3 text-sm text-muted-foreground">
-                  {getProjectName(task.projectId)}
-                </td>
-                <td className="px-4 py-3 text-sm text-muted-foreground">
-                  {task.dueDate ? formatDate(task.dueDate) : "Sin fecha"}
-                </td>
-                <td className="px-4 py-3">
-                  <Tag
-                    label={task.priority}
-                    color={
-                      task.priority === "alta"
-                        ? "red"
-                        : task.priority === "media"
-                        ? "amber"
-                        : "gray"
-                    }
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <Tag
-                    label={task.status === "en-curso" ? "En curso" : task.status}
-                    color={
-                      task.status === "completada"
-                        ? "green"
-                        : task.status === "en-curso"
-                        ? "blue"
-                        : "gray"
-                    }
-                  />
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-[#F0EDE4] border-b border-border">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">Tarea</th>
+                <th className="px-4 py-3 text-left font-medium">Proyecto</th>
+                <th className="px-4 py-3 text-left font-medium">Fecha l{"\u00ed"}mite</th>
+                <th className="px-4 py-3 text-left font-medium">Prioridad</th>
+                <th className="px-4 py-3 text-left font-medium">Estado</th>
+                <th className="px-4 py-3 w-20"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filteredTasks.length === 0 && (
-          <Empty
-            title="No hay tareas"
-            description={filter !== "all" || searchQuery ? "Cambia el filtro o búsqueda" : "Crea tu primera tarea"}
-            action={filter === "all" && !searchQuery && <Btn onClick={() => setShowNew(true)}>Crear Tarea</Btn>}
-          />
-        )}
+            </thead>
+            <tbody>
+              {tasks.map(task => (
+                <tr key={task.id} className="border-b border-border last:border-0 hover:bg-[#FAFAF9]">
+                  <td className="px-4 py-3 font-medium">{task.title}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{getProjectName(task.project_id)}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{task.due_date ? formatDate(task.due_date) : "—"}</td>
+                  <td className="px-4 py-3"><Tag label={task.priority} color={prioColor(task.priority)} /></td>
+                  <td className="px-4 py-3">
+                    <select value={task.status} onChange={e => updateRow("task_items", task.id, { status: e.target.value }, "tasks")}
+                      className="text-xs px-2 py-1 rounded border border-[#E0DDD0]">
+                      <option value="pendiente">Pendiente</option>
+                      <option value="en-curso">En curso</option>
+                      <option value="completada">Completada</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      <button onClick={() => { setEditingTask(task); setShowNew(true) }}
+                        className="p-1.5 hover:bg-accent rounded"><Pencil size={14} className="text-muted-foreground" /></button>
+                      <button onClick={() => deleteRow("task_items", task.id, "tasks")}
+                        className="p-1.5 hover:bg-red-50 rounded"><Trash2 size={14} className="text-red-600" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {tasks.length === 0 && <Empty title="Sin tareas" action={<Btn onClick={() => setShowNew(true)}>Crear tarea</Btn>} />}
       </div>
 
-      {/* Barra de selección masiva */}
-      <SelectionBar
-        selectedCount={selection.selectedCount}
-        onDelete={handleDeleteSelected}
-        onExport={handleExportSelected}
-        onClear={selection.clearSelection}
-        itemName="tarea"
-      />
-
-      {/* New Task Modal */}
       {showNew && (
-        <TaskModal
-          projects={data.projects}
-          onClose={() => setShowNew(false)}
-          onSave={async (task) => {
-            await addTask(task)
-            setShowNew(false)
-          }}
-        />
-      )}
-
-      {/* Edit Task Modal */}
-      {editingTask && (
         <TaskModal
           task={editingTask}
           projects={data.projects}
-          onClose={() => setEditingId(null)}
+          onClose={() => { setShowNew(false); setEditingTask(null) }}
           onSave={async (task) => {
-            await updateTask(task.id, task)
-            setEditingId(null)
-          }}
-          onDelete={async () => {
-            await deleteTask(editingTask.id)
-            setEditingId(null)
+            if (editingTask) await updateRow("task_items", task.id, task, "tasks")
+            else await addRow("task_items", task, "tasks")
+            setShowNew(false); setEditingTask(null)
           }}
         />
       )}
@@ -329,91 +111,35 @@ export function Tasks() {
   )
 }
 
-// Task Modal
-function TaskModal({
-  task,
-  projects,
-  onClose,
-  onSave,
-  onDelete,
-}: {
-  task?: Task
-  projects: Array<{ id: string; name: string }>
-  onClose: () => void
-  onSave: (task: Task) => void
-  onDelete?: () => void
+function TaskModal({ task, projects, onClose, onSave }: {
+  task: Task | null; projects: { id: string; name: string }[]
+  onClose: () => void; onSave: (t: Task) => void
 }) {
   const [title, setTitle] = useState(task?.title ?? "")
-  const [projectId, setProjectId] = useState(task?.projectId ?? projects[0]?.id ?? "")
-  const [dueDate, setDueDate] = useState(task?.dueDate ?? today())
-  const [priority, setPriority] = useState<Task["priority"]>(task?.priority ?? "media")
-  const [status, setStatus] = useState<Task["status"]>(task?.status ?? "pendiente")
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const data: Task = {
-      id: task?.id ?? generateId(),
-      title,
-      projectId,
-      dueDate,
-      priority,
-      status,
-      assignee: task?.assignee ?? "",
-    }
-    onSave(data)
-  }
+  const [projectId, setProjectId] = useState(task?.project_id ?? "")
+  const [dueDate, setDueDate] = useState(task?.due_date ?? today())
+  const [priority, setPriority] = useState(task?.priority ?? "media")
+  const [status, setStatus] = useState(task?.status ?? "pendiente")
 
   return (
     <Modal isOpen={true} title={task ? "Editar Tarea" : "Nueva Tarea"} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <FormInput label="Titulo" value={title} onChange={setTitle} />
-        <FormSelect
-          label="Proyecto"
-          value={projectId}
-          onChange={setProjectId}
-          options={projects.map((p) => ({ value: p.id, label: p.name }))}
-        />
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Fecha limite" type="date" value={dueDate} onChange={setDueDate} />
-          <FormSelect
-            label="Prioridad"
-            value={priority}
-            onChange={(v) => setPriority(v as Task["priority"])}
-            options={[
-              { value: "alta", label: "Alta" },
-              { value: "media", label: "Media" },
-              { value: "baja", label: "Baja" },
-            ]}
-          />
+      <form onSubmit={e => { e.preventDefault(); onSave({
+        id: task?.id ?? generateId(), title, project_id: projectId || null,
+        due_date: dueDate, priority, status, assignee: task?.assignee ?? "",
+      })}} className="space-y-4">
+        <FormInput label="T\u00edtulo" value={title} onChange={setTitle} />
+        <FormSelect label="Proyecto" value={projectId || ""} onChange={setProjectId}
+          options={projects.map(p => ({ value: p.id, label: p.name }))} />
+        <div className="grid grid-cols-3 gap-4">
+          <FormInput label="Fecha l\u00edmite" type="date" value={dueDate} onChange={setDueDate} />
+          <FormSelect label="Prioridad" value={priority} onChange={setPriority}
+            options={[{ value: "alta", label: "Alta" }, { value: "media", label: "Media" }, { value: "baja", label: "Baja" }]} />
+          <FormSelect label="Estado" value={status} onChange={setStatus}
+            options={[{ value: "pendiente", label: "Pendiente" }, { value: "en-curso", label: "En curso" }, { value: "completada", label: "Completada" }]} />
         </div>
-        {task && (
-          <FormSelect
-            label="Estado"
-            value={status}
-            onChange={(v) => setStatus(v as Task["status"])}
-            options={[
-              { value: "pendiente", label: "Pendiente" },
-              { value: "en-curso", label: "En curso" },
-              { value: "completada", label: "Completada" },
-            ]}
-          />
-        )}
-        <div className="flex justify-between pt-4">
-          <div>
-            {onDelete && (
-              <Btn variant="danger" onClick={onDelete}>
-                Eliminar
-              </Btn>
-            )}
-          </div>
-          <div className="flex gap-3">
-            <Btn variant="ghost" onClick={onClose}>
-              Cancelar
-            </Btn>
-            <Btn type="submit" disabled={!title || !projectId}>
-              {task ? "Guardar" : "Crear"}
-            </Btn>
-          </div>
+        <div className="flex justify-end gap-3 pt-4">
+          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn type="submit" disabled={!title}>{task ? "Guardar" : "Crear"}</Btn>
         </div>
       </form>
     </Modal>

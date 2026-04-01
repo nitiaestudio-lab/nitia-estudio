@@ -33,7 +33,7 @@ export function LoginScreen() {
       if (result.success) {
         setAvailableUsers(result.users as typeof availableUsers)
       } else {
-        setConnectionError(result.error || "Error al conectar. Verifica tu conexion e intenta de nuevo.")
+        setConnectionError(result.error || "Error al conectar. Verifica tu conexión e intenta de nuevo.")
       }
       setIsLoadingUsers(false)
     }
@@ -86,7 +86,7 @@ export function LoginScreen() {
       return
     }
     if (!pin || pin.length !== 4) {
-      setError("PIN debe tener 4 digitos")
+      setError("PIN debe tener 4 dígitos")
       return
     }
 
@@ -123,7 +123,7 @@ export function LoginScreen() {
     e.preventDefault()
     
     if (!totp2FACode || totp2FACode.length !== 6) {
-      setError("Código debe tener 6 digitos")
+      setError("Código debe tener 6 dígitos")
       return
     }
     

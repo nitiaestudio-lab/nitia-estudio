@@ -1,213 +1,84 @@
-// Utilidades para exportar datos a Excel/CSV
+// Export utilities - generic CSV/JSON export
 
-export function exportToCSV(data: Record<string, unknown>[], filename: string) {
+function downloadCSV(data: Record<string, any>[], filename: string) {
   if (data.length === 0) return
-
   const headers = Object.keys(data[0])
-  const csvContent = [
+  const csvRows = [
     headers.join(","),
-    ...data.map((row) =>
-      headers
-        .map((header) => {
-          const value = row[header]
-          // Escapar comillas y envolver en comillas si contiene coma
-          const stringValue = String(value ?? "")
-          if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
-            return `"${stringValue.replace(/"/g, '""')}"`
-          }
-          return stringValue
-        })
-        .join(",")
-    ),
-  ].join("\n")
-
-  const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" })
+    ...data.map(row => headers.map(h => {
+      const val = row[h]
+      if (val === null || val === undefined) return ""
+      const str = String(val)
+      return str.includes(",") || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str
+    }).join(","))
+  ]
+  const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
-  link.href = URL.createObjectURL(blob)
+  link.href = url
   link.download = `${filename}_${new Date().toISOString().split("T")[0]}.csv`
   link.click()
-  URL.revokeObjectURL(link.href)
+  URL.revokeObjectURL(url)
 }
 
-export function exportProjectMovements(
-  movements: { date: string; description: string; amount: number; type: string; category: string; conceptoIngreso?: string; cuentaDestino?: string }[],
-  projectName: string
-) {
-  const data = movements.map((m) => ({
-    Fecha: m.date,
-    Descripcion: m.description,
-    Tipo: m.type === "ingreso" ? "Ingreso" : "Egreso",
-    Categoria: m.category,
-    Concepto: m.conceptoIngreso || "",
-    Cuenta: m.cuentaDestino || "",
-    Monto: m.amount,
-  }))
-  exportToCSV(data, `movimientos_${projectName.replace(/\s+/g, "_")}`)
+export function exportCuentas(accounts: { name: string; type?: string; balance: number; owner?: string }[]) {
+  downloadCSV(accounts.map(a => ({
+    Nombre: a.name, Tipo: a.type || "", Saldo: a.balance, Titular: a.owner || "nitia"
+  })), "cuentas")
 }
 
-export function exportProjectDesglose(
-  project: {
-    name: string
-    honorarios: { clientPrice: number }
-    manoDeObra: { description: string; cost: number; clientPrice: number }[]
-    materiales: { description: string; cost: number; clientPrice: number }[]
-    mobiliario: { item?: string; description?: string; cost: number; clientPrice: number }[]
-  }
-) {
-  const data = [
-    { Categoria: "Honorarios", Descripcion: "Honorarios del proyecto", Costo: 0, PrecioCliente: project.honorarios.clientPrice },
-    ...project.manoDeObra.map((i) => ({
-      Categoria: "Mano de Obra",
-      Descripcion: i.description,
-      Costo: i.cost,
-      PrecioCliente: i.clientPrice,
-    })),
-    ...project.materiales.map((i) => ({
-      Categoria: "Materiales",
-      Descripcion: i.description,
-      Costo: i.cost,
-      PrecioCliente: i.clientPrice,
-    })),
-    ...project.mobiliario.map((i) => ({
-      Categoria: "Mobiliario",
-      Descripcion: i.description || i.item || "",
-      Costo: i.cost,
-      PrecioCliente: i.clientPrice,
-    })),
-  ]
-  exportToCSV(data, `desglose_${project.name.replace(/\s+/g, "_")}`)
+export function exportMovimientosCuenta(movements: { date: string; description: string; amount: number; type: string; category?: string }[], label: string) {
+  downloadCSV(movements.map(m => ({
+    Fecha: m.date, Descripcion: m.description, Monto: m.amount, Tipo: m.type, Categoria: m.category || ""
+  })), `movimientos_${label}`)
 }
 
-export function exportCotizaciones(
-  cotizaciones: { date: string; item: string; category: string; providerName: string; cost: number; priceX14: number; priceX16: number; selected: boolean }[],
-  projectName: string
-) {
-  const data = cotizaciones.map((c) => ({
-    Fecha: c.date,
-    Categoria: c.category,
-    Item: c.item,
-    Proveedor: c.providerName,
-    Costo: c.cost,
-    PrecioX14: c.priceX14,
-    PrecioX16: c.priceX16,
-    Seleccionada: c.selected ? "Si" : "No",
-  }))
-  exportToCSV(data, `cotizaciones_${projectName.replace(/\s+/g, "_")}`)
+export function exportCostosFijos(costs: { description: string; amount: number; category?: string; active: boolean }[]) {
+  downloadCSV(costs.map(c => ({
+    Descripcion: c.description, Monto: c.amount, Categoria: c.category || "", Activo: c.active ? "Si" : "No"
+  })), "costos_fijos")
 }
 
-export function exportTareas(
-  tareas: { title: string; status: string; priority: string; dueDate?: string; assignee: string }[],
-  projectName: string
-) {
-  const data = tareas.map((t) => ({
-    Tarea: t.title,
-    Estado: t.status,
-    Prioridad: t.priority,
-    Vencimiento: t.dueDate || "",
-    Asignado: t.assignee,
-  }))
-  exportToCSV(data, `tareas_${projectName.replace(/\s+/g, "_")}`)
+export function exportProveedores(providers: { name: string; category: string; phone?: string; email?: string }[]) {
+  downloadCSV(providers.map(p => ({
+    Nombre: p.name, Categoria: p.category, Telefono: p.phone || "", Email: p.email || ""
+  })), "proveedores")
 }
 
-// Exportar proveedores
-export function exportProveedores(
-  proveedores: { name: string; category: string; phone?: string; email?: string; cbu?: string; alias?: string; address?: string }[]
-) {
-  const data = proveedores.map((p) => ({
-    Nombre: p.name,
-    Categoria: p.category,
-    Telefono: p.phone || "",
-    Email: p.email || "",
-    CBU: p.cbu || "",
-    Alias: p.alias || "",
-    Direccion: p.address || "",
-  }))
-  exportToCSV(data, "proveedores")
+export function exportProyectos(projects: { name: string; client: string; status?: string }[]) {
+  downloadCSV(projects.map(p => ({
+    Nombre: p.name, Cliente: p.client, Estado: p.status || "activo"
+  })), "proyectos")
 }
 
-// Exportar cuentas
-export function exportCuentas(
-  cuentas: { name: string; type: string; balance: number; owner: string }[]
-) {
-  const data = cuentas.map((c) => ({
-    Nombre: c.name,
-    Tipo: c.type,
-    Saldo: c.balance,
-    Propietario: c.owner,
-  }))
-  exportToCSV(data, "cuentas")
+export function exportFinanzasPersonales(movements: { date: string; description: string; amount: number; type: string; category?: string }[], owner: string) {
+  downloadCSV(movements.map(m => ({
+    Fecha: m.date, Descripcion: m.description, Tipo: m.type, Categoria: m.category || "", Monto: m.amount
+  })), `finanzas_${owner}`)
 }
 
-// Exportar movimientos de cuentas
-export function exportMovimientosCuenta(
-  movimientos: { date: string; description: string; amount: number; type: string; category?: string }[],
-  accountName: string
-) {
-  const data = movimientos.map((m) => ({
-    Fecha: m.date,
-    Descripcion: m.description,
-    Tipo: m.type === "ingreso" ? "Ingreso" : "Egreso",
-    Categoria: m.category || "",
-    Monto: m.amount,
-  }))
-  exportToCSV(data, `movimientos_${accountName.replace(/\s+/g, "_")}`)
+export function exportProjectMovements(movements: { date: string; description: string; amount: number; type: string }[], projectName: string) {
+  downloadCSV(movements.map(m => ({
+    Fecha: m.date, Descripcion: m.description, Monto: m.amount, Tipo: m.type
+  })), `movimientos_${projectName.replace(/\s+/g, "_")}`)
 }
 
-// Exportar finanzas personales
-export function exportFinanzasPersonales(
-  movimientos: { date: string; description: string; amount: number; type: string; category?: string }[],
-  owner: string
-) {
-  const data = movimientos.map((m) => ({
-    Fecha: m.date,
-    Descripcion: m.description,
-    Tipo: m.type === "ingreso" ? "Ingreso" : "Egreso",
-    Categoria: m.category || "",
-    Monto: m.amount,
-  }))
-  exportToCSV(data, `finanzas_${owner}`)
+export function exportProjectDesglose(items: { type: string; description: string; cost: number; client_price: number }[], projectName: string) {
+  downloadCSV(items.map(i => ({
+    Tipo: i.type, Descripcion: i.description, Costo: i.cost, PrecioCliente: i.client_price
+  })), `desglose_${projectName.replace(/\s+/g, "_")}`)
 }
 
-// Exportar costos fijos de Nitia
-export function exportCostosFijos(
-  costos: { description: string; amount: number; category?: string; active: boolean }[]
-) {
-  const data = costos.map((c) => ({
-    Descripcion: c.description,
-    Monto: c.amount,
-    Categoria: c.category || "",
-    Activo: c.active ? "Si" : "No",
-  }))
-  exportToCSV(data, "costos_fijos_nitia")
+export function exportCotizaciones(quotes: { category: string; item: string; provider_name: string; cost: number; price_x14: number; price_x16: number; selected: boolean }[]) {
+  downloadCSV(quotes.map(q => ({
+    Categoria: q.category, Item: q.item, Proveedor: q.provider_name,
+    Costo: q.cost, PrecioX14: q.price_x14, PrecioX16: q.price_x16,
+    Seleccionado: q.selected ? "Si" : "No"
+  })), "cotizaciones")
 }
 
-// Exportar proyectos
-export function exportProyectos(
-  proyectos: { name: string; client: string; type: string; status: string; startDate?: string; budget?: number }[]
-) {
-  const data = proyectos.map((p) => ({
-    Nombre: p.name,
-    Cliente: p.client,
-    Tipo: p.type,
-    Estado: p.status,
-    FechaInicio: p.startDate || "",
-    Presupuesto: p.budget || 0,
-  }))
-  exportToCSV(data, "proyectos")
-}
-
-// Exportar movimientos globales
-export function exportMovimientosGlobales(
-  movimientos: { date: string; description: string; amount: number; type: string; category?: string; projectName?: string; providerName?: string }[]
-) {
-  const data = movimientos.map((m) => ({
-    Fecha: m.date,
-    Descripcion: m.description,
-    Tipo: m.type === "ingreso" ? "Ingreso" : "Egreso",
-    Categoria: m.category || "",
-    Proyecto: m.projectName || "",
-    Proveedor: m.providerName || "",
-    Monto: m.amount,
-  }))
-  exportToCSV(data, "movimientos_globales")
+export function exportTareas(tasks: { title: string; status: string; priority: string; due_date?: string }[]) {
+  downloadCSV(tasks.map(t => ({
+    Titulo: t.title, Estado: t.status, Prioridad: t.priority, FechaLimite: t.due_date || ""
+  })), "tareas")
 }

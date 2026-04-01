@@ -2,237 +2,126 @@
 
 import { useState } from "react"
 import { useApp } from "@/lib/app-context"
-import { formatCurrency, formatDate, generateId, today } from "@/lib/helpers"
-import { Stat, SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect, ExportButton, PeriodFilter, getDateRangeForPeriod, type PeriodValue } from "@/components/nitia-ui"
-import type { AccountMovement } from "@/lib/types"
-import { exportCuentas, exportMovimientosCuenta } from "@/lib/export-utils"
-import { Plus, ArrowUpRight, ArrowDownLeft, Trash2 } from "lucide-react"
-import { useSelection } from "@/hooks/use-selection"
-import { SelectionBar } from "@/components/selection-bar"
-import { SearchInput } from "@/components/search-input"
-import { TableCheckbox, TableHeaderCheckbox } from "@/components/table-checkbox"
-import { InlineEditField } from "@/components/inline-edit-field"
+import { formatCurrency, formatDate, generateId, today, filterByDateRange } from "@/lib/helpers"
+import { Stat, SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect, PeriodFilter, type PeriodValue } from "@/components/nitia-ui"
+import type { Movement, Account } from "@/lib/types"
+import { Plus, ArrowUpRight, ArrowDownLeft, Trash2, Pencil } from "lucide-react"
 
 export function Accounts() {
-  const { data, addAccountMovement, deleteAccountMovement, deleteAccountMovements, updateAccount } = useApp()
+  const { data, addMovement, deleteMovement, addRow, updateRow, deleteRow } = useApp()
   const [showNewMovement, setShowNewMovement] = useState(false)
-  const [period, setPeriod] = useState<PeriodValue>("month")
+  const [showNewAccount, setShowNewAccount] = useState(false)
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null)
+  const [period, setPeriod] = useState<PeriodValue>("mes")
   const [searchQuery, setSearchQuery] = useState("")
+  const [customStart, setCustomStart] = useState("")
+  const [customEnd, setCustomEnd] = useState("")
 
-  const totalBalance = data.accounts.reduce((sum, a) => sum + a.balance, 0)
-  
-  // Filter movements by period and search
-  const { start, end } = getDateRangeForPeriod(period)
-  const filteredMovements = data.accountMovements.filter((m) => {
-    const date = new Date(m.date)
-    const matchesPeriod = date >= start && date <= end
-    const matchesSearch = !searchQuery || 
+  // Filter movements by account (all movements that have an account_id)
+  const accountMovements = data.movements.filter(m => m.account_id)
+  const filtered = filterByDateRange(accountMovements, period, customStart, customEnd)
+    .filter(m => !searchQuery ||
       m.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.category.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesPeriod && matchesSearch
-  })
-  
-  const sortedMovements = [...filteredMovements]
+      (m.category || "").toLowerCase().includes(searchQuery.toLowerCase())
+    )
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  // Hook de selecciÃ³n masiva
-  const selection = useSelection({ items: sortedMovements })
+  const getAccountName = (id: string | null | undefined) =>
+    data.accounts.find(a => a.id === id)?.name ?? "—"
 
-  const getAccountName = (id: string) => {
-    return data.accounts.find((a) => a.id === id)?.name ?? "Desconocida"
-  }
-
-  // Handler para eliminar seleccionados
-  const handleDeleteSelected = async () => {
-    await deleteAccountMovements(selection.selectedIds)
-    selection.clearSelection()
-  }
-
-  // Handler para exportar seleccionados
-  const handleExportSelected = () => {
-    const selectedMovs = selection.selectedItems
-    exportMovimientosCuenta(selectedMovs.map(m => ({
-      date: m.date,
-      description: m.description,
-      amount: m.amount,
-      type: m.type,
-      category: m.category,
-    })), "seleccionados")
-  }
+  const totalBalance = data.accounts.reduce((s, a) => s + (a.balance || 0), 0)
 
   return (
     <div className="p-6 lg:p-8 space-y-8">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Cuentas</h1>
-          <p className="text-sm text-[#76746A] mt-1">
-            GestiÃ³n de cuentas y movimientos del estudio
-          </p>
+          <p className="text-sm text-[#76746A] mt-1">Gesti{"\u00f3"}n de cuentas y movimientos del estudio</p>
         </div>
-        <div className="flex flex-col sm:flex-row items-end gap-3">
-          <PeriodFilter value={period} onChange={setPeriod} />
-          <div className="flex gap-2">
-            <ExportButton 
-              onClick={() => exportCuentas(data.accounts.map(a => ({
-                name: a.name,
-                type: a.type || "cuenta",
-                balance: a.balance,
-                owner: a.owner || "nitia",
-              })))}
-              label="Cuentas"
-              disabled={data.accounts.length === 0}
-            />
-            <ExportButton 
-              onClick={() => exportMovimientosCuenta(filteredMovements.map(m => ({
-                date: m.date,
-                description: m.description,
-                amount: m.amount,
-                type: m.type,
-                category: m.category,
-              })), "todas")}
-              label="Movimientos"
-              disabled={filteredMovements.length === 0}
-            />
-            <Btn onClick={() => setShowNewMovement(true)}>
-              <Plus size={14} className="mr-1.5 inline" />
-              Nuevo Movimiento
-            </Btn>
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <PeriodFilter value={period} onChange={setPeriod}
+            onCustomRange={(s, e) => { setCustomStart(s); setCustomEnd(e) }} />
+          <Btn variant="soft" size="sm" onClick={() => setShowNewAccount(true)}>
+            <Plus size={14} className="mr-1 inline" />Cuenta
+          </Btn>
+          <Btn onClick={() => setShowNewMovement(true)}>
+            <Plus size={14} className="mr-1 inline" />Movimiento
+          </Btn>
         </div>
       </div>
 
-      {/* Accounts Cards */}
+      {/* Account Cards */}
       <div className="grid md:grid-cols-3 gap-4">
-        {data.accounts.map((account) => (
-          <div
-            key={account.id}
-            className="bg-card border border-border rounded-xl p-5"
-          >
+        {data.accounts.map(account => (
+          <div key={account.id} className="bg-card border border-border rounded-xl p-5 group relative">
+            <button onClick={() => setEditingAccount(account)}
+              className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 p-1 hover:bg-accent rounded transition-all">
+              <Pencil size={14} className="text-muted-foreground" />
+            </button>
             <div className="flex items-center gap-3 mb-3">
-              <div
-                className="w-4 h-4 rounded-full"
-                style={{ backgroundColor: account.color }}
-              />
-              <InlineEditField
-                value={account.name}
-                onSave={async (value) => {
-                  await updateAccount(account.id, { name: String(value) })
-                }}
-                fieldName="nombre"
-                className="text-sm font-medium"
-              />
+              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: account.color || "#5F5A46" }} />
+              <span className="text-sm font-medium">{account.name}</span>
+              {account.type && <Tag label={account.type} color="gray" />}
             </div>
-            <p className="text-2xl font-medium text-foreground tracking-tight">
-              {formatCurrency(account.balance)}
-            </p>
+            <p className="text-2xl font-medium text-foreground tracking-tight">{formatCurrency(account.balance)}</p>
           </div>
         ))}
-        <div className="bg-primary border border-primary rounded-xl p-5">
+        <div className="bg-[#5F5A46] rounded-xl p-5">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-4 h-4 rounded-full bg-primary-foreground/30" />
-            <span className="text-sm font-medium text-primary-foreground/70">Total</span>
+            <div className="w-4 h-4 rounded-full bg-white/30" />
+            <span className="text-sm font-medium text-white/70">Total</span>
           </div>
-          <p className="text-2xl font-medium text-primary-foreground tracking-tight">
-            {formatCurrency(totalBalance)}
-          </p>
+          <p className="text-2xl font-medium text-white tracking-tight">{formatCurrency(totalBalance)}</p>
         </div>
       </div>
 
-      {/* BÃºsqueda */}
-      <SearchInput
-        value={searchQuery}
-        onChange={setSearchQuery}
-        placeholder="Buscar movimientos por descripciÃ³n o categorÃ­a..."
-        className="max-w-md"
-      />
+      {/* Search */}
+      <div className="max-w-md">
+        <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+          placeholder={"Buscar movimientos por descripci\u00f3n o categor\u00eda..."}
+          className="w-full px-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
+      </div>
 
       {/* Movements Table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="p-4 border-b border-border">
-          <SecHead n="1" title={`Movimientos (${sortedMovements.length})`} />
+          <SecHead title={`Movimientos (${filtered.length})`} />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-[#F0EDE4] border-b border-border">
               <tr>
-                <th className="px-4 py-3 text-left w-10">
-                  <TableHeaderCheckbox
-                    isAllSelected={selection.isAllSelected}
-                    isSomeSelected={selection.isSomeSelected}
-                    onToggleAll={selection.toggleAll}
-                  />
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">Fecha</th>
-                <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">DescripciÃ³n</th>
-                <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">Cuenta</th>
-                <th className="px-4 py-3 text-left font-medium text-[#1C1A12]">CategorÃ­a</th>
-                <th className="px-4 py-3 text-right font-medium text-[#1C1A12]">Importe</th>
+                <th className="px-4 py-3 text-left font-medium">Fecha</th>
+                <th className="px-4 py-3 text-left font-medium">Descripci{"\u00f3"}n</th>
+                <th className="px-4 py-3 text-left font-medium">Cuenta</th>
+                <th className="px-4 py-3 text-left font-medium">Categor{"\u00ed"}a</th>
+                <th className="px-4 py-3 text-right font-medium">Importe</th>
                 <th className="px-4 py-3 w-10"></th>
               </tr>
             </thead>
             <tbody>
-              {sortedMovements.map((mov) => (
-                <tr 
-                  key={mov.id}
-                  className={`border-b border-border last:border-0 hover:bg-[#FAFAF9] transition-colors ${
-                    selection.isSelected(mov.id) ? "bg-[#F7F5ED]" : ""
-                  }`}
-                >
-                  <td className="px-4 py-3">
-                    <TableCheckbox
-                      checked={selection.isSelected(mov.id)}
-                      onChange={() => selection.toggleItem(mov.id)}
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-[#76746A]">
-                    {formatDate(mov.date)}
-                  </td>
+              {filtered.map(mov => (
+                <tr key={mov.id} className="border-b border-border last:border-0 hover:bg-[#FAFAF9]">
+                  <td className="px-4 py-3 text-[#76746A]">{formatDate(mov.date)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <div
-                        className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
-                          mov.type === "ingreso" ? "bg-[var(--green-light)]" : "bg-[var(--red-light)]"
-                        }`}
-                      >
-                        {mov.type === "ingreso" ? (
-                          <ArrowDownLeft size={12} className="text-[var(--green)]" />
-                        ) : (
-                          <ArrowUpRight size={12} className="text-[var(--red)]" />
-                        )}
+                      <div className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+                        mov.type === "ingreso" ? "bg-green-50" : "bg-red-50"}`}>
+                        {mov.type === "ingreso" ? <ArrowDownLeft size={12} className="text-green-600" /> : <ArrowUpRight size={12} className="text-red-600" />}
                       </div>
-                      <InlineEditField
-                        value={mov.description}
-                        onSave={async (value) => {
-                          // Actualizar descripciÃ³n del movimiento
-                          const updated = { ...mov, description: String(value) }
-                          await deleteAccountMovement(mov.id)
-                          await addAccountMovement(updated)
-                        }}
-                        fieldName="descripciÃ³n"
-                      />
+                      {mov.description}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-[#76746A]">
-                    {getAccountName(mov.accountId)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Tag label={mov.category} color="gray" />
-                  </td>
+                  <td className="px-4 py-3 text-[#76746A]">{getAccountName(mov.account_id)}</td>
+                  <td className="px-4 py-3">{mov.category && <Tag label={mov.category} color="gray" />}</td>
                   <td className="px-4 py-3 text-right">
-                    <span className={`font-medium ${
-                      mov.type === "ingreso" ? "text-[var(--green)]" : "text-[var(--red)]"
-                    }`}>
-                      {mov.type === "ingreso" ? "+" : "-"}
-                      {formatCurrency(mov.amount)}
+                    <span className={`font-medium ${mov.type === "ingreso" ? "text-green-600" : "text-red-600"}`}>
+                      {mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => deleteAccountMovement(mov.id)}
-                      className="p-1.5 text-[#76746A] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                      title="Eliminar"
-                    >
+                    <button onClick={() => deleteMovement(mov.id)}
+                      className="p-1.5 text-[#76746A] hover:text-red-600 hover:bg-red-50 rounded transition-colors">
                       <Trash2 size={14} />
                     </button>
                   </td>
@@ -241,119 +130,144 @@ export function Accounts() {
             </tbody>
           </table>
         </div>
-        {sortedMovements.length === 0 && (
-          <Empty
-            title="Sin movimientos"
-            description={searchQuery ? "Intenta con otra bÃºsqueda" : "Registra tu primer movimiento"}
-            action={!searchQuery && <Btn onClick={() => setShowNewMovement(true)}>Agregar</Btn>}
-          />
-        )}
+        {filtered.length === 0 && <Empty title="Sin movimientos" description="Registr\u00e1 tu primer movimiento" />}
       </div>
-
-      {/* Barra de selecciÃ³n masiva */}
-      <SelectionBar
-        selectedCount={selection.selectedCount}
-        onDelete={handleDeleteSelected}
-        onExport={handleExportSelected}
-        onClear={selection.clearSelection}
-        itemName="movimiento"
-      />
 
       {/* New Movement Modal */}
       {showNewMovement && (
-        <AccountMovementModal
+        <NewMovementModal
           accounts={data.accounts}
+          projects={data.projects}
+          providers={data.providers}
           onClose={() => setShowNewMovement(false)}
-          onSave={async (movement) => {
-            await addAccountMovement(movement)
-            setShowNewMovement(false)
+          onSave={async (mov) => { await addMovement(mov); setShowNewMovement(false) }}
+        />
+      )}
+
+      {/* New/Edit Account Modal */}
+      {(showNewAccount || editingAccount) && (
+        <AccountModal
+          account={editingAccount}
+          onClose={() => { setShowNewAccount(false); setEditingAccount(null) }}
+          onSave={async (acc) => {
+            if (editingAccount) {
+              await updateRow("accounts", acc.id, acc, "accounts")
+            } else {
+              await addRow("accounts", acc, "accounts")
+            }
+            setShowNewAccount(false); setEditingAccount(null)
           }}
+          onDelete={editingAccount ? async () => {
+            await deleteRow("accounts", editingAccount.id, "accounts")
+            setEditingAccount(null)
+          } : undefined}
         />
       )}
     </div>
   )
 }
 
-// Account Movement Modal
-function AccountMovementModal({
-  accounts,
-  onClose,
-  onSave,
-}: {
-  accounts: Array<{ id: string; name: string; balance: number; color: string }>
-  onClose: () => void
-  onSave: (movement: AccountMovement) => void
+function NewMovementModal({ accounts, projects, providers, onClose, onSave }: {
+  accounts: Account[]; projects: any[]; providers: any[]
+  onClose: () => void; onSave: (m: Movement) => void
 }) {
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "")
   const [date, setDate] = useState(today())
   const [description, setDescription] = useState("")
   const [amount, setAmount] = useState("")
   const [type, setType] = useState<"ingreso" | "egreso">("ingreso")
-  const [category, setCategory] = useState("Proyecto")
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const movement: AccountMovement = {
-      id: generateId(),
-      accountId,
-      date,
-      description,
-      amount: parseFloat(amount),
-      type,
-      category,
-    }
-    onSave(movement)
-  }
+  const [category, setCategory] = useState("")
+  const [projectId, setProjectId] = useState("")
+  const [providerId, setProviderId] = useState("")
+  const [medioPago, setMedioPago] = useState("")
 
   return (
     <Modal isOpen={true} title="Nuevo Movimiento" onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <FormSelect
-          label="Cuenta"
-          value={accountId}
-          onChange={setAccountId}
-          options={accounts.map((a) => ({ value: a.id, label: a.name }))}
-        />
+      <form onSubmit={e => {
+        e.preventDefault()
+        onSave({
+          id: generateId(), date, description,
+          amount: parseFloat(amount), type, category: category || null,
+          account_id: accountId || null, project_id: projectId || null,
+          provider_id: providerId || null, medio_pago: medioPago || null,
+          created_at: new Date().toISOString(),
+        })
+      }} className="space-y-4">
+        <FormSelect label="Cuenta" value={accountId} onChange={setAccountId}
+          options={accounts.map(a => ({ value: a.id, label: a.name }))} />
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Fecha" type="date" value={date} onChange={setDate} />
-          <FormSelect
-            label="Tipo"
-            value={type}
-            onChange={(v) => setType(v as "ingreso" | "egreso")}
-            options={[
-              { value: "ingreso", label: "Ingreso" },
-              { value: "egreso", label: "Egreso" },
-            ]}
-          />
+          <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)}
+            options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} />
         </div>
-        <FormInput label="Descripcion" value={description} onChange={setDescription} />
+        <FormInput label="Descripci\u00f3n" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-4">
-          <FormInput
-            label="Importe"
-            type="number"
-            value={amount}
-            onChange={setAmount}
-            inputMode="decimal"
-          />
-          <FormSelect
-            label="Categoria"
-            value={category}
-            onChange={setCategory}
+          <FormInput label="Importe" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
+          <FormSelect label="Categor\u00eda" value={category} onChange={setCategory}
             options={[
-              { value: "Proyecto", label: "Proyecto" },
-              { value: "Honorarios", label: "Honorarios" },
-              { value: "Gastos fijos", label: "Gastos fijos" },
+              { value: "Proyecto", label: "Proyecto" }, { value: "Honorarios", label: "Honorarios" },
+              { value: "Proveedor", label: "Proveedor" }, { value: "Gastos fijos", label: "Gastos fijos" },
               { value: "Varios", label: "Varios" },
-            ]}
-          />
+            ]} />
         </div>
+        {category === "Proyecto" && (
+          <FormSelect label="Proyecto" value={projectId} onChange={setProjectId}
+            options={projects.map(p => ({ value: p.id, label: p.name }))} />
+        )}
+        {category === "Proveedor" && (
+          <FormSelect label="Proveedor" value={providerId} onChange={setProviderId}
+            options={providers.map(p => ({ value: p.id, label: p.name }))} />
+        )}
+        <FormSelect label="Medio de pago" value={medioPago} onChange={setMedioPago}
+          options={[
+            { value: "efectivo", label: "Efectivo" }, { value: "transferencia", label: "Transferencia" },
+            { value: "cheque", label: "Cheque" }, { value: "tarjeta", label: "Tarjeta" },
+            { value: "mercadopago", label: "Mercado Pago" },
+          ]} />
         <div className="flex justify-end gap-3 pt-4">
-          <Btn variant="ghost" onClick={onClose}>
-            Cancelar
-          </Btn>
-          <Btn type="submit" disabled={!description || !amount || !accountId}>
-            Agregar Movimiento
-          </Btn>
+          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn type="submit" disabled={!description || !amount || !accountId}>Agregar</Btn>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function AccountModal({ account, onClose, onSave, onDelete }: {
+  account: Account | null; onClose: () => void
+  onSave: (a: Account) => void; onDelete?: () => void
+}) {
+  const [name, setName] = useState(account?.name ?? "")
+  const [type, setType] = useState(account?.type ?? "banco")
+  const [balance, setBalance] = useState(String(account?.balance ?? "0"))
+  const [color, setColor] = useState(account?.color ?? "#5F5A46")
+
+  return (
+    <Modal isOpen={true} title={account ? "Editar Cuenta" : "Nueva Cuenta"} onClose={onClose}>
+      <form onSubmit={e => {
+        e.preventDefault()
+        onSave({ id: account?.id ?? generateId(), name, type, balance: parseFloat(balance) || 0, color })
+      }} className="space-y-4">
+        <FormInput label="Nombre" value={name} onChange={setName} placeholder="Ej: Cuenta Santander" />
+        <div className="grid grid-cols-2 gap-4">
+          <FormSelect label="Tipo" value={type || ""} onChange={setType}
+            options={[
+              { value: "banco", label: "Banco" }, { value: "efectivo", label: "Efectivo" },
+              { value: "mercadopago", label: "Mercado Pago" }, { value: "dolares", label: "D\u00f3lares" },
+              { value: "otro", label: "Otro" },
+            ]} />
+          <FormInput label="Saldo inicial" type="number" value={balance} onChange={setBalance} />
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium">Color</label>
+          <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-8 h-8 rounded border" />
+        </div>
+        <div className="flex justify-between pt-4">
+          {onDelete && <Btn variant="danger" onClick={onDelete}>Eliminar</Btn>}
+          <div className="flex gap-3 ml-auto">
+            <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+            <Btn type="submit" disabled={!name}>{account ? "Guardar" : "Crear"}</Btn>
+          </div>
         </div>
       </form>
     </Modal>

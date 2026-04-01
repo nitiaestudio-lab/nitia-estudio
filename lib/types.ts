@@ -1,13 +1,105 @@
-// Nitia Estudio - Types
+// Nitia Estudio - Types v2.0
 
-export type RoleKey = "paula" | "cami" | "empleada"
+export type RoleKey = string
 
-export interface Role {
+export interface User {
+  id: string
   name: string
-  label: string
-  pin: string
-  full: boolean
-  partner: RoleKey | null
+  role: string
+  pin?: string
+  email?: string | null
+  permissions?: Record<string, boolean>
+  profit_split?: number
+  totp_enabled?: boolean
+  totp_secret?: string | null
+  can_see_financials?: boolean
+}
+
+export interface Category {
+  id: string
+  type: string
+  name: string
+  active: boolean
+  sort_order: number
+}
+
+export interface Project {
+  id: string
+  name: string
+  client: string
+  client_email?: string | null
+  client_phone?: string | null
+  client_contact?: string | null
+  address?: string | null
+  type?: string | null
+  status?: string | null
+  start_date?: string | null
+  end_date?: string | null
+  budget?: number
+  margin?: number
+  honorarios_cost?: number
+  honorarios_client_price?: number
+  notes?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ProjectItem {
+  id: string
+  project_id: string
+  type: 'mano_de_obra' | 'material' | 'mobiliario'
+  description: string
+  cost: number
+  client_price: number
+  multiplier: number
+  category?: string | null
+  provider_id?: string | null
+  paid: boolean
+  sort_order: number
+  created_at?: string
+}
+
+export interface ProjectFile {
+  id: string
+  project_id: string
+  name: string
+  category: string
+  description?: string | null
+  storage_path?: string | null
+  url?: string | null
+  file_size?: number | null
+  mime_type?: string | null
+  uploaded_by?: string | null
+  created_at?: string
+}
+
+export interface Provider {
+  id: string
+  name: string
+  category: string
+  subcategory?: string | null
+  zone?: string | null
+  phone?: string | null
+  email?: string | null
+  address?: string | null
+  cbu?: string | null
+  alias?: string | null
+  contact?: string | null
+  website?: string | null
+  advance_percent?: number
+  notes?: string | null
+  created_at?: string
+}
+
+export interface ProviderDocument {
+  id: string
+  provider_id: string
+  name: string
+  type: string
+  description?: string | null
+  storage_path?: string | null
+  url?: string | null
+  created_at?: string
 }
 
 export interface Movement {
@@ -15,267 +107,118 @@ export interface Movement {
   date: string
   description: string
   amount: number
-  type: "ingreso" | "egreso"
-  category: string
-  providerId?: string | null
-  // Medio de pago (obligatorio)
-  medioPago?: "efectivo" | "transferencia" | "cheque" | "tarjeta" | "dolares"
-  // Nuevos campos para ingresos
-  conceptoIngreso?: "mano-de-obra" | "senal-mobiliario" | "honorarios" | "otro"
-  cuentaDestino?: "paula" | "cami" | "efectivo" | "dolares"
-  // Quién creó este movimiento
-  createdBy?: "paula" | "cami" | "empleada"
-}
-
-export interface ProjectFile {
-  id: string
-  name: string
-  category: "contrato" | "plano" | "presupuesto" | "factura" | "foto" | "render" | "otro"
-  date: string
-  url: string
-  description?: string
-}
-
-export interface ManoDeObra {
-  id: string
-  description: string
-  cost: number
-  clientPrice: number
-  paid: boolean
-}
-
-export interface Material {
-  id: string
-  description: string
-  cost: number
-  clientPrice: number
-  category: string
-}
-
-export interface Mobiliario {
-  id: string
-  item: string
-  description?: string
-  cost: number
-  clientPrice: number
-}
-
-export interface QuoteOption {
-  providerName: string
-  amount: number
-}
-
-export interface Quote {
-  id: string
-  item: string
-  margin: number
-  selectedIndex: number
-  options: QuoteOption[]
-}
-
-export interface Project {
-  id: string
-  name: string
-  client: string
-  clientEmail?: string
-  clientPhone?: string
-  clientContact?: string // Persona de contacto
-  address: string
-  type: "arquitectura" | "interiorismo"
-  status: "activo" | "pausado" | "finalizado"
-  createdAt: string
-  startDate?: string
-  budget?: number
-  margin: number
-  honorarios: {
-    cost: number
-    clientPrice: number
-  }
-  manoDeObra: ManoDeObra[]
-  materiales: Material[]
-  mobiliario: Mobiliario[]
-  movements: Movement[]
-  files: ProjectFile[]
-  quotes: Quote[]
-}
-
-export interface ProviderPayment {
-  id: string
-  date: string
-  description: string
-  amount: number
-  projectId: string
-}
-
-export interface ProviderQuoteHistory {
-  id: string
-  date: string
-  projectId: string
-  projectName: string
-  category: string
-  item: string
-  costProvider: number
-  priceClient: number
-  ganancia: number
-}
-
-export interface ProviderDocument {
-  id: string
-  type: "presupuesto" | "contrato" | "factura" | "comprobante" | "foto"
-  name: string
-  date: string
-  url: string
-  description?: string
-}
-
-export interface ProviderPaymentDetail {
-  id: string
-  projectId: string
-  projectName: string
-  date: string
-  budgetAmount: number
-  advancePercentage: number
-  advanceAmount: number
-  balanceAmount: number
-  status: "pendiente" | "anticipo-pagado" | "pagado-completo"
-  description: string
-  amount: number
-}
-
-export interface Provider {
-  id: string
-  name: string
-  category: string
-  subcategory?: string
-  zone: string
-  phone: string
-  email: string
-  cbu?: string
-  alias?: string
-  advancePercent: number
-  notes: string
-  payments: ProviderPaymentDetail[]
-  quoteHistory: ProviderQuoteHistory[]
-  documents: ProviderDocument[]
-  projectIds: string[]
-  createdAt?: string
-  contact?: string
-  website?: string
+  type: 'ingreso' | 'egreso'
+  category?: string | null
+  project_id?: string | null
+  provider_id?: string | null
+  account_id?: string | null
+  medio_pago?: string | null
+  concepto?: string | null
+  fixed_cost_id?: string | null
+  auto_split?: boolean
+  split_percentage?: number
+  created_by?: string | null
+  created_at?: string
 }
 
 export interface Account {
   id: string
   name: string
+  type?: string | null
   balance: number
-  color: string
-  type?: string
-  owner?: string
-}
-
-export interface AccountMovement {
-  id: string
-  accountId: string
-  date: string
-  description: string
-  amount: number
-  type: "ingreso" | "egreso"
-  category: string
+  color?: string
+  owner?: string | null
 }
 
 export interface Task {
   id: string
+  project_id?: string | null
   title: string
-  projectId: string
-  dueDate?: string
-  priority: "alta" | "media" | "baja"
-  status: "pendiente" | "en-curso" | "completada"
-  assignee: string
+  description?: string | null
+  status: string
+  priority: string
+  due_date?: string | null
+  assignee?: string
+  assigned_to?: string | null
+  created_at?: string
 }
 
 export interface FixedExpense {
   id: string
   description: string
   amount: number
-  category: string
+  category?: string | null
   active: boolean
+  due_day?: number
+  notes?: string | null
+  created_at?: string
 }
 
-export interface VariableExpense {
+export interface FixedCostPayment {
   id: string
+  fixed_cost_id: string
+  movement_id?: string | null
+  month: number
+  year: number
+  paid: boolean
+  paid_date?: string | null
+  paid_amount?: number | null
+}
+
+export interface PersonalFinanceMovement {
+  id: string
+  owner: string
   date: string
   description: string
   amount: number
+  type: 'ingreso' | 'egreso'
+  category?: string | null
+  is_fixed?: boolean
+  active?: boolean
+  note?: string | null
+  created_by?: string | null
+  created_at?: string
+}
+
+export interface QuoteComparison {
+  id: string
+  date: string
+  project_id?: string | null
   category: string
-}
-
-export interface NitiaIncome {
-  id: string
-  date: string
-  description: string
-  amount: number
-  note: string
-}
-
-export interface PersonalFinance {
-  fixedExpenses: FixedExpense[]
-  variableExpenses: VariableExpense[]
-  nitiaIncome: NitiaIncome[]
+  item: string
+  provider_id?: string | null
+  provider_name: string
+  cost: number
+  price_x14: number
+  price_x16: number
+  ganancia_x14: number
+  ganancia_x16: number
+  selected: boolean
 }
 
 export interface AppData {
   projects: Project[]
+  projectItems: ProjectItem[]
+  projectFiles: ProjectFile[]
   providers: Provider[]
+  providerDocuments: ProviderDocument[]
   accounts: Account[]
-  accountMovements: AccountMovement[]
+  movements: Movement[]
   tasks: Task[]
-  personalFinance: {
-    paula: PersonalFinance
-    cami: PersonalFinance
-  }
+  personalFinanceMovements: PersonalFinanceMovement[]
   nitiaFixedCosts: FixedExpense[]
-  globalMovements: GlobalMovement[]
+  fixedCostPayments: FixedCostPayment[]
   quoteComparisons: QuoteComparison[]
-  partnerCount: number // numero de socias para calcular ganancia individual
+  categories: Category[]
 }
 
 export type Section =
-  | "dashboard"
-  | "projects"
-  | "providers"
-  | "accounts"
-  | "tasks"
-  | "personal"
-  | "nitia-costs"
-  | "quotes"
-  | "settings"
-
-// Quote comparison types
-export interface QuoteComparison {
-  id: string
-  date: string
-  projectId: string // Asociado a un proyecto
-  category: string
-  item: string
-  providerId: string
-  providerName: string
-  cost: number
-  priceX14: number
-  priceX16: number
-  gananciaX14: number
-  gananciaX16: number
-  selected: boolean
-}
-
-// Global movement type that links everything
-export interface GlobalMovement {
-  id: string
-  date: string
-  description: string
-  amount: number
-  type: "ingreso" | "egreso"
-  category: string
-  projectId?: string | null
-  providerId?: string | null
-  accountId?: string | null
-  quoteId?: string | null
-}
+  | 'dashboard'
+  | 'projects'
+  | 'providers'
+  | 'accounts'
+  | 'tasks'
+  | 'personal'
+  | 'nitia-costs'
+  | 'quotes'
+  | 'settings'
