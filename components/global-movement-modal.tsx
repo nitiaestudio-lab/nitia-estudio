@@ -61,7 +61,7 @@ export function GlobalMovementModal({
   ]
 
   return (
-    <Modal title="Nuevo Movimiento" onClose={onClose} size="lg">
+    <Modal isOpen={true} title="Nuevo Movimiento" onClose={onClose} size="lg">
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Tipo y Fecha */}
         <div className="grid grid-cols-2 gap-4">

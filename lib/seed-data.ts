@@ -440,6 +440,7 @@ export const SEED_DATA: AppData = {
   quoteComparisons: [
     {
       id: "qc1",
+      projectId: "p1",
       date: "2026-03-01",
       category: "Mueble TV",
       item: "Mueble TV roble 180cm",
@@ -454,6 +455,7 @@ export const SEED_DATA: AppData = {
     },
     {
       id: "qc2",
+      projectId: "p1",
       date: "2026-03-01",
       category: "Mueble TV",
       item: "Mueble TV roble 180cm",
@@ -468,6 +470,7 @@ export const SEED_DATA: AppData = {
     },
     {
       id: "qc3",
+      projectId: "p1",
       date: "2026-03-02",
       category: "Sillon Living",
       item: "Sillon 3 cuerpos lino",

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useApp } from "@/lib/app-context"
 import { formatCurrency, generateId } from "@/lib/helpers"
 import { SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect, FormTextarea, ExportButton } from "@/components/nitia-ui"
-import type { Provider, ProviderPaymentDetail } from "@/lib/types"
+import type { Provider, ProviderPaymentDetail, ProviderDocument } from "@/lib/types"
 import { exportProveedores } from "@/lib/export-utils"
 import { Plus, Phone, Mail, ChevronDown, AlertCircle, CheckCircle, Clock, FileText, Upload, Trash2, ArrowLeft } from "lucide-react"
 import { useSelection } from "@/hooks/use-selection"
@@ -310,11 +310,13 @@ function ProviderDetail({
   onBack,
   onUpdate,
   onAddPayment,
+  onDelete,
 }: {
   provider: Provider
   onBack: () => void
   onUpdate: (provider: Provider) => void
   onAddPayment: (payment: ProviderPaymentDetail) => void
+  onDelete?: () => Promise<void>
 }) {
   const [showEditPayment, setShowEditPayment] = useState(false)
   const [showAddDocument, setShowAddDocument] = useState(false)
@@ -560,7 +562,7 @@ function DocumentModal({
   providerId,
 }: {
   onClose: () => void
-  onSave: (doc: { id: string; type: string; name: string; date: string; url: string; description?: string }) => void
+  onSave: (doc: ProviderDocument) => void
   providerId: string
 }) {
   const [name, setName] = useState("")
@@ -638,7 +640,7 @@ function DocumentModal({
       
       onSave({
         id: generateId(),
-        type,
+        type: type as ProviderDocument["type"],
         name,
         description,
         date,

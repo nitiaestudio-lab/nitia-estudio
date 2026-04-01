@@ -30,7 +30,7 @@ export interface Movement {
 export interface ProjectFile {
   id: string
   name: string
-  category: "contrato" | "plano" | "presupuesto" | "factura" | "foto" | "otro"
+  category: "contrato" | "plano" | "presupuesto" | "factura" | "foto" | "render" | "otro"
   date: string
   url: string
   description?: string
@@ -55,6 +55,7 @@ export interface Material {
 export interface Mobiliario {
   id: string
   item: string
+  description?: string
   cost: number
   clientPrice: number
 }
@@ -83,6 +84,8 @@ export interface Project {
   type: "arquitectura" | "interiorismo"
   status: "activo" | "pausado" | "finalizado"
   createdAt: string
+  startDate?: string
+  budget?: number
   margin: number
   honorarios: {
     cost: number
@@ -122,6 +125,7 @@ export interface ProviderDocument {
   name: string
   date: string
   url: string
+  description?: string
 }
 
 export interface ProviderPaymentDetail {
@@ -164,6 +168,8 @@ export interface Account {
   name: string
   balance: number
   color: string
+  type?: string
+  owner?: string
 }
 
 export interface AccountMovement {

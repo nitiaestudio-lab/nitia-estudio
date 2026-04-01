@@ -208,7 +208,7 @@ export function LoginScreen() {
     setIsLoading(true)
     try {
       const result = await sendPasswordResetEmail(resetEmail)
-      setResetMessage(result.message)
+      setResetMessage(result.message || "")
       if (result.success) {
         setTimeout(() => {
           setShowForgotPin(false)

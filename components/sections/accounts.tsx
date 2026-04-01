@@ -76,7 +76,7 @@ export function Accounts() {
             <ExportButton 
               onClick={() => exportCuentas(data.accounts.map(a => ({
                 name: a.name,
-                type: a.type,
+                type: a.type || "cuenta",
                 balance: a.balance,
                 owner: a.owner || "nitia",
               })))}
@@ -280,7 +280,7 @@ function AccountMovementModal({
   onClose,
   onSave,
 }: {
-  accounts: typeof import("@/lib/types").Account[]
+  accounts: Array<{ id: string; name: string; balance: number; color: string }>
   onClose: () => void
   onSave: (movement: AccountMovement) => void
 }) {

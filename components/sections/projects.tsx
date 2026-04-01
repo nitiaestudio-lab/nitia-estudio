@@ -469,7 +469,7 @@ function ProjectDetail({
             </div>
             {project.mobiliario.map((item) => (
               <div key={item.id} className="flex items-center justify-between py-1.5 group">
-                <span className="text-sm text-foreground">{item.description}</span>
+                <span className="text-sm text-foreground">{item.description || item.item}</span>
                 <div className="flex items-center gap-2">
                   {isFull && (
                     <span className="text-sm text-muted-foreground">
@@ -775,7 +775,7 @@ function ProjectDetail({
           onClose={() => setShowAddManoDeObra(false)}
           onSave={(item) => {
             updateProject(project.id, {
-              manoDeObra: [...project.manoDeObra, item],
+              manoDeObra: [...project.manoDeObra, { ...item, paid: false }],
             })
             setShowAddManoDeObra(false)
           }}
@@ -790,7 +790,7 @@ function ProjectDetail({
           onClose={() => setShowAddMaterial(false)}
           onSave={(item) => {
             updateProject(project.id, {
-              materiales: [...project.materiales, item],
+              materiales: [...project.materiales, { ...item, category: "General" }],
             })
             setShowAddMaterial(false)
           }}
@@ -805,7 +805,7 @@ function ProjectDetail({
           onClose={() => setShowAddMobiliario(false)}
           onSave={(item) => {
             updateProject(project.id, {
-              mobiliario: [...project.mobiliario, item],
+              mobiliario: [...project.mobiliario, { ...item, item: item.description }],
             })
             setShowAddMobiliario(false)
           }}
@@ -924,7 +924,7 @@ function MovementsSection({
 }: {
   project: Project
   onAddMovement: () => void
-  updateProject: (p: Project) => void
+  updateProject: (id: string, updates: Partial<Project>) => void
   isFull: boolean
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -962,7 +962,7 @@ function MovementsSection({
     setIsDeleting(true)
     try {
       const newMovements = project.movements.filter((m) => !selectedIds.has(m.id))
-      updateProject({ ...project, movements: newMovements })
+      updateProject(project.id, { movements: newMovements })
       clearSelection()
       setShowDeleteConfirm(false)
     } catch (error) {

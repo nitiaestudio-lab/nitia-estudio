@@ -249,7 +249,7 @@ export function Tasks() {
                   {getProjectName(task.projectId)}
                 </td>
                 <td className="px-4 py-3 text-sm text-muted-foreground">
-                  {formatDate(task.dueDate)}
+                  {task.dueDate ? formatDate(task.dueDate) : "Sin fecha"}
                 </td>
                 <td className="px-4 py-3">
                   <Tag
@@ -338,7 +338,7 @@ function TaskModal({
   onDelete,
 }: {
   task?: Task
-  projects: typeof import("@/lib/types").Project[]
+  projects: Array<{ id: string; name: string }>
   onClose: () => void
   onSave: (task: Task) => void
   onDelete?: () => void
@@ -358,12 +358,13 @@ function TaskModal({
       dueDate,
       priority,
       status,
+      assignee: task?.assignee ?? "",
     }
     onSave(data)
   }
 
   return (
-    <Modal title={task ? "Editar Tarea" : "Nueva Tarea"} onClose={onClose}>
+    <Modal isOpen={true} title={task ? "Editar Tarea" : "Nueva Tarea"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormInput label="Titulo" value={title} onChange={setTitle} />
         <FormSelect

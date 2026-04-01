@@ -51,7 +51,7 @@ export function exportProjectDesglose(
     honorarios: { clientPrice: number }
     manoDeObra: { description: string; cost: number; clientPrice: number }[]
     materiales: { description: string; cost: number; clientPrice: number }[]
-    mobiliario: { description: string; cost: number; clientPrice: number }[]
+    mobiliario: { item?: string; description?: string; cost: number; clientPrice: number }[]
   }
 ) {
   const data = [
@@ -70,7 +70,7 @@ export function exportProjectDesglose(
     })),
     ...project.mobiliario.map((i) => ({
       Categoria: "Mobiliario",
-      Descripcion: i.description,
+      Descripcion: i.description || i.item || "",
       Costo: i.cost,
       PrecioCliente: i.clientPrice,
     })),

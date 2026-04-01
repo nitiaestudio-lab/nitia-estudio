@@ -630,8 +630,7 @@ export function Settings() {
 
       {/* Modal Editar Perfil */}
       {showEditProfileModal && (
-        <Modal
-          title="Editar Perfil"
+        <Modal isOpen={true} title="Editar Perfil"
           onClose={() => setShowEditProfileModal(false)}
         >
           <form onSubmit={handleUpdateProfile} className="space-y-4">
@@ -676,8 +675,7 @@ export function Settings() {
 
       {/* Modal Empleada */}
       {showModal && (
-        <Modal
-          title={modalMode === "create" ? "Nueva Empleada" : "Editar Empleada"}
+        <Modal isOpen={true} title={modalMode === "create" ? "Nueva Empleada" : "Editar Empleada"}
           onClose={() => setShowModal(false)}
         >
           <form onSubmit={modalMode === "create" ? handleCreateEmployee : handleUpdateEmployee} className="space-y-4">
@@ -717,8 +715,7 @@ export function Settings() {
 
       {/* Modal Cambiar PIN */}
       {showChangePinModal && (
-        <Modal
-          title="Cambiar PIN"
+        <Modal isOpen={true} title="Cambiar PIN"
           onClose={() => {
             setShowChangePinModal(false)
             setCurrentPin("")
@@ -794,8 +791,7 @@ export function Settings() {
 
       {/* Modal Request PIN via Email */}
       {showRequestPinEmailModal && (
-        <Modal
-          title="Cambiar PIN por Email"
+        <Modal isOpen={true} title="Cambiar PIN por Email"
           onClose={() => {
             setShowRequestPinEmailModal(false)
             setEmailSent(false)
@@ -841,8 +837,7 @@ export function Settings() {
 
       {/* Modal 2FA Setup */}
       {show2FAModal && (
-        <Modal
-          title="Configurar Autenticación en Dos Pasos"
+        <Modal isOpen={true} title="Configurar Autenticación en Dos Pasos"
           onClose={() => {
             setShow2FAModal(false)
             setTotpSecret("")

@@ -29,7 +29,7 @@ const CATEGORIES = [
 ]
 
 export function Quotes() {
-  const { data, addQuoteComparison, updateQuoteComparison, deleteQuoteComparison, deleteQuoteComparisons, selectQuote, toggleQuoteSelection } = useApp()
+  const { data, setData, addQuoteComparison, updateQuoteComparison, deleteQuoteComparison, deleteQuoteComparisons, selectQuote, toggleQuoteSelection } = useApp()
   const [showNew, setShowNew] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
@@ -386,7 +386,7 @@ export function Quotes() {
               <select
                 value={partnerCount}
                 onChange={(e) =>
-                  setData((prev) => ({ ...prev, partnerCount: parseInt(e.target.value) }))
+                  setData((prev: any) => ({ ...prev, partnerCount: parseInt(e.target.value) }))
                 }
                 className="text-sm border border-[#E0DDD0] rounded-lg px-3 py-1.5 bg-white"
               >
@@ -535,8 +535,8 @@ function NewQuoteModal({
 }: {
   onClose: () => void
   onSave: (quote: QuoteComparison) => void
-  providers: typeof import("@/lib/types").Provider[]
-  projects: typeof import("@/lib/types").Project[]
+  providers: Array<{ id: string; name: string; category: string }>
+  projects: Array<{ id: string; name: string }>
 }) {
   const [date, setDate] = useState(today())
   const [projectId, setProjectId] = useState(projects[0]?.id || "")
@@ -578,7 +578,7 @@ function NewQuoteModal({
   }
 
   return (
-    <Modal title="Nueva Cotizacion" onClose={onClose}>
+    <Modal isOpen={true} title="Nueva Cotizacion" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-5">
         <FormSelect
           label="Proyecto"

@@ -9,7 +9,7 @@ import { X, Download } from "lucide-react"
 // Tag component
 interface TagProps {
   label: string
-  color?: "blue" | "green" | "red" | "yellow" | "purple" | "gray"
+  color?: "blue" | "green" | "red" | "yellow" | "purple" | "gray" | "olive" | "amber"
   onRemove?: () => void
 }
 
@@ -20,6 +20,8 @@ const colorMap = {
   yellow: "bg-yellow-50 text-yellow-700 border-yellow-200",
   purple: "bg-purple-50 text-purple-700 border-purple-200",
   gray: "bg-gray-50 text-gray-700 border-gray-200",
+  olive: "bg-[#F5F5DC] text-[#6B6B3D] border-[#D4D4A0]",
+  amber: "bg-amber-50 text-amber-700 border-amber-200",
 }
 
 export function Tag({ label, color = "blue", onRemove }: TagProps) {
@@ -37,8 +39,9 @@ export function Tag({ label, color = "blue", onRemove }: TagProps) {
 
 // Button component
 interface BtnProps {
-  variant?: "primary" | "soft" | "ghost"
+  variant?: "primary" | "soft" | "ghost" | "danger"
   size?: "sm" | "md" | "lg"
+  type?: "button" | "submit" | "reset"
   onClick?: () => void
   disabled?: boolean
   children: ReactNode
@@ -48,6 +51,7 @@ interface BtnProps {
 export function Btn({
   variant = "primary",
   size = "md",
+  type = "button",
   onClick,
   disabled,
   children,
@@ -58,6 +62,7 @@ export function Btn({
     primary: "bg-[#5F5A46] text-white hover:bg-[#4A4639] disabled:opacity-50",
     soft: "bg-[#F7F5ED] text-[#5F5A46] hover:bg-[#E0DDD0] disabled:opacity-50",
     ghost: "text-[#5F5A46] hover:bg-[#F7F5ED] disabled:opacity-50",
+    danger: "bg-red-600 text-white hover:bg-red-700 disabled:opacity-50",
   }
   const sizeClasses = {
     sm: "px-3 py-1.5 text-sm",
@@ -67,6 +72,7 @@ export function Btn({
 
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       className={cn(baseClasses, variantClasses[variant], sizeClasses[size], className)}
@@ -81,7 +87,7 @@ interface EmptyProps {
   icon?: ReactNode
   title: string
   description?: string
-  action?: { label: string; onClick: () => void }
+  action?: ReactNode | { label: string; onClick: () => void }
 }
 
 export function Empty({ icon, title, description, action }: EmptyProps) {
@@ -91,9 +97,15 @@ export function Empty({ icon, title, description, action }: EmptyProps) {
       <h3 className="text-lg font-semibold text-foreground mb-2">{title}</h3>
       {description && <p className="text-sm text-muted-foreground mb-4">{description}</p>}
       {action && (
-        <Btn onClick={action.onClick} variant="soft" size="sm">
-          {action.label}
-        </Btn>
+        <div className="mt-2">
+          {typeof action === "object" && action !== null && "label" in action ? (
+            <Btn onClick={(action as { label: string; onClick: () => void }).onClick} variant="soft" size="sm">
+              {(action as { label: string; onClick: () => void }).label}
+            </Btn>
+          ) : (
+            action
+          )}
+        </div>
       )}
     </div>
   )
@@ -105,15 +117,23 @@ interface ModalProps {
   onClose: () => void
   title: string
   children: ReactNode
-  actions?: { label: string; onClick: () => void; variant?: "primary" | "soft" | "ghost" }[]
+  size?: "sm" | "md" | "lg" | "xl"
+  actions?: { label: string; onClick: () => void; variant?: "primary" | "soft" | "ghost" | "danger" }[]
 }
 
-export function Modal({ isOpen, onClose, title, children, actions }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, size = "md", actions }: ModalProps) {
   if (!isOpen) return null
+
+  const sizeClasses = {
+    sm: "max-w-sm",
+    md: "max-w-lg",
+    lg: "max-w-2xl",
+    xl: "max-w-4xl",
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className={cn("bg-white rounded-2xl p-6 w-full mx-4 max-h-[90vh] overflow-y-auto", sizeClasses[size])}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-foreground">{title}</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -145,9 +165,15 @@ interface FormInputProps {
   type?: string
   placeholder?: string
   error?: string
+  inputMode?: "text" | "numeric" | "decimal" | "tel" | "search" | "email" | "url" | "none"
+  required?: boolean
+  maxLength?: number
+  min?: string | number
+  max?: string | number
+  step?: string | number
 }
 
-export function FormInput({ label, value, onChange, type = "text", placeholder, error }: FormInputProps) {
+export function FormInput({ label, value, onChange, type = "text", placeholder, error, inputMode, required, maxLength, min, max, step }: FormInputProps) {
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium text-foreground">{label}</label>
@@ -156,6 +182,12 @@ export function FormInput({ label, value, onChange, type = "text", placeholder, 
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        inputMode={inputMode}
+        required={required}
+        maxLength={maxLength}
+        min={min}
+        max={max}
+        step={step}
         className={cn(
           "w-full px-3 py-2 rounded-lg border text-sm",
           error ? "border-red-300 bg-red-50" : "border-[#E0DDD0] bg-white"
@@ -168,11 +200,12 @@ export function FormInput({ label, value, onChange, type = "text", placeholder, 
 
 // Form Select
 interface FormSelectProps {
-  label: string
+  label?: string
   value: string
   onChange: (value: string) => void
   options: { value: string; label: string }[]
   error?: string
+  required?: boolean
 }
 
 export function FormSelect({ label, value, onChange, options, error }: FormSelectProps) {
@@ -231,13 +264,21 @@ interface StatProps {
   value: string | number
   change?: string
   changeType?: "up" | "down"
+  highlight?: boolean
+  sub?: string
 }
 
-export function Stat({ label, value, change, changeType }: StatProps) {
+export function Stat({ label, value, change, changeType, highlight, sub }: StatProps) {
   return (
-    <div className="p-4 rounded-lg bg-card border border-border">
-      <p className="text-sm text-muted-foreground mb-2">{label}</p>
-      <p className="text-2xl font-bold text-foreground">{value}</p>
+    <div className={cn(
+      "p-4 rounded-lg border",
+      highlight ? "bg-[#295E29] text-white border-[#295E29]" : "bg-card border-border"
+    )}>
+      <p className={cn("text-sm mb-2", highlight ? "text-white/70" : "text-muted-foreground")}>{label}</p>
+      <p className={cn("text-2xl font-bold", highlight ? "text-white" : "text-foreground")}>{value}</p>
+      {sub && (
+        <p className={cn("text-xs mt-1", highlight ? "text-white/60" : "text-muted-foreground")}>{sub}</p>
+      )}
       {change && (
         <p className={cn("text-xs mt-2", changeType === "up" ? "text-green-600" : "text-red-600")}>
           {changeType === "up" ? "â" : "â"} {change}
@@ -273,33 +314,42 @@ export function SecHead({ n, title, right }: SecHeadProps) {
 
 // Export Button
 interface ExportButtonProps {
-  data: unknown[]
-  filename: string
-  children: ReactNode
+  data?: unknown[]
+  filename?: string
+  children?: ReactNode
+  onClick?: () => void
+  label?: string
+  disabled?: boolean
 }
 
-export function ExportButton({ data, filename, children }: ExportButtonProps) {
+export function ExportButton({ data, filename, children, onClick, label, disabled }: ExportButtonProps) {
   const handleExport = () => {
-    const json = JSON.stringify(data, null, 2)
-    const blob = new Blob([json], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `${filename}.json`
-    link.click()
-    URL.revokeObjectURL(url)
+    if (onClick) {
+      onClick()
+      return
+    }
+    if (data && filename) {
+      const json = JSON.stringify(data, null, 2)
+      const blob = new Blob([json], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `${filename}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+    }
   }
 
   return (
-    <Btn variant="ghost" size="sm" onClick={handleExport}>
+    <Btn variant="ghost" size="sm" onClick={handleExport} disabled={disabled}>
       <Download size={12} className="mr-1 inline" />
-      {children}
+      {children || label || "Exportar"}
     </Btn>
   )
 }
 
 // Period Filter for historical data
-export type PeriodValue = "hoy" | "semana" | "mes" | "3meses" | "ano" | "all"
+export type PeriodValue = "hoy" | "semana" | "mes" | "month" | "thisMonth" | "3meses" | "ano" | "all"
 
 interface PeriodFilterProps {
   value: PeriodValue
@@ -344,6 +394,8 @@ export function getDateRangeForPeriod(period: PeriodValue) {
       start = new Date(today.setDate(today.getDate() - today.getDay()))
       break
     case "mes":
+    case "month":
+    case "thisMonth":
       start = new Date(today.getFullYear(), today.getMonth(), 1)
       break
     case "3meses":
@@ -413,6 +465,7 @@ interface ConfirmDeleteModalProps {
   title?: string
   message: string
   itemCount?: number
+  itemName?: string
   onConfirm: () => void
   onCancel: () => void
   isLoading?: boolean

@@ -9,7 +9,7 @@ import {
   softDeleteNitiaFixedCost,
   getNitiaFixedCostsByPeriod,
 } from "@/lib/database-actions"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency } from "@/lib/helpers"
 
 interface FixedCost {
   id: string

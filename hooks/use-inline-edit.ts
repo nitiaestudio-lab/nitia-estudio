@@ -4,8 +4,8 @@ import { useState, useCallback } from "react"
 import { useToast } from "@/hooks/use-toast"
 
 interface UseInlineEditProps {
-  initialValue: string | number | boolean
-  onSave: (value: string | number | boolean) => Promise<void>
+  initialValue: string | number
+  onSave: (value: string | number) => Promise<void>
   fieldName?: string
 }
 
