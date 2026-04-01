@@ -8,7 +8,7 @@ import type { Provider, ProviderDocument } from "@/lib/types"
 import { Plus, Phone, Mail, ArrowLeft, Trash2, Pencil, Upload, FileText, Download } from "lucide-react"
 
 export function Providers() {
-  const { data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, selectedProjectId } = useApp()
+  const { data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory, selectedProjectId } = useApp()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -28,7 +28,7 @@ export function Providers() {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Proveedores</h1>
-          <p className="text-sm text-[#76746A] mt-1">Gesti{"\u00f3"}n de proveedores del estudio</p>
+          <p className="text-sm text-[#76746A] mt-1">Gesti{"ó"}n de proveedores del estudio</p>
         </div>
         <Btn onClick={() => setShowNew(true)}><Plus size={14} className="mr-1 inline" />Nuevo Proveedor</Btn>
       </div>
@@ -37,7 +37,7 @@ export function Providers() {
         <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           placeholder="Buscar proveedores..." className="px-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
         <FormSelect value={filterCategory} onChange={setFilterCategory}
-          options={[{ value: "", label: "Todas las categor\u00edas" }, ...categories.map(c => ({ value: c, label: c }))]} />
+          options={[{ value: "", label: "Todas las categorías" }, ...categories.map(c => ({ value: c, label: c }))]} />
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -62,7 +62,7 @@ export function Providers() {
 
       {showNew && <ProviderFormModal
         categories={getCategoriesFor("proveedor")}
-        onAddCategory={n => addCategory("proveedor", n)}
+        onAddCategory={n => addCategory("proveedor", n)} onDeleteCategory={deleteCategory}
         onClose={() => setShowNew(false)}
         onSave={async (p) => { await addRow("providers", p, "providers"); setShowNew(false) }}
       />}
@@ -71,7 +71,7 @@ export function Providers() {
 }
 
 function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () => void }) {
-  const { data, updateRow, addRow, deleteRow, uploadFile, addMovement, getCategoriesFor, addCategory } = useApp()
+  const { data, updateRow, addRow, deleteRow, uploadFile, addMovement, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [showEdit, setShowEdit] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
 
@@ -157,7 +157,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
 
       {showEdit && <ProviderFormModal provider={provider}
         categories={getCategoriesFor("proveedor")}
-        onAddCategory={n => addCategory("proveedor", n)}
+        onAddCategory={n => addCategory("proveedor", n)} onDeleteCategory={deleteCategory}
         onClose={() => setShowEdit(false)}
         onSave={async (p) => { await updateRow("providers", provider.id, p, "providers"); setShowEdit(false) }}
         onDelete={async () => { await deleteRow("providers", provider.id, "providers"); onBack() }}
@@ -181,9 +181,10 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
   )
 }
 
-function ProviderFormModal({ provider, categories, onAddCategory, onClose, onSave, onDelete }: {
+function ProviderFormModal({ provider, categories, onAddCategory, onDeleteCategory, onClose, onSave, onDelete }: {
   provider?: Provider; categories: { id: string; name: string }[]
   onAddCategory: (n: string) => void
+  onDeleteCategory: (n: string) => void
   onClose: () => void; onSave: (p: Provider) => void; onDelete?: () => void
 }) {
   const [name, setName] = useState(provider?.name ?? "")
@@ -202,11 +203,11 @@ function ProviderFormModal({ provider, categories, onAddCategory, onClose, onSav
       })}} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Nombre" value={name} onChange={setName} />
-          <EditableSelect label="Categor\u00eda" value={category} onChange={setCategory}
-            options={categories.map(c => ({ value: c.name, label: c.name }))} onAddNew={onAddCategory} />
+          <EditableSelect label="Categoría" value={category} onChange={setCategory}
+            options={categories.map(c => ({ value: c.name, label: c.name }))} onAddNew={onAddCategory} onDelete={onDeleteCategory} />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Tel\u00e9fono" value={phone} onChange={setPhone} />
+          <FormInput label="Teléfono" value={phone} onChange={setPhone} />
           <FormInput label="Email" type="email" value={email} onChange={setEmail} />
         </div>
         <FormInput label="Zona" value={zone} onChange={setZone} />

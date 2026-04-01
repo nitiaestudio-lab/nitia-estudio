@@ -36,7 +36,7 @@ export function Accounts() {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Cuentas</h1>
-          <p className="text-sm text-[#76746A] mt-1">Gesti{"\u00f3"}n de cuentas y movimientos del estudio</p>
+          <p className="text-sm text-[#76746A] mt-1">Gesti{"ó"}n de cuentas y movimientos del estudio</p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <PeriodFilter value={period} onChange={setPeriod}
@@ -78,7 +78,7 @@ export function Accounts() {
       {/* Search */}
       <div className="max-w-md">
         <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-          placeholder={"Buscar movimientos por descripci\u00f3n o categor\u00eda..."}
+          placeholder={"Buscar movimientos por descripción o categoría..."}
           className="w-full px-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
       </div>
 
@@ -92,9 +92,9 @@ export function Accounts() {
             <thead className="bg-[#F0EDE4] border-b border-border">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Fecha</th>
-                <th className="px-4 py-3 text-left font-medium">Descripci{"\u00f3"}n</th>
+                <th className="px-4 py-3 text-left font-medium">Descripci{"ó"}n</th>
                 <th className="px-4 py-3 text-left font-medium">Cuenta</th>
-                <th className="px-4 py-3 text-left font-medium">Categor{"\u00ed"}a</th>
+                <th className="px-4 py-3 text-left font-medium">Categor{"í"}a</th>
                 <th className="px-4 py-3 text-right font-medium">Importe</th>
                 <th className="px-4 py-3 w-10"></th>
               </tr>
@@ -130,7 +130,7 @@ export function Accounts() {
             </tbody>
           </table>
         </div>
-        {filtered.length === 0 && <Empty title="Sin movimientos" description="Registr\u00e1 tu primer movimiento" />}
+        {filtered.length === 0 && <Empty title="Sin movimientos" description="Registrá tu primer movimiento" />}
       </div>
 
       {/* New Movement Modal */}
@@ -200,10 +200,10 @@ function NewMovementModal({ accounts, projects, providers, onClose, onSave }: {
           <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)}
             options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} />
         </div>
-        <FormInput label="Descripci\u00f3n" value={description} onChange={setDescription} />
+        <FormInput label="Descripción" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Importe" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
-          <FormSelect label="Categor\u00eda" value={category} onChange={setCategory}
+          <FormSelect label="Categoría" value={category} onChange={setCategory}
             options={[
               { value: "Proyecto", label: "Proyecto" }, { value: "Honorarios", label: "Honorarios" },
               { value: "Proveedor", label: "Proveedor" }, { value: "Gastos fijos", label: "Gastos fijos" },
@@ -253,7 +253,7 @@ function AccountModal({ account, onClose, onSave, onDelete }: {
           <FormSelect label="Tipo" value={type || ""} onChange={setType}
             options={[
               { value: "banco", label: "Banco" }, { value: "efectivo", label: "Efectivo" },
-              { value: "mercadopago", label: "Mercado Pago" }, { value: "dolares", label: "D\u00f3lares" },
+              { value: "mercadopago", label: "Mercado Pago" }, { value: "dolares", label: "Dólares" },
               { value: "otro", label: "Otro" },
             ]} />
           <FormInput label="Saldo inicial" type="number" value={balance} onChange={setBalance} />

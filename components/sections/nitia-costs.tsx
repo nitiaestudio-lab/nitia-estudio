@@ -8,7 +8,7 @@ import type { FixedExpense } from "@/lib/types"
 import { Plus, Pencil, Check, X } from "lucide-react"
 
 export function NitiaCosts() {
-  const { data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory } = useApp()
+  const { data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [showNew, setShowNew] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [viewMonth, setViewMonth] = useState(() => {
@@ -130,13 +130,14 @@ export function NitiaCosts() {
         </div>
       )}
 
-      {costs.length === 0 && <Empty title="Sin costos fijos" description="Agreg\u00e1 los gastos fijos del estudio" action={<Btn onClick={() => setShowNew(true)}>Agregar</Btn>} />}
+      {costs.length === 0 && <Empty title="Sin costos fijos" description="Agregá los gastos fijos del estudio" action={<Btn onClick={() => setShowNew(true)}>Agregar</Btn>} />}
 
       {(showNew || editingCost) && (
         <CostModal
           cost={editingCost ?? undefined}
           categories={getCategoriesFor("gasto_fijo_nitia")}
           onAddCategory={(name) => addCategory("gasto_fijo_nitia", name)}
+          onDeleteCategory={deleteCategory}
           onClose={() => { setShowNew(false); setEditingId(null) }}
           onSave={async (cost) => {
             if (editingCost) await updateRow("nitia_fixed_costs", cost.id, cost, "nitiaFixedCosts")
@@ -153,9 +154,10 @@ export function NitiaCosts() {
   )
 }
 
-function CostModal({ cost, categories, onAddCategory, onClose, onSave, onDelete }: {
+function CostModal({ cost, categories, onAddCategory, onDeleteCategory, onClose, onSave, onDelete }: {
   cost?: FixedExpense; categories: { id: string; name: string }[]
   onAddCategory: (name: string) => void
+  onDeleteCategory: (name: string) => void
   onClose: () => void; onSave: (c: FixedExpense) => void; onDelete?: () => void
 }) {
   const [description, setDescription] = useState(cost?.description ?? "")
@@ -170,14 +172,14 @@ function CostModal({ cost, categories, onAddCategory, onClose, onSave, onDelete 
         id: cost?.id ?? generateId(), description,
         amount: parseFloat(amount), category, active, due_day: parseInt(dueDay) || 1,
       })}} className="space-y-4">
-        <FormInput label="Descripci\u00f3n" value={description} onChange={setDescription} />
+        <FormInput label="Descripción" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Monto mensual" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
-          <EditableSelect label="Categor\u00eda" value={category} onChange={setCategory}
+          <EditableSelect label="Categoría" value={category} onChange={setCategory}
             options={categories.map(c => ({ value: c.name, label: c.name }))}
-            onAddNew={onAddCategory} />
+            onAddNew={onAddCategory} onDelete={onDeleteCategory} />
         </div>
-        <FormInput label="D\u00eda de vencimiento (1-31)" type="number" value={dueDay} onChange={setDueDay} min="1" max="31" />
+        <FormInput label="Día de vencimiento (1-31)" type="number" value={dueDay} onChange={setDueDay} min="1" max="31" />
         <div className="flex items-center gap-3">
           <input type="checkbox" id="active" checked={active} onChange={e => setActive(e.target.checked)}
             className="w-4 h-4 rounded border-border" />

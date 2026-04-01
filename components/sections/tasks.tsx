@@ -33,7 +33,7 @@ export function Tasks() {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Tareas</h1>
-          <p className="text-sm text-[#76746A] mt-1">Gesti{"\u00f3"}n de tareas por proyecto</p>
+          <p className="text-sm text-[#76746A] mt-1">Gesti{"ó"}n de tareas por proyecto</p>
         </div>
         <Btn onClick={() => { setEditingTask(null); setShowNew(true) }}>
           <Plus size={14} className="mr-1 inline" />Nueva Tarea
@@ -58,7 +58,7 @@ export function Tasks() {
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Tarea</th>
                 <th className="px-4 py-3 text-left font-medium">Proyecto</th>
-                <th className="px-4 py-3 text-left font-medium">Fecha l{"\u00ed"}mite</th>
+                <th className="px-4 py-3 text-left font-medium">Fecha l{"í"}mite</th>
                 <th className="px-4 py-3 text-left font-medium">Prioridad</th>
                 <th className="px-4 py-3 text-left font-medium">Estado</th>
                 <th className="px-4 py-3 w-20"></th>
@@ -127,11 +127,11 @@ function TaskModal({ task, projects, onClose, onSave }: {
         id: task?.id ?? generateId(), title, project_id: projectId || null,
         due_date: dueDate, priority, status, assignee: task?.assignee ?? "",
       })}} className="space-y-4">
-        <FormInput label="T\u00edtulo" value={title} onChange={setTitle} />
+        <FormInput label="Título" value={title} onChange={setTitle} />
         <FormSelect label="Proyecto" value={projectId || ""} onChange={setProjectId}
           options={projects.map(p => ({ value: p.id, label: p.name }))} />
         <div className="grid grid-cols-3 gap-4">
-          <FormInput label="Fecha l\u00edmite" type="date" value={dueDate} onChange={setDueDate} />
+          <FormInput label="Fecha límite" type="date" value={dueDate} onChange={setDueDate} />
           <FormSelect label="Prioridad" value={priority} onChange={setPriority}
             options={[{ value: "alta", label: "Alta" }, { value: "media", label: "Media" }, { value: "baja", label: "Baja" }]} />
           <FormSelect label="Estado" value={status} onChange={setStatus}

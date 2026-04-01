@@ -8,7 +8,7 @@ import { Plus, Pencil, Trash2 } from "lucide-react"
 import type { PersonalFinanceMovement } from "@/lib/types"
 
 export function PersonalFinance() {
-  const { role, data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory } = useApp()
+  const { role, data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [activeTab, setActiveTab] = useState<"paula" | "cami">(role === "cami" ? "cami" : "paula")
   const [period, setPeriod] = useState<PeriodValue>("mes")
   const [customStart, setCustomStart] = useState("")
@@ -149,7 +149,7 @@ export function PersonalFinance() {
         {/* Auto from projects */}
         {projectIncomes.length > 0 && (
           <div className="mb-4">
-            <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Desde Proyectos (autom{"\u00e1"}tico)</p>
+            <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Desde Proyectos (autom{"á"}tico)</p>
             {projectIncomes.map((pi, i) => (
               <div key={i} className="flex justify-between py-1.5 text-sm">
                 <span className="text-green-700">{pi.description}</span>
@@ -182,7 +182,7 @@ export function PersonalFinance() {
         <FinanceItemModal
           item={editingItem} type="fixed" owner={activeTab}
           categories={getCategoriesFor("gasto_fijo_personal")}
-          onAddCategory={n => addCategory("gasto_fijo_personal", n)}
+          onAddCategory={n => addCategory("gasto_fijo_personal", n)} onDeleteCategory={deleteCategory}
           onClose={() => { setShowFixedDialog(false); setEditingItem(null) }}
           onSave={saveItem}
         />
@@ -191,7 +191,7 @@ export function PersonalFinance() {
         <FinanceItemModal
           item={editingItem} type="variable" owner={activeTab}
           categories={getCategoriesFor("gasto_variable_personal")}
-          onAddCategory={n => addCategory("gasto_variable_personal", n)}
+          onAddCategory={n => addCategory("gasto_variable_personal", n)} onDeleteCategory={deleteCategory}
           onClose={() => { setShowVariableDialog(false); setEditingItem(null) }}
           onSave={saveItem}
         />
@@ -200,7 +200,7 @@ export function PersonalFinance() {
         <FinanceItemModal
           item={editingItem} type="income" owner={activeTab}
           categories={getCategoriesFor("ingreso_personal")}
-          onAddCategory={n => addCategory("ingreso_personal", n)}
+          onAddCategory={n => addCategory("ingreso_personal", n)} onDeleteCategory={deleteCategory}
           onClose={() => { setShowIncomeDialog(false); setEditingItem(null) }}
           onSave={saveItem}
         />
@@ -209,9 +209,9 @@ export function PersonalFinance() {
   )
 }
 
-function FinanceItemModal({ item, type, owner, categories, onAddCategory, onClose, onSave }: {
+function FinanceItemModal({ item, type, owner, categories, onAddCategory, onDeleteCategory, onClose, onSave }: {
   item: PersonalFinanceMovement | null; type: "fixed" | "variable" | "income"; owner: string
-  categories: { id: string; name: string }[]; onAddCategory: (n: string) => void
+  categories: { id: string; name: string }[]; onAddCategory: (n: string) => void; onDeleteCategory: (n: string) => void
   onClose: () => void; onSave: (item: PersonalFinanceMovement) => void
 }) {
   const titles = { fixed: "Gasto Fijo", variable: "Gasto Variable", income: "Ingreso" }
@@ -230,13 +230,13 @@ function FinanceItemModal({ item, type, owner, categories, onAddCategory, onClos
         category, is_fixed: type === "fixed", active: true,
         note, created_at: item?.created_at ?? new Date().toISOString(),
       })}} className="space-y-4">
-        <FormInput label="Descripci\u00f3n" value={description} onChange={setDescription} />
+        <FormInput label="Descripción" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Monto" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
           <FormInput label="Fecha" type="date" value={date} onChange={setDate} />
         </div>
-        <EditableSelect label="Categor\u00eda" value={category} onChange={setCategory}
-          options={categories.map(c => ({ value: c.name, label: c.name }))} onAddNew={onAddCategory} />
+        <EditableSelect label="Categoría" value={category} onChange={setCategory}
+          options={categories.map(c => ({ value: c.name, label: c.name }))} onAddNew={onAddCategory} onDelete={onDeleteCategory} />
         {type === "income" && <FormInput label="Nota" value={note} onChange={setNote} />}
         <div className="flex justify-end gap-3 pt-4">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>

@@ -41,14 +41,14 @@ export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
           <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)}
             options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} />
         </div>
-        <FormInput label={`Descripci\u00f3n`} value={description} onChange={setDescription} />
+        <FormInput label={`Descripción`} value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Monto" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
           <FormSelect label="Cuenta" value={accountId} onChange={setAccountId}
             options={data.accounts.map(a => ({ value: a.id, label: a.name }))} />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <FormSelect label={`Categor\u00eda`} value={category} onChange={setCategory}
+          <FormSelect label={`Categoría`} value={category} onChange={setCategory}
             options={[
               { value: "Proyecto", label: "Proyecto" }, { value: "Honorarios", label: "Honorarios" },
               { value: "Proveedor", label: "Proveedor" }, { value: "Gastos fijos", label: "Gastos fijos" },
@@ -74,7 +74,7 @@ export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
             <input type="checkbox" checked={autoSplit} onChange={e => setAutoSplit(e.target.checked)} className="w-4 h-4" />
             <div>
               <p className="text-sm font-medium text-green-800">Distribuir 50/50 a socias</p>
-              <p className="text-xs text-green-600">{`Se calcular\u00e1 en Finanzas Personales`}</p>
+              <p className="text-xs text-green-600">{`Se calculará en Finanzas Personales`}</p>
             </div>
           </div>
         )}

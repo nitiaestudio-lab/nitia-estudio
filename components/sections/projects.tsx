@@ -29,7 +29,7 @@ export function Projects() {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Proyectos</h1>
-          <p className="text-sm text-[#76746A] mt-1">Gesti{"\u00f3"}n de proyectos del estudio</p>
+          <p className="text-sm text-[#76746A] mt-1">Gesti{"ó"}n de proyectos del estudio</p>
         </div>
         <Btn onClick={() => setShowNew(true)}><Plus size={14} className="mr-1 inline" />Nuevo Proyecto</Btn>
       </div>
@@ -69,7 +69,7 @@ export function Projects() {
         })}
       </div>
 
-      {projects.length === 0 && <Empty title="Sin proyectos" description="Cre\u00e1 tu primer proyecto" action={<Btn onClick={() => setShowNew(true)}>Crear</Btn>} />}
+      {projects.length === 0 && <Empty title="Sin proyectos" description="Creá tu primer proyecto" action={<Btn onClick={() => setShowNew(true)}>Crear</Btn>} />}
 
       {showNew && <ProjectFormModal onClose={() => setShowNew(false)} onSave={async (p) => {
         await addRow("projects", p, "projects"); setShowNew(false)
@@ -112,7 +112,7 @@ function ProjectDetail({ project, onBack, isFull }: { project: Project; onBack: 
             <h1 className="font-serif text-2xl font-light text-[#1C1A12]">{project.name}</h1>
             <Tag label={project.status || "activo"} color={project.status === "activo" ? "green" : "yellow"} />
           </div>
-          <p className="text-sm text-[#76746A]">{project.client} {project.address && `\u2014 ${project.address}`}</p>
+          <p className="text-sm text-[#76746A]">{project.client} {project.address && `— ${project.address}`}</p>
         </div>
         <Btn variant="soft" onClick={() => setShowEdit(true)}><Pencil size={14} className="mr-1 inline" />Editar</Btn>
       </div>
@@ -244,7 +244,7 @@ function ProjectDetail({ project, onBack, isFull }: { project: Project; onBack: 
                 <FileText size={20} className="text-[#5F5A46]" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">{file.category} {file.created_at && `\u2022 ${formatDate(file.created_at.split("T")[0])}`}</p>
+                  <p className="text-xs text-muted-foreground">{file.category} {file.created_at && `• ${formatDate(file.created_at.split("T")[0])}`}</p>
                 </div>
                 {file.url && <a href={file.url} target="_blank" rel="noopener" className="p-1 hover:bg-accent rounded"><Download size={14} /></a>}
                 <button onClick={() => deleteRow("project_files", file.id, "projectFiles")}
@@ -330,7 +330,7 @@ function ProjectFormModal({ project, onClose, onSave }: {
           <FormInput label="Nombre del proyecto" value={name} onChange={setName} />
           <FormInput label="Cliente" value={client} onChange={setClient} />
         </div>
-        <FormInput label="Direcci\u00f3n" value={address} onChange={setAddress} />
+        <FormInput label="Dirección" value={address} onChange={setAddress} />
         <div className="grid grid-cols-3 gap-4">
           <FormSelect label="Tipo" value={type || ""} onChange={setType}
             options={[{ value: "arquitectura", label: "Arquitectura" }, { value: "interiorismo", label: "Interiorismo" }, { value: "ambos", label: "Ambos" }]} />
@@ -340,7 +340,7 @@ function ProjectFormModal({ project, onClose, onSave }: {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Email cliente" type="email" value={clientEmail} onChange={setClientEmail} />
-          <FormInput label="Tel\u00e9fono cliente" value={clientPhone} onChange={setClientPhone} />
+          <FormInput label="Teléfono cliente" value={clientPhone} onChange={setClientPhone} />
         </div>
         <div className="flex justify-end gap-3 pt-4">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
@@ -373,7 +373,7 @@ function AddItemModal({ type, defaultMultiplier, providers, onClose, onSave }: {
         multiplier: multNum, provider_id: providerId || null,
         paid: false, sort_order: 0,
       })}} className="space-y-4">
-        <FormInput label="Descripci\u00f3n" value={description} onChange={setDescription} />
+        <FormInput label="Descripción" value={description} onChange={setDescription} />
         <FormSelect label="Proveedor (opcional)" value={providerId} onChange={setProviderId}
           options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
         <div className="grid grid-cols-2 gap-4">
@@ -420,7 +420,7 @@ function AddProjectMovementModal({ project, accounts, providers, onClose, onSave
           <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)}
             options={[{ value: "ingreso", label: "Ingreso (cobro)" }, { value: "egreso", label: "Egreso (pago)" }]} />
         </div>
-        <FormInput label="Descripci\u00f3n" value={description} onChange={setDescription} />
+        <FormInput label="Descripción" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Monto" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
           <FormSelect label="Cuenta" value={accountId} onChange={setAccountId}
@@ -435,7 +435,7 @@ function AddProjectMovementModal({ project, accounts, providers, onClose, onSave
             <input type="checkbox" checked={autoSplit} onChange={e => setAutoSplit(e.target.checked)} className="w-4 h-4" />
             <div>
               <p className="text-sm font-medium text-green-800">Distribuir 50/50 a socias</p>
-              <p className="text-xs text-green-600">Se calcular\u00e1 autom\u00e1ticamente en Finanzas Personales</p>
+              <p className="text-xs text-green-600">Se calculará automáticamente en Finanzas Personales</p>
             </div>
           </div>
         )}
@@ -468,14 +468,14 @@ function UploadFileModal({ projectId, onClose, onUpload }: {
             if (f) { setFile(f); if (!name) setName(f.name) }
           }} accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" />
           {file ? <p className="text-sm font-medium">{file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)</p>
-            : <p className="text-sm text-muted-foreground">Click para seleccionar archivo (PDF, im\u00e1genes, Office - m\u00e1x 25MB)</p>}
+            : <p className="text-sm text-muted-foreground">Click para seleccionar archivo (PDF, imágenes, Office - máx 25MB)</p>}
         </div>
         <FormInput label="Nombre" value={name} onChange={setName} />
-        <FormSelect label="Categor\u00eda" value={category} onChange={setCategory}
+        <FormSelect label="Categoría" value={category} onChange={setCategory}
           options={[{ value: "contrato", label: "Contrato" }, { value: "plano", label: "Plano" },
             { value: "presupuesto", label: "Presupuesto" }, { value: "factura", label: "Factura" },
             { value: "foto", label: "Foto" }, { value: "render", label: "Render" }, { value: "otro", label: "Otro" }]} />
-        <FormInput label="Descripci\u00f3n (opcional)" value={description} onChange={setDescription} />
+        <FormInput label="Descripción (opcional)" value={description} onChange={setDescription} />
         <div className="flex justify-end gap-3 pt-4">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={!file}>Subir</Btn>

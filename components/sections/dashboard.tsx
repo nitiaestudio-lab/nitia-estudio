@@ -50,7 +50,7 @@ export function Dashboard() {
         {/* Recent Movements */}
         {isFull && (
           <div className="bg-card border border-border rounded-xl p-6">
-            <SecHead title={"\u00DAltimos Movimientos"} right={
+            <SecHead title={"Últimos Movimientos"} right={
               <button onClick={() => setSection("accounts")} className="text-sm text-[#5F5A46] hover:underline">Ver todos</button>
             } />
             {recentMovements.length > 0 ? recentMovements.map(mov => (

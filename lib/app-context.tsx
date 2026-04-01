@@ -51,6 +51,7 @@ interface AppContextType {
   // Categories
   getCategoriesFor: (type: string) => Category[]
   addCategory: (type: string, name: string) => Promise<void>
+  deleteCategory: (name: string) => Promise<void>
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -339,6 +340,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await addRow("categories", cat as any, "categories")
   }, [data.categories, addRow])
 
+  const deleteCategory = useCallback(async (name: string) => {
+    const cat = data.categories.find(c => c.name === name)
+    if (cat) {
+      await updateRow("categories", cat.id, { active: false }, "categories")
+    }
+  }, [data.categories, updateRow])
+
   return (
     <AppContext.Provider value={{
       role, setRole, data, setData, section, setSection,
@@ -347,7 +355,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addRow, updateRow, deleteRow, deleteRows,
       addMovement, deleteMovement,
       uploadFile, refreshData,
-      getCategoriesFor, addCategory,
+      getCategoriesFor, addCategory, deleteCategory,
     }}>
       {children}
     </AppContext.Provider>

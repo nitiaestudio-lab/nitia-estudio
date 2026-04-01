@@ -37,8 +37,8 @@ export function Settings() {
   return (
     <div className="p-6 lg:p-8 space-y-8">
       <div>
-        <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Configuraci{"\u00f3"}n</h1>
-        <p className="text-sm text-[#76746A] mt-1">Gesti{"\u00f3"}n de usuarios y seguridad</p>
+        <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Configuraci{"ó"}n</h1>
+        <p className="text-sm text-[#76746A] mt-1">Gesti{"ó"}n de usuarios y seguridad</p>
       </div>
 
       {/* Current User */}
@@ -74,7 +74,7 @@ export function Settings() {
 
       {/* User Management */}
       <div className="bg-card border border-border rounded-xl p-6">
-        <SecHead title="Gesti\u00f3n de Usuarios" right={
+        <SecHead title="Gestión de Usuarios" right={
           <Btn size="sm" onClick={() => setShowAddUser(true)}>
             <Plus size={14} className="mr-1 inline" />Agregar Usuario
           </Btn>
@@ -84,7 +84,7 @@ export function Settings() {
             <div key={user.id} className="flex items-center justify-between py-3 border-b border-border last:border-0">
               <div>
                 <p className="text-sm font-medium">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.role} {user.email && `\u2022 ${user.email}`}</p>
+                <p className="text-xs text-muted-foreground">{user.role} {user.email && `• ${user.email}`}</p>
               </div>
               <div className="flex gap-2">
                 {user.role !== "paula" && user.role !== "cami" && (
@@ -92,7 +92,7 @@ export function Settings() {
                     <button onClick={() => setEditingUser(user)}
                       className="p-1.5 hover:bg-accent rounded"><Pencil size={14} className="text-muted-foreground" /></button>
                     <button onClick={async () => {
-                      if (confirm("\u00bfEliminar este usuario?")) {
+                      if (confirm("¿Eliminar este usuario?")) {
                         await deleteEmployeeUser()
                         setAllUsers(prev => prev.filter(u => u.id !== user.id))
                       }
@@ -107,8 +107,8 @@ export function Settings() {
 
       {/* Session */}
       <div className="bg-card border border-border rounded-xl p-6">
-        <SecHead title="Sesi\u00f3n" />
-        <Btn variant="danger" onClick={() => setRole(null)}>Cerrar Sesi\u00f3n</Btn>
+        <SecHead title="Sesión" />
+        <Btn variant="danger" onClick={() => setRole(null)}>Cerrar Sesión</Btn>
       </div>
 
       {/* Change PIN Modal */}
@@ -158,7 +158,7 @@ function ChangePinModal({ role, onClose }: { role: string; onClose: () => void }
     <Modal isOpen={true} title="Cambiar PIN" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormInput label="PIN actual" type="password" value={current} onChange={setCurrent} inputMode="numeric" />
-        <FormInput label="Nuevo PIN (4 d\u00edgitos)" type="password" value={newPin} onChange={setNewPin} inputMode="numeric" />
+        <FormInput label="Nuevo PIN (4 dígitos)" type="password" value={newPin} onChange={setNewPin} inputMode="numeric" />
         <FormInput label="Confirmar nuevo PIN" type="password" value={confirm} onChange={setConfirm} inputMode="numeric" />
         {error && <p className="text-sm text-red-600">{error}</p>}
         {success && <p className="text-sm text-green-600">PIN actualizado correctamente</p>}
@@ -195,7 +195,7 @@ function Setup2FAModal({ role, isEnabled, onClose }: { role: string; isEnabled: 
     setLoading(true)
     const result = await verifyAndEnableTOTP(role, code)
     if (result.success) onClose()
-    else { setError(result.error || "C\u00f3digo incorrecto"); setCode("") }
+    else { setError(result.error || "Código incorrecto"); setCode("") }
     setLoading(false)
   }
 
@@ -206,10 +206,10 @@ function Setup2FAModal({ role, isEnabled, onClose }: { role: string; isEnabled: 
   }
 
   return (
-    <Modal isOpen={true} title="Autenticaci\u00f3n en Dos Pasos" onClose={onClose}>
+    <Modal isOpen={true} title="Autenticación en Dos Pasos" onClose={onClose}>
       {step === "choice" && (
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">La autenticaci\u00f3n en dos pasos est\u00e1 activa.</p>
+          <p className="text-sm text-muted-foreground">La autenticación en dos pasos está activa.</p>
           <div className="flex gap-3">
             <Btn variant="danger" onClick={handleDisable} disabled={loading}>Desactivar 2FA</Btn>
             <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
@@ -218,18 +218,18 @@ function Setup2FAModal({ role, isEnabled, onClose }: { role: string; isEnabled: 
       )}
       {step === "setup" && (
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Configur\u00e1 una app de autenticaci\u00f3n (Google Authenticator, Authy) para mayor seguridad.</p>
+          <p className="text-sm text-muted-foreground">Configurá una app de autenticación (Google Authenticator, Authy) para mayor seguridad.</p>
           <Btn onClick={handleSetup} disabled={loading}>{loading ? "Configurando..." : "Configurar 2FA"}</Btn>
         </div>
       )}
       {step === "verify" && (
         <form onSubmit={handleVerify} className="space-y-4">
-          <p className="text-sm text-muted-foreground">Escane\u00e1 este c\u00f3digo QR con tu app de autenticaci\u00f3n:</p>
+          <p className="text-sm text-muted-foreground">Escaneá este código QR con tu app de autenticación:</p>
           <div className="bg-[#F7F5ED] p-4 rounded-lg text-center">
-            <p className="text-xs text-muted-foreground mb-2">O ingres\u00e1 manualmente:</p>
+            <p className="text-xs text-muted-foreground mb-2">O ingresá manualmente:</p>
             <code className="text-sm font-mono bg-white px-3 py-1 rounded border select-all">{secret}</code>
           </div>
-          <FormInput label="C\u00f3digo de verificaci\u00f3n (6 d\u00edgitos)" value={code} onChange={setCode} inputMode="numeric" />
+          <FormInput label="Código de verificación (6 dígitos)" value={code} onChange={setCode} inputMode="numeric" />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-3">
             <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
@@ -251,7 +251,7 @@ function UserModal({ user, onClose, onSave }: {
     <Modal isOpen={true} title={user ? "Editar Usuario" : "Agregar Usuario"} onClose={onClose}>
       <form onSubmit={e => { e.preventDefault(); onSave(name, pin) }} className="space-y-4">
         <FormInput label="Nombre" value={name} onChange={setName} />
-        <FormInput label="PIN (4 d\u00edgitos)" type="password" value={pin} onChange={setPin} inputMode="numeric" />
+        <FormInput label="PIN (4 dígitos)" type="password" value={pin} onChange={setPin} inputMode="numeric" />
         <div className="flex justify-end gap-3 pt-4">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={!name || pin.length !== 4}>{user ? "Guardar" : "Crear"}</Btn>

@@ -44,12 +44,12 @@ export function Quotes() {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Cotizaciones</h1>
-          <p className="text-sm text-[#76746A] mt-1">Comparaci{"\u00f3"}n de presupuestos de proveedores</p>
+          <p className="text-sm text-[#76746A] mt-1">Comparaci{"ó"}n de presupuestos de proveedores</p>
         </div>
         <div className="flex gap-2">
           <FormSelect value={filterProject} onChange={setFilterProject}
             options={[{ value: "", label: "Todos los proyectos" }, ...data.projects.map(p => ({ value: p.id, label: p.name }))]} />
-          <Btn onClick={() => setShowNew(true)}><Plus size={14} className="mr-1 inline" />Nueva Cotizaci{"\u00f3"}n</Btn>
+          <Btn onClick={() => setShowNew(true)}><Plus size={14} className="mr-1 inline" />Nueva Cotizaci{"ó"}n</Btn>
         </div>
       </div>
 
@@ -65,7 +65,7 @@ export function Quotes() {
         const [category, item] = key.split("::")
         return (
           <div key={key} className="bg-card border border-border rounded-xl p-6">
-            <SecHead title={`${category} \u2014 ${item}`} />
+            <SecHead title={`${category} — ${item}`} />
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-[#F0EDE4]">
@@ -130,7 +130,7 @@ function QuoteModal({ projects, providers, onClose, onSave }: {
   const costNum = parseFloat(cost) || 0
 
   return (
-    <Modal isOpen={true} title="Nueva Cotizaci\u00f3n" onClose={onClose}>
+    <Modal isOpen={true} title="Nueva Cotización" onClose={onClose}>
       <form onSubmit={e => { e.preventDefault(); onSave({
         id: generateId(), date: today(), project_id: projectId || null,
         category, item, provider_id: providerId || null,
@@ -141,8 +141,8 @@ function QuoteModal({ projects, providers, onClose, onSave }: {
         <FormSelect label="Proyecto" value={projectId} onChange={setProjectId}
           options={projects.map(p => ({ value: p.id, label: p.name }))} />
         <div className="grid grid-cols-2 gap-4">
-          <FormInput label="Categor\u00eda" value={category} onChange={setCategory} placeholder="Ej: Pisos" />
-          <FormInput label="\u00cdtem" value={item} onChange={setItem} placeholder="Ej: Porcelanato 60x60" />
+          <FormInput label="Categoría" value={category} onChange={setCategory} placeholder="Ej: Pisos" />
+          <FormInput label="Ítem" value={item} onChange={setItem} placeholder="Ej: Porcelanato 60x60" />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <FormSelect label="Proveedor" value={providerId} onChange={v => {

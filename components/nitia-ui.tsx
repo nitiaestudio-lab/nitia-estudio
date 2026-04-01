@@ -216,7 +216,7 @@ export function PeriodFilter({ value, onChange, onCustomRange }: {
     { label: "Esta semana", value: "semana" as PeriodValue },
     { label: "Este mes", value: "mes" as PeriodValue },
     { label: "3 meses", value: "3meses" as PeriodValue },
-    { label: "Este a\u00f1o", value: "ano" as PeriodValue },
+    { label: "Este año", value: "ano" as PeriodValue },
     { label: "Todos", value: "all" as PeriodValue },
     { label: "Personalizado", value: "custom" as PeriodValue },
   ]
@@ -260,7 +260,7 @@ export function ConfirmDeleteModal({ isOpen = true, title = "Confirmar", message
         <h3 className="text-lg font-semibold text-[#1C1A12] mb-4">{title}</h3>
         <p className="text-sm text-[#76746A] mb-6">
           {message}
-          {itemCount && itemCount > 1 && <span className="block mt-2 font-medium text-red-600">Se eliminar\u00e1n {itemCount} elementos.</span>}
+          {itemCount && itemCount > 1 && <span className="block mt-2 font-medium text-red-600">Se eliminarán {itemCount} elementos.</span>}
         </p>
         <div className="flex gap-3 justify-end">
           <button onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-medium text-[#76746A]">Cancelar</button>
@@ -273,13 +273,15 @@ export function ConfirmDeleteModal({ isOpen = true, title = "Confirmar", message
   )
 }
 
-// =================== EDITABLE SELECT (with "add new" option) ===================
-export function EditableSelect({ label, value, onChange, options, onAddNew, placeholder }: {
+// =================== EDITABLE SELECT (add + delete) ===================
+export function EditableSelect({ label, value, onChange, options, onAddNew, onDelete, placeholder }: {
   label?: string; value: string; onChange: (v: string) => void
   options: { value: string; label: string }[]
-  onAddNew?: (name: string) => void; placeholder?: string
+  onAddNew?: (name: string) => void; onDelete?: (value: string) => void
+  placeholder?: string
 }) {
   const [adding, setAdding] = useState(false)
+  const [managing, setManaging] = useState(false)
   const [newName, setNewName] = useState("")
 
   if (adding) {
@@ -288,7 +290,7 @@ export function EditableSelect({ label, value, onChange, options, onAddNew, plac
         {label && <label className="block text-sm font-medium text-foreground">{label}</label>}
         <div className="flex gap-2">
           <input value={newName} onChange={e => setNewName(e.target.value)}
-            placeholder={placeholder || "Nueva categoria..."} autoFocus
+            placeholder={placeholder || "Nueva categoría..."} autoFocus
             className="flex-1 px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm" />
           <Btn size="sm" onClick={() => {
             if (newName.trim() && onAddNew) { onAddNew(newName.trim()); onChange(newName.trim()) }
@@ -300,16 +302,39 @@ export function EditableSelect({ label, value, onChange, options, onAddNew, plac
     )
   }
 
+  if (managing) {
+    return (
+      <div className="space-y-2">
+        {label && <label className="block text-sm font-medium text-foreground">{label}</label>}
+        <div className="border border-[#E0DDD0] rounded-lg p-2 max-h-48 overflow-y-auto space-y-1">
+          {options.map(o => (
+            <div key={o.value} className="flex items-center justify-between px-2 py-1 rounded hover:bg-[#F7F5ED] text-sm">
+              <span>{o.label}</span>
+              {onDelete && (
+                <button onClick={() => onDelete(o.value)}
+                  className="text-red-500 hover:text-red-700 p-0.5"><X size={14} /></button>
+              )}
+            </div>
+          ))}
+          {options.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Sin opciones</p>}
+        </div>
+        <Btn size="sm" variant="ghost" onClick={() => setManaging(false)}>Cerrar</Btn>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-2">
       {label && <label className="block text-sm font-medium text-foreground">{label}</label>}
       <select value={value} onChange={e => {
         if (e.target.value === "__add_new__") { setAdding(true); return }
+        if (e.target.value === "__manage__") { setManaging(true); return }
         onChange(e.target.value)
       }} className="w-full px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm">
         <option value="">Seleccionar...</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         {onAddNew && <option value="__add_new__">+ Agregar nuevo...</option>}
+        {onDelete && <option value="__manage__">⚙ Gestionar opciones...</option>}
       </select>
     </div>
   )
