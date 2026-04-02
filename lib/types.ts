@@ -105,6 +105,9 @@ export interface ProviderDocument {
   description?: string | null
   storage_path?: string | null
   url?: string | null
+  file_size?: number | null
+  mime_type?: string | null
+  date?: string | null
   created_at?: string
 }
 
@@ -124,6 +127,8 @@ export interface Movement {
   auto_split?: boolean
   split_percentage?: number
   created_by?: string | null
+  sena_real_pct?: number | null
+  sena_cliente_pct?: number | null
   created_at?: string
 }
 
