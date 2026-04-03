@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AppProvider, useApp, canSee } from "@/lib/app-context"
 import { LoginScreen } from "@/components/login-screen"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -20,6 +20,16 @@ function AppContent() {
   const { role, section } = useApp()
   const [showGlobalMovement, setShowGlobalMovement] = useState(false)
   const isFull = canSee(role)
+
+  // Detect magic link (reset PIN) and redirect to /reset-pin
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash
+      if (hash && hash.includes("access_token") && hash.includes("type=magiclink")) {
+        window.location.href = `/reset-pin${hash}`
+      }
+    }
+  }, [])
 
   if (!role) return <LoginScreen />
 

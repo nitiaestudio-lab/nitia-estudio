@@ -1,20 +1,38 @@
 "use client"
 
 import { useSearchParams, useRouter } from "next/navigation"
-import { useState, Suspense } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { resetPin } from "@/lib/auth-actions"
 import Image from "next/image"
 
 function ResetPinContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const email = searchParams.get("email") || ""
+  const emailFromParams = searchParams.get("email") || ""
   
+  const [email, setEmail] = useState(emailFromParams)
   const [pin, setPin] = useState("")
   const [confirmPin, setConfirmPin] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [ready, setReady] = useState(!!emailFromParams)
+
+  // Extract email from JWT in hash if not in query params
+  useEffect(() => {
+    if (!emailFromParams && typeof window !== "undefined") {
+      const hash = window.location.hash.substring(1)
+      const params = new URLSearchParams(hash)
+      const token = params.get("access_token")
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1]))
+          if (payload.email) setEmail(payload.email)
+        } catch {}
+      }
+    }
+    setReady(true)
+  }, [emailFromParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,6 +87,10 @@ function ResetPinContent() {
       setConfirmPin(confirmPin.slice(0, -1))
     }
     setError("")
+  }
+
+  if (!ready) {
+    return <div className="min-h-screen flex items-center justify-center bg-[#F7F5ED]"><p className="text-sm text-[#76746A]">Cargando...</p></div>
   }
 
   if (!email) {
