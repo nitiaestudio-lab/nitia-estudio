@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useMemo } from "react"
+import { useState, useRef, useMemo, useCallback } from "react"
 import { useApp } from "@/lib/app-context"
 import {
   formatCurrency, formatDate, generateId, today,
@@ -22,12 +22,12 @@ import {
   Plus, ArrowLeft, Trash2, Pencil, Download, Upload, FileText, Check,
   Search, FolderOpen, Eye, Star, X, FileSpreadsheet, ChevronDown, ChevronUp,
   Lightbulb, ToggleLeft, ToggleRight, TrendingUp, AlertCircle, CheckCircle2,
-  Settings2,
+  Settings2, ArrowUpDown, Info, Save, XCircle,
 } from "lucide-react"
 
-type ProjectTab = "desglose" | "comparador" | "movimientos" | "archivos" | "tareas"
+type ProjectTab = "movimientos" | "desglose" | "comparador" | "archivos" | "tareas"
 const TAB_LABELS: Record<ProjectTab, string> = {
-  desglose: "Desglose", comparador: "Comparador", movimientos: "Movimientos", archivos: "Archivos", tareas: "Tareas",
+  movimientos: "Movimientos", desglose: "Desglose", comparador: "Comparador", archivos: "Archivos", tareas: "Tareas",
 }
 
 // =================== PROJECTS LIST ===================
@@ -87,9 +87,10 @@ export function Projects() {
 // =================== PROJECT DETAIL ===================
 function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: Project; onBack: () => void; isFull: boolean; canSeeGanancias: boolean }) {
   const { data, updateRow, deleteRow, addRow } = useApp()
-  const [tab, setTab] = useState<ProjectTab>("desglose")
+  const [tab, setTab] = useState<ProjectTab>("movimientos")
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteProject, setShowDeleteProject] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const [editingBudget, setEditingBudget] = useState(false)
   const [budgetValue, setBudgetValue] = useState(String(project.budget_final ?? ""))
   const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
@@ -119,6 +120,7 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
           <p className="text-sm text-[#76746A] truncate">{project.client} {project.address && `— ${project.address}`}</p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
+          <Btn variant="soft" size="sm" onClick={() => setShowProfile(true)}><Info size={14} className="mr-1 inline" />Perfil</Btn>
           <Btn variant="soft" size="sm" onClick={() => setShowEdit(true)}><Pencil size={14} className="mr-1 inline" />Editar</Btn>
           <Btn variant="ghost" size="sm" onClick={() => setShowDeleteProject(true)}><Trash2 size={14} className="text-red-500" /></Btn>
         </div>
@@ -186,6 +188,7 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
       {tab === "tareas" && <TareasTab project={project} />}
       {showEdit && <ProjectFormModal project={project} onClose={() => setShowEdit(false)} onSave={async (p) => { await updateRow("projects", project.id, p, "projects"); setShowEdit(false) }} />}
       {showDeleteProject && <ConfirmDeleteModal message={`¿Eliminar "${project.name}"?`} onConfirm={async () => { await deleteRow("projects", project.id, "projects"); onBack() }} onCancel={() => setShowDeleteProject(false)} />}
+      {showProfile && <ProjectProfileModal project={project} isFull={isFull} canSeeGanancias={canSeeGanancias} onClose={() => setShowProfile(false)} onEdit={() => { setShowProfile(false); setShowEdit(true) }} />}
     </div>
   )
 }
@@ -599,42 +602,222 @@ function ComparadorTab({ project }: { project: Project }) {
 }
 
 // =================== TAB: MOVIMIENTOS ===================
+type SortField = "date" | "description" | "amount" | "type" | "provider"
+type SortDir = "asc" | "desc"
+
 function MovimientosTab({ project }: { project: Project }) {
   const { data, addMovement, deleteMovement, updateRow } = useApp()
-  const [showAdd, setShowAdd] = useState(false); const [editingMov, setEditingMov] = useState<Movement | null>(null)
-  const [movPeriod, setMovPeriod] = useState<PeriodValue>("all"); const [cStart, setCStart] = useState(""); const [cEnd, setCEnd] = useState(""); const [searchQ, setSearchQ] = useState("")
+  const [showAdd, setShowAdd] = useState(false)
+  const [movPeriod, setMovPeriod] = useState<PeriodValue>("all"); const [cStart, setCStart] = useState(""); const [cEnd, setCEnd] = useState("")
+  const [searchQ, setSearchQ] = useState("")
+  const [filterType, setFilterType] = useState<"all" | "ingreso" | "egreso">("all")
+  const [sortField, setSortField] = useState<SortField>("date")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
+  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
+  const [editValue, setEditValue] = useState("")
+
   const all = data.movements.filter(m => m.project_id === project.id)
   const df = filterByDateRange(all, movPeriod, cStart, cEnd)
-  const movs = df.filter(m => !searchQ || m.description.toLowerCase().includes(searchQ.toLowerCase())).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const movs = useMemo(() => {
+    let filtered = df.filter(m => {
+      if (searchQ && !m.description.toLowerCase().includes(searchQ.toLowerCase())) return false
+      if (filterType !== "all" && m.type !== filterType) return false
+      return true
+    })
+    return filtered.sort((a, b) => {
+      let cmp = 0
+      switch (sortField) {
+        case "date": cmp = new Date(a.date).getTime() - new Date(b.date).getTime(); break
+        case "description": cmp = a.description.localeCompare(b.description); break
+        case "amount": cmp = a.amount - b.amount; break
+        case "type": cmp = a.type.localeCompare(b.type); break
+        case "provider": {
+          const pa = data.providers.find(p => p.id === a.provider_id)?.name || ""
+          const pb = data.providers.find(p => p.id === b.provider_id)?.name || ""
+          cmp = pa.localeCompare(pb); break
+        }
+      }
+      return sortDir === "asc" ? cmp : -cmp
+    })
+  }, [df, searchQ, filterType, sortField, sortDir, data.providers])
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc")
+    else { setSortField(field); setSortDir(field === "amount" ? "desc" : "asc") }
+  }
+
+  const SortHeader = ({ field, label, className }: { field: SortField; label: string; className?: string }) => (
+    <th className={`px-3 py-2.5 text-left cursor-pointer hover:bg-[#E0DDD0]/50 select-none ${className || ""}`} onClick={() => toggleSort(field)}>
+      <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase">
+        {label}
+        {sortField === field ? (sortDir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ArrowUpDown size={10} className="opacity-30" />}
+      </div>
+    </th>
+  )
+
+  const startEdit = (id: string, field: string, value: string) => {
+    setEditingCell({ id, field }); setEditValue(value)
+  }
+  const saveEdit = async (movId: string) => {
+    if (!editingCell) return
+    const updates: Record<string, any> = {}
+    if (editingCell.field === "description") updates.description = editValue
+    else if (editingCell.field === "amount") updates.amount = parseFloat(editValue) || 0
+    else if (editingCell.field === "date") updates.date = editValue
+    await updateRow("movements", movId, updates, "movements")
+    setEditingCell(null)
+  }
+  const cancelEdit = () => setEditingCell(null)
+
+  const totalIngresos = movs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
+  const totalEgresos = movs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+  const balance = totalIngresos - totalEgresos
+
   return (
     <div className="space-y-4">
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
+          <p className="text-xs text-green-600 mb-1">Ingresos</p>
+          <p className="text-lg font-bold text-green-700">{formatCurrency(totalIngresos)}</p>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+          <p className="text-xs text-red-600 mb-1">Egresos</p>
+          <p className="text-lg font-bold text-red-700">{formatCurrency(totalEgresos)}</p>
+        </div>
+        <div className={`${balance >= 0 ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"} border rounded-xl p-3 text-center`}>
+          <p className="text-xs text-muted-foreground mb-1">Balance</p>
+          <p className={`text-lg font-bold ${balance >= 0 ? "text-blue-700" : "text-amber-700"}`}>{formatCurrency(balance)}</p>
+        </div>
+      </div>
+
+      {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar..." className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" /></div>
+          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar movimientos..." className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" /></div>
         <div className="flex flex-wrap gap-2">
+          <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+            {(["all", "ingreso", "egreso"] as const).map(t => (
+              <button key={t} onClick={() => setFilterType(t)} className={`px-3 py-1.5 text-xs font-medium ${filterType === t ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A] hover:bg-[#F0EDE4]"}`}>
+                {t === "all" ? "Todos" : t === "ingreso" ? "Ingresos" : "Egresos"}
+              </button>
+            ))}
+          </div>
           <PeriodFilter value={movPeriod} onChange={setMovPeriod} onCustomRange={(s, e) => { setCStart(s); setCEnd(e) }} />
           <Btn variant="soft" size="sm" onClick={() => exportProjectMovementsXLSX(project.name, movs.map(m => ({ date: m.date, description: m.description, amount: m.amount, type: m.type, category: m.category || undefined, provider: data.providers.find(p => p.id === m.provider_id)?.name })))}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
           <Btn size="sm" onClick={() => setShowAdd(true)}><Plus size={14} className="mr-1 inline" />Movimiento</Btn>
         </div>
       </div>
+
+      {/* Table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        {movs.length > 0 ? <div className="divide-y divide-border">{movs.map(mov => (
-          <div key={mov.id} className="flex items-center justify-between px-4 py-3 group hover:bg-[#FAFAF9]">
-            <div className="min-w-0 flex-1"><span className={`text-sm font-medium ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>{mov.description}</span>
-              <span className="text-xs text-muted-foreground ml-2">{formatDate(mov.date)}</span></div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className={`font-medium text-sm ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>{mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}</span>
-              <button onClick={() => setEditingMov(mov)} className="p-1 hover:bg-accent rounded opacity-0 group-hover:opacity-100 sm:opacity-100"><Pencil size={12} /></button>
-              <button onClick={() => deleteMovement(mov.id)} className="p-1 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 sm:opacity-100"><Trash2 size={12} className="text-red-600" /></button>
-            </div>
-          </div>))}</div> : <Empty title="Sin movimientos" />}
+        {movs.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-[#F0EDE4]">
+                <tr>
+                  <SortHeader field="date" label="Fecha" className="w-28" />
+                  <SortHeader field="description" label="Descripción" />
+                  <SortHeader field="provider" label="Proveedor" className="hidden md:table-cell" />
+                  <SortHeader field="type" label="Tipo" className="w-24" />
+                  <SortHeader field="amount" label="Monto" className="w-32" />
+                  <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground uppercase hidden sm:table-cell">Cuenta</th>
+                  <th className="px-3 py-2.5 w-20"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {movs.map(mov => {
+                  const provName = data.providers.find(p => p.id === mov.provider_id)?.name
+                  const accName = data.accounts.find(a => a.id === mov.account_id)?.name
+                  const isEditing = (field: string) => editingCell?.id === mov.id && editingCell?.field === field
+                  return (
+                    <tr key={mov.id} className="group hover:bg-[#FAFAF9] transition-colors">
+                      {/* Date */}
+                      <td className="px-3 py-2.5">
+                        {isEditing("date") ? (
+                          <input type="date" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus
+                            onBlur={() => saveEdit(mov.id)} onKeyDown={e => { if (e.key === "Enter") saveEdit(mov.id); if (e.key === "Escape") cancelEdit() }}
+                            className="w-full px-1.5 py-0.5 text-xs border border-[#5F5A46] rounded bg-white" />
+                        ) : (
+                          <span className="text-xs text-muted-foreground cursor-pointer hover:text-foreground" onDoubleClick={() => startEdit(mov.id, "date", mov.date)}>
+                            {formatDate(mov.date)}
+                          </span>
+                        )}
+                      </td>
+                      {/* Description */}
+                      <td className="px-3 py-2.5">
+                        {isEditing("description") ? (
+                          <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus
+                            onBlur={() => saveEdit(mov.id)} onKeyDown={e => { if (e.key === "Enter") saveEdit(mov.id); if (e.key === "Escape") cancelEdit() }}
+                            className="w-full px-1.5 py-0.5 text-sm border border-[#5F5A46] rounded bg-white" />
+                        ) : (
+                          <span className={`font-medium cursor-pointer hover:underline ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}
+                            onDoubleClick={() => startEdit(mov.id, "description", mov.description)}>
+                            {mov.description}
+                          </span>
+                        )}
+                        {mov.category && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
+                        {mov.concepto && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">{mov.concepto}</span>}
+                      </td>
+                      {/* Provider */}
+                      <td className="px-3 py-2.5 hidden md:table-cell">
+                        <span className="text-xs text-muted-foreground">{provName || "—"}</span>
+                      </td>
+                      {/* Type */}
+                      <td className="px-3 py-2.5">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${mov.type === "ingreso" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                          {mov.type === "ingreso" ? "Ingreso" : "Egreso"}
+                        </span>
+                      </td>
+                      {/* Amount */}
+                      <td className="px-3 py-2.5 text-right">
+                        {isEditing("amount") ? (
+                          <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus
+                            onBlur={() => saveEdit(mov.id)} onKeyDown={e => { if (e.key === "Enter") saveEdit(mov.id); if (e.key === "Escape") cancelEdit() }}
+                            className="w-full px-1.5 py-0.5 text-sm border border-[#5F5A46] rounded bg-white text-right" />
+                        ) : (
+                          <span className={`font-semibold cursor-pointer hover:underline ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}
+                            onDoubleClick={() => startEdit(mov.id, "amount", String(mov.amount))}>
+                            {mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}
+                          </span>
+                        )}
+                      </td>
+                      {/* Account */}
+                      <td className="px-3 py-2.5 hidden sm:table-cell">
+                        <span className="text-xs text-muted-foreground">{accName || "—"}</span>
+                      </td>
+                      {/* Actions */}
+                      <td className="px-3 py-2.5">
+                        <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 sm:opacity-100">
+                          <button onClick={() => deleteMovement(mov.id)} className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              {/* Totals row */}
+              <tfoot>
+                <tr className="bg-[#F0EDE4] font-semibold text-sm">
+                  <td className="px-3 py-3" colSpan={4}>
+                    <span className="text-muted-foreground">{movs.length} movimiento{movs.length !== 1 ? "s" : ""}</span>
+                  </td>
+                  <td className="px-3 py-3 text-right font-bold">
+                    <span className="text-green-700">+{formatCurrency(totalIngresos)}</span>
+                    <span className="mx-1 text-muted-foreground">/</span>
+                    <span className="text-red-700">-{formatCurrency(totalEgresos)}</span>
+                  </td>
+                  <td colSpan={2}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ) : <Empty title="Sin movimientos" description="Registrá el primer movimiento del proyecto" action={<Btn onClick={() => setShowAdd(true)}>+ Movimiento</Btn>} />}
       </div>
-      {movs.length > 0 && <div className="flex gap-4 text-sm">
-        <span className="text-green-700">Ingresos: <strong>{formatCurrency(movs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0))}</strong></span>
-        <span className="text-red-700">Egresos: <strong>{formatCurrency(movs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0))}</strong></span>
-      </div>}
+
+      <p className="text-xs text-muted-foreground">Doble click en fecha, descripción o monto para editar inline</p>
+
       {showAdd && <AddMovModal project={project} accounts={data.accounts} providers={data.providers} onClose={() => setShowAdd(false)} onSave={async (m) => { await addMovement(m); setShowAdd(false) }} />}
-      {editingMov && <EditMovModal movement={editingMov} accounts={data.accounts} providers={data.providers} onClose={() => setEditingMov(null)} onSave={async (u) => { await updateRow("movements", editingMov.id, u, "movements"); setEditingMov(null) }} />}
     </div>
   )
 }
@@ -678,6 +861,90 @@ function ArchivosTab({ project }: { project: Project }) {
         setShowUpload(false)
       }} />}
     </div>
+  )
+}
+
+// =================== PROJECT PROFILE MODAL ===================
+function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit }: { project: Project; isFull: boolean; canSeeGanancias: boolean; onClose: () => void; onEdit: () => void }) {
+  const { data } = useApp()
+  const totalCost = projectTotalCost(project, data.projectItems, data.quoteComparisons)
+  const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
+  const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
+  const income = projectIncome(data.movements, project.id)
+  const expenses = projectExpenses(data.movements, project.id)
+  const projectMoves = data.movements.filter(m => m.project_id === project.id)
+  const projectItems = data.projectItems.filter(i => i.project_id === project.id)
+  const projectTsk = data.tasks.filter(t => t.project_id === project.id)
+  const projectFls = data.projectFiles.filter(f => f.project_id === project.id)
+  const budgetFinal = project.budget_final ?? totalClient
+
+  const InfoRow = ({ label, value, color }: { label: string; value: string; color?: string }) => (
+    <div className="flex justify-between py-2 border-b border-border/30 last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className={`text-sm font-medium ${color || ""}`}>{value}</span>
+    </div>
+  )
+
+  return (
+    <Modal isOpen={true} title="" onClose={onClose} size="lg">
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="text-center pb-4 border-b border-border">
+          <h2 className="font-serif text-2xl font-light text-[#1C1A12]">{project.name}</h2>
+          <p className="text-sm text-[#76746A] mt-1">{project.client}</p>
+          <div className="flex items-center justify-center gap-2 mt-2">
+            <Tag label={project.status || "activo"} color={project.status === "activo" ? "green" : project.status === "pausado" ? "yellow" : "gray"} />
+            {project.type && <Tag label={project.type} color="gray" />}
+          </div>
+        </div>
+
+        {/* Client info */}
+        <div className="bg-[#F7F5ED] rounded-xl p-4">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Datos del Cliente</h4>
+          <InfoRow label="Cliente" value={project.client} />
+          {project.client_email && <InfoRow label="Email" value={project.client_email} />}
+          {project.client_phone && <InfoRow label="Teléfono" value={project.client_phone} />}
+          {project.address && <InfoRow label="Dirección" value={project.address} />}
+          {project.type && <InfoRow label="Tipo" value={project.type} />}
+          {project.start_date && <InfoRow label="Inicio" value={formatDate(project.start_date)} />}
+          {project.end_date && <InfoRow label="Fin" value={formatDate(project.end_date)} />}
+        </div>
+
+        {/* Financial summary */}
+        {isFull && <div className="bg-[#F7F5ED] rounded-xl p-4">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Resumen Financiero</h4>
+          <InfoRow label="Presupuesto" value={formatCurrency(budgetFinal)} />
+          <InfoRow label="Cobrado" value={formatCurrency(income)} color="text-green-600" />
+          <InfoRow label="Pendiente de cobro" value={formatCurrency(budgetFinal - income)} color={budgetFinal - income > 0 ? "text-amber-600" : "text-green-600"} />
+          <InfoRow label="Pagado a proveedores" value={formatCurrency(expenses)} color="text-red-600" />
+          {canSeeGanancias && <>
+            <InfoRow label="Costo total" value={formatCurrency(totalCost)} />
+            <InfoRow label="Ganancia bruta" value={formatCurrency(totalGanancia)} color="text-green-700" />
+            <InfoRow label="Margen" value={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(1) : 0}%`} />
+          </>}
+        </div>}
+
+        {/* Activity summary */}
+        <div className="bg-[#F7F5ED] rounded-xl p-4">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Actividad</h4>
+          <InfoRow label="Movimientos" value={String(projectMoves.length)} />
+          <InfoRow label="Ítems presupuesto" value={String(projectItems.length)} />
+          <InfoRow label="Tareas" value={`${projectTsk.filter(t => t.status !== "completada").length} pendientes / ${projectTsk.length} total`} />
+          <InfoRow label="Archivos" value={String(projectFls.length)} />
+          {project.created_at && <InfoRow label="Creado" value={formatDate(project.created_at.split("T")[0])} />}
+        </div>
+
+        {project.notes && <div className="bg-[#F7F5ED] rounded-xl p-4">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Notas</h4>
+          <p className="text-sm text-foreground whitespace-pre-wrap">{project.notes}</p>
+        </div>}
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Btn variant="ghost" onClick={onClose}>Cerrar</Btn>
+          <Btn variant="soft" onClick={onEdit}><Pencil size={14} className="mr-1 inline" />Editar Proyecto</Btn>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -767,67 +1034,185 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   const [date, setDate] = useState(today()); const [desc, setDesc] = useState(""); const [amt, setAmt] = useState("")
   const [type, setType] = useState<"ingreso" | "egreso">("ingreso"); const [aid, setAid] = useState(accounts[0]?.id ?? ""); const [pid, setPid] = useState(""); const [split, setSplit] = useState(true)
   const [pagoDirecto, setPagoDirecto] = useState(false); const [pagoProvId, setPagoProvId] = useState("")
+  const [selectedItemId, setSelectedItemId] = useState("")
+  // Seña tracking
+  const [esSeña, setEsSeña] = useState(false)
+  const [señaClientePct, setSeñaClientePct] = useState(String(project.sena_cliente_pct ?? 50))
+  const [señaProvPct, setSeñaProvPct] = useState(String(project.sena_proveedor_pct ?? 60))
+  const [señaPagadaProv, setSeñaPagadaProv] = useState(false)
 
   // Provider debt for this project
-  const selectedProv = pagoProvId ? providers.find(p => p.id === pagoProvId) : null
-  const provItems = pagoProvId ? data.projectItems.filter(i => i.project_id === project.id && i.provider_id === pagoProvId) : []
-  const provQuotes = pagoProvId ? data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === pagoProvId && q.selected) : []
+  const activeProvId = type === "egreso" ? pid : pagoProvId
+  const selectedProv = activeProvId ? providers.find((p: any) => p.id === activeProvId) : null
+  const provItems = activeProvId ? data.projectItems.filter(i => i.project_id === project.id && i.provider_id === activeProvId) : []
+  const provQuotes = activeProvId ? data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === activeProvId && q.selected) : []
   const provOwed = provItems.reduce((s, i) => s + i.cost, 0) + provQuotes.reduce((s, q) => s + q.cost, 0)
-  const provPaid = pagoProvId ? data.movements.filter(m => m.project_id === project.id && m.provider_id === pagoProvId && m.type === "egreso").reduce((s, m) => s + m.amount, 0) : 0
+  const provPaid = activeProvId ? data.movements.filter(m => m.project_id === project.id && m.provider_id === activeProvId && m.type === "egreso").reduce((s, m) => s + m.amount, 0) : 0
   const provDebt = provOwed - provPaid
+
+  // Seña calculations
+  const señaCliPctNum = parseFloat(señaClientePct) || 0
+  const señaProvPctNum = parseFloat(señaProvPct) || 0
+  const amount = parseFloat(amt) || 0
+  const señaDiff = esSeña && señaProvPctNum > señaCliPctNum ? ((señaProvPctNum - señaCliPctNum) / 100) * provOwed : 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const amount = parseFloat(amt)
-    const mainMov: Movement = { id: generateId(), date, description: desc, amount, type, project_id: project.id, account_id: aid || null, provider_id: type === "egreso" ? (pid || null) : null, category: "Proyecto", auto_split: type === "ingreso" ? split : false, split_percentage: 50 }
+    const concepto = esSeña ? `seña` : undefined
+    const mainMov: Movement = {
+      id: generateId(), date, description: desc, amount, type, project_id: project.id,
+      account_id: aid || null, provider_id: type === "egreso" ? (pid || null) : null,
+      category: "Proyecto", auto_split: type === "ingreso" ? split : false, split_percentage: 50,
+      concepto: concepto || null,
+      sena_real_pct: esSeña ? señaProvPctNum : null,
+      sena_cliente_pct: esSeña ? señaCliPctNum : null,
+    }
     onSave(mainMov)
+
+    // Pago directo: create egreso for provider
     if (type === "ingreso" && pagoDirecto && pagoProvId) {
       await addRow("movements", {
         id: generateId(), date, description: `[Pago directo] ${desc}`, amount, type: "egreso" as const,
         project_id: project.id, account_id: aid || null, provider_id: pagoProvId, category: "Pago directo",
-        auto_split: false, split_percentage: 0
+        auto_split: false, split_percentage: 0,
+        concepto: selectedItemId ? `item:${selectedItemId}` : null,
+      }, "movements")
+    }
+
+    // Seña: if provider seña > client seña, register the difference from own money
+    if (esSeña && señaDiff > 0 && señaPagadaProv && activeProvId) {
+      await addRow("movements", {
+        id: generateId(), date, description: `[Diferencia seña] ${desc} (${señaProvPctNum}% prov - ${señaCliPctNum}% cli)`,
+        amount: señaDiff, type: "egreso" as const,
+        project_id: project.id, account_id: aid || null, provider_id: activeProvId,
+        category: "Diferencia seña", auto_split: false, split_percentage: 0,
       }, "movements")
     }
   }
 
-  return (<Modal isOpen={true} title="Movimiento" onClose={onClose}>
+  const ProviderDebtPanel = ({ provId }: { provId: string }) => {
+    const prov = providers.find((p: any) => p.id === provId)
+    const items = data.projectItems.filter(i => i.project_id === project.id && i.provider_id === provId)
+    const quotes = data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === provId && q.selected)
+    const owed = items.reduce((s, i) => s + i.cost, 0) + quotes.reduce((s, q) => s + q.cost, 0)
+    const paid = data.movements.filter(m => m.project_id === project.id && m.provider_id === provId && m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+    const debt = owed - paid
+    if (!prov) return null
+    return (
+      <div className="bg-[#F7F5ED] rounded-lg p-3 space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase">Deuda con {prov.name}</p>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Comprometido: {formatCurrency(owed)}</span>
+          <span className="text-green-600">Pagado: {formatCurrency(paid)}</span>
+        </div>
+        <p className={`text-sm font-bold ${debt > 0 ? "text-red-600" : "text-green-600"}`}>
+          {debt > 0 ? `Pendiente: ${formatCurrency(debt)}` : "Al día ✓"}
+        </p>
+        {(items.length > 0 || quotes.length > 0) && (
+          <div className="border-t border-border pt-2 space-y-1">
+            <p className="text-[10px] text-muted-foreground uppercase">Ítems de este proveedor:</p>
+            {items.map(item => (
+              <div key={item.id} className="flex items-center justify-between text-xs gap-2">
+                <label className="flex items-center gap-1.5 cursor-pointer flex-1 min-w-0">
+                  {type === "egreso" && <input type="radio" name="targetItem" value={item.id}
+                    checked={selectedItemId === item.id} onChange={() => setSelectedItemId(item.id)}
+                    className="w-3 h-3" />}
+                  <span className="truncate">{item.description}</span>
+                </label>
+                <span className="font-medium shrink-0">{formatCurrency(item.cost)}</span>
+              </div>
+            ))}
+            {quotes.map(q => (
+              <div key={q.id} className="flex items-center justify-between text-xs gap-2">
+                <label className="flex items-center gap-1.5 cursor-pointer flex-1 min-w-0">
+                  {type === "egreso" && <input type="radio" name="targetItem" value={q.id}
+                    checked={selectedItemId === q.id} onChange={() => setSelectedItemId(q.id)}
+                    className="w-3 h-3" />}
+                  <span className="truncate">{q.item} <span className="text-muted-foreground">(cotización)</span></span>
+                </label>
+                <span className="font-medium shrink-0">{formatCurrency(q.cost)}</span>
+              </div>
+            ))}
+            {type === "egreso" && selectedItemId && (
+              <button type="button" onClick={() => setSelectedItemId("")} className="text-[10px] text-blue-600 hover:underline">No especificar ítem</button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (<Modal isOpen={true} title="Movimiento" onClose={onClose} size="lg">
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4"><FormInput label="Fecha" type="date" value={date} onChange={setDate} />
         <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)} options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} /></div>
       <FormInput label="Descripción" value={desc} onChange={setDesc} />
       <div className="grid grid-cols-2 gap-4"><FormInput label="Monto" type="number" value={amt} onChange={setAmt} inputMode="decimal" />
         <FormSelect label="Cuenta" value={aid} onChange={setAid} options={accounts.map(a => ({ value: a.id, label: a.name }))} /></div>
-      {type === "egreso" && <FormSelect label="Proveedor" value={pid} onChange={setPid} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />}
+
+      {/* Egreso: provider + item selection */}
+      {type === "egreso" && <>
+        <FormSelect label="Proveedor" value={pid} onChange={v => { setPid(v); setSelectedItemId("") }}
+          options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
+        {pid && <ProviderDebtPanel provId={pid} />}
+      </>}
+
+      {/* Ingreso options */}
       {type === "ingreso" && <>
         <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-green-800">Distribuir 50/50 entre socias</p></div>
         <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg"><input type="checkbox" checked={pagoDirecto} onChange={e => setPagoDirecto(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-blue-800">Pago directo a proveedor</p></div>
         {pagoDirecto && <>
-          <FormSelect label="Proveedor" value={pagoProvId} onChange={setPagoProvId} options={[{ value: "", label: "Seleccionar proveedor..." }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
-          {pagoProvId && (
-            <div className="bg-[#F7F5ED] rounded-lg p-3 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Deuda con {selectedProv?.name}</p>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Comprometido: {formatCurrency(provOwed)}</span>
-                <span className="text-green-600">Pagado: {formatCurrency(provPaid)}</span>
-              </div>
-              <p className={`text-sm font-bold ${provDebt > 0 ? "text-red-600" : "text-green-600"}`}>
-                {provDebt > 0 ? `Pendiente: ${formatCurrency(provDebt)}` : "Al día ✓"}
-              </p>
-              {provItems.length > 0 && (
-                <div className="border-t border-border pt-2 space-y-1">
-                  <p className="text-[10px] text-muted-foreground uppercase">Ítems de este proveedor:</p>
-                  {provItems.map(item => (
-                    <div key={item.id} className="flex justify-between text-xs">
-                      <span>{item.description}</span>
-                      <span className="font-medium">{formatCurrency(item.cost)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          <FormSelect label="Proveedor" value={pagoProvId} onChange={v => { setPagoProvId(v); setSelectedItemId("") }}
+            options={[{ value: "", label: "Seleccionar proveedor..." }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
+          {pagoProvId && <ProviderDebtPanel provId={pagoProvId} />}
         </>}
       </>}
+
+      {/* Seña tracking */}
+      <div className={`flex items-center gap-3 p-3 rounded-lg ${esSeña ? "bg-purple-50" : "bg-[#F7F5ED]"}`}>
+        <input type="checkbox" checked={esSeña} onChange={e => setEsSeña(e.target.checked)} className="w-4 h-4" />
+        <div>
+          <p className={`text-sm font-medium ${esSeña ? "text-purple-800" : "text-muted-foreground"}`}>Es seña / anticipo</p>
+          {!esSeña && <p className="text-xs text-muted-foreground">Marcar si es un pago de seña</p>}
+        </div>
+      </div>
+      {esSeña && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-purple-700">Seña cliente %</label>
+              <input type="number" value={señaClientePct} onChange={e => setSeñaClientePct(e.target.value)} step="1"
+                className="w-full px-3 py-1.5 rounded border border-purple-300 text-sm bg-white mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-purple-700">Seña proveedor %</label>
+              <input type="number" value={señaProvPct} onChange={e => setSeñaProvPct(e.target.value)} step="1"
+                className="w-full px-3 py-1.5 rounded border border-purple-300 text-sm bg-white mt-1" />
+            </div>
+          </div>
+          {señaProvPctNum > señaCliPctNum && provOwed > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
+              <p className="text-sm font-medium text-amber-800">
+                Diferencia: {señaProvPctNum - señaCliPctNum}% sale de dinero propio
+              </p>
+              <p className="text-xs text-amber-600">
+                Cliente paga {señaCliPctNum}% = {formatCurrency((señaCliPctNum / 100) * provOwed)} · Proveedor cobra {señaProvPctNum}% = {formatCurrency((señaProvPctNum / 100) * provOwed)}
+              </p>
+              <p className="text-sm font-bold text-amber-700">
+                Diferencia a cubrir: {formatCurrency(señaDiff)}
+              </p>
+              <div className="flex items-center gap-2 pt-1">
+                <input type="checkbox" checked={señaPagadaProv} onChange={e => setSeñaPagadaProv(e.target.checked)} className="w-4 h-4" />
+                <span className="text-xs text-amber-700 font-medium">Ya le pagué la seña al proveedor (registrar diferencia como egreso)</span>
+              </div>
+            </div>
+          )}
+          {señaProvPctNum <= señaCliPctNum && (
+            <p className="text-xs text-green-600">La seña del cliente cubre la del proveedor. Sin diferencia.</p>
+          )}
+        </div>
+      )}
+
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !amt}>Registrar</Btn></div>
     </form>
   </Modal>)
