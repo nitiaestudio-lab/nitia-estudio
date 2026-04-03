@@ -88,12 +88,13 @@ export function exportProjectDesgloseXLSX(
 
 export function exportProjectMovementsXLSX(
   projectName: string,
-  movements: { date: string; description: string; amount: number; type: string; category?: string; provider?: string }[]
+  movements: { date: string; description: string; amount: number; type: string; category?: string; provider?: string; medio_pago?: string | null }[]
 ) {
   const data = movements.map(m => ({
     Fecha: m.date,
     Descripción: m.description,
     Tipo: m.type === "ingreso" ? "Ingreso" : "Egreso",
+    Moneda: m.medio_pago === "USD" ? "USD" : "ARS",
     Monto: m.amount,
     Categoría: m.category || "",
     Proveedor: m.provider || "",
@@ -144,8 +145,8 @@ export function exportProyectos(projects: { name: string; client: string; status
   downloadCSV(projects.map(p => ({ Nombre: p.name, Cliente: p.client, Estado: p.status || "activo" })), "proyectos")
 }
 
-export function exportFinanzasPersonales(movements: { date: string; description: string; amount: number; type: string; category?: string }[], owner: string) {
-  downloadCSV(movements.map(m => ({ Fecha: m.date, Descripcion: m.description, Tipo: m.type, Categoria: m.category || "", Monto: m.amount })), `finanzas_${owner}`)
+export function exportFinanzasPersonales(movements: { date: string; description: string; amount: number; type: string; category?: string; medio_pago?: string | null }[], owner: string) {
+  downloadCSV(movements.map(m => ({ Fecha: m.date, Descripcion: m.description, Tipo: m.type, Moneda: m.medio_pago === "USD" ? "USD" : "ARS", Categoria: m.category || "", Monto: m.amount })), `finanzas_${owner}`)
 }
 
 export function exportProjectMovements(movements: { date: string; description: string; amount: number; type: string }[], projectName: string) {

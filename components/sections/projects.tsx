@@ -1229,7 +1229,8 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
     if (targetAccount?.owner && targetAccount.owner !== "nitia") {
       await addRow("personal_finance_movements", {
         id: generateId(), owner: targetAccount.owner, date, description: `${desc} — ${project.name}`,
-        amount, type: type, category: "Ingreso Nitia", is_fixed: false, active: true, created_by: targetAccount.owner,
+        amount, type: type, category: "Ingreso Nitia", is_fixed: false, active: true,
+        medio_pago: currency === "USD" ? "USD" : null, created_by: targetAccount.owner,
       } as any, "personalFinanceMovements")
     }
 

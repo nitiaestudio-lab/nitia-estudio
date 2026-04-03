@@ -45,6 +45,7 @@ export function PersonalFinance() {
       date: m.date,
       type: "ingreso" as const,
       category: "Proyecto",
+      medio_pago: m.medio_pago,
       isAuto: true,
     }))
   const periodProjectIncomes = filterByDateRange(
@@ -74,11 +75,18 @@ export function PersonalFinance() {
     return items
   }, [periodFiltered, periodProjectIncomes, searchQ, filterType, sortField, sortDir])
 
-  const totalFixed = fixedExpenses.reduce((s, m) => s + m.amount, 0)
-  const totalVariable = periodFiltered.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
-  const totalIncome = periodFiltered.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
-  const totalProjectIncome = periodProjectIncomes.reduce((s, m) => s + m.amount, 0)
+  const isUSD = (m: any) => m.medio_pago === "USD"
+  const totalFixed = fixedExpenses.filter(m => !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const totalFixedUSD = fixedExpenses.filter(m => isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const totalVariable = periodFiltered.filter(m => m.type === "egreso" && !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const totalVariableUSD = periodFiltered.filter(m => m.type === "egreso" && isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const totalIncome = periodFiltered.filter(m => m.type === "ingreso" && !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const totalIncomeUSD = periodFiltered.filter(m => m.type === "ingreso" && isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const totalProjectIncome = periodProjectIncomes.filter(m => !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const totalProjectIncomeUSD = periodProjectIncomes.filter(m => isUSD(m)).reduce((s, m) => s + m.amount, 0)
   const balance = totalIncome + totalProjectIncome - totalFixed - totalVariable
+  const balanceUSD = totalIncomeUSD + totalProjectIncomeUSD - totalFixedUSD - totalVariableUSD
+  const fmtUSD = (n: number) => `U$D ${new Intl.NumberFormat("es-AR").format(n)}`
 
   const saveItem = async (item: PersonalFinanceMovement) => {
     if (editingItem) {
@@ -250,10 +258,10 @@ export function PersonalFinance() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Ingresos" value={formatCurrency(totalIncome + totalProjectIncome)} />
-        <Stat label="Gastos Fijos" value={formatCurrency(totalFixed)} />
-        <Stat label="Gastos Variables" value={formatCurrency(totalVariable)} />
-        <Stat label="Balance" value={formatCurrency(balance)} highlight={balance >= 0} />
+        <Stat label="Ingresos" value={formatCurrency(totalIncome + totalProjectIncome)} sub={(totalIncomeUSD + totalProjectIncomeUSD) > 0 ? `+ ${fmtUSD(totalIncomeUSD + totalProjectIncomeUSD)}` : undefined} />
+        <Stat label="Gastos Fijos" value={formatCurrency(totalFixed)} sub={totalFixedUSD > 0 ? `+ ${fmtUSD(totalFixedUSD)}` : undefined} />
+        <Stat label="Gastos Variables" value={formatCurrency(totalVariable)} sub={totalVariableUSD > 0 ? `+ ${fmtUSD(totalVariableUSD)}` : undefined} />
+        <Stat label="Balance" value={formatCurrency(balance)} sub={balanceUSD !== 0 ? `${balanceUSD >= 0 ? "+" : ""}${fmtUSD(balanceUSD)}` : undefined} highlight={balance >= 0} />
       </div>
 
       {/* ============ COSTOS FIJOS - Cards checkables ============ */}

@@ -135,8 +135,11 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
   const movements = data.movements.filter(m => m.provider_id === provider.id)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   const isSeñaEgreso = (m: any) => m.type === "egreso" && (m.category === "Seña proveedor" || m.category === "Aporte propio seña" || m.category === "Diferencia seña" || (m.concepto === "seña" && m.type === "egreso"))
-  const totalPaidSinSeña = movements.filter(m => m.type === "egreso" && !isSeñaEgreso(m)).reduce((s, m) => s + m.amount, 0)
-  const señaPagada = movements.filter(m => isSeñaEgreso(m)).reduce((s, m) => s + m.amount, 0)
+  const isUSD = (m: any) => m.medio_pago === "USD"
+  const totalPaidSinSeña = movements.filter(m => m.type === "egreso" && !isSeñaEgreso(m) && !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const totalPaidUSD = movements.filter(m => m.type === "egreso" && !isSeñaEgreso(m) && isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const señaPagada = movements.filter(m => isSeñaEgreso(m) && !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+  const señaPagadaUSD = movements.filter(m => isSeñaEgreso(m) && isUSD(m)).reduce((s, m) => s + m.amount, 0)
 
   // Saldo por proyecto
   const balanceByProject = useMemo(() => {
@@ -147,11 +150,13 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
       const itemsCost = data.projectItems.filter(i => i.project_id === pid && i.provider_id === provider.id).reduce((s, i) => s + i.cost, 0)
       const quotesCost = data.quoteComparisons.filter(q => q.project_id === pid && q.provider_id === provider.id && q.selected).reduce((s, q) => s + q.cost, 0)
       const totalOwed = itemsCost + quotesCost
-      const paid = movements.filter(m => m.project_id === pid && m.type === "egreso" && !isSeñaEgreso(m)).reduce((s, m) => s + m.amount, 0)
-      const seña = movements.filter(m => m.project_id === pid && isSeñaEgreso(m)).reduce((s, m) => s + m.amount, 0)
+      const paid = movements.filter(m => m.project_id === pid && m.type === "egreso" && !isSeñaEgreso(m) && !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+      const paidUSD = movements.filter(m => m.project_id === pid && m.type === "egreso" && !isSeñaEgreso(m) && isUSD(m)).reduce((s, m) => s + m.amount, 0)
+      const seña = movements.filter(m => m.project_id === pid && isSeñaEgreso(m) && !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+      const señaUSD = movements.filter(m => m.project_id === pid && isSeñaEgreso(m) && isUSD(m)).reduce((s, m) => s + m.amount, 0)
       const pending = totalOwed - paid
-      return { project, totalOwed, paid, pending, seña }
-    }).filter(Boolean) as { project: any; totalOwed: number; paid: number; pending: number; seña: number }[]
+      return { project, totalOwed, paid, paidUSD, pending, seña, señaUSD }
+    }).filter(Boolean) as { project: any; totalOwed: number; paid: number; paidUSD: number; pending: number; seña: number; señaUSD: number }[]
   }, [data.projectItems, data.quoteComparisons, movements, provider.id, data.projects])
 
   const isImage = (mime?: string | null) => mime?.startsWith("image/")
@@ -175,6 +180,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
       const wb = XLSX.utils.book_new()
       const sheet = movements.map(m => ({
         Fecha: m.date, Descripción: m.description, Tipo: m.type === "egreso" ? "Pago" : "Ingreso",
+        Moneda: m.medio_pago === "USD" ? "USD" : "ARS",
         Monto: m.amount, Proyecto: data.projects.find(p => p.id === m.project_id)?.name || "",
         "Seña Real %": m.sena_real_pct || "", "Seña Cliente %": m.sena_cliente_pct || "",
       }))
@@ -216,7 +222,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
           {/* Barra de progreso */}
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Pagado: {formatCurrency(totalPaidSinSeña)}{señaPagada > 0 ? ` + seña ${formatCurrency(señaPagada)}` : ""}</span>
+              <span>Pagado: {formatCurrency(totalPaidSinSeña)}{totalPaidUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(totalPaidUSD)}` : ""}{señaPagada > 0 ? ` + seña ${formatCurrency(señaPagada)}` : ""}</span>
               <span>Total: {formatCurrency(totalOwedAll)}</span>
             </div>
             <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
@@ -231,10 +237,10 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
               {totalDebt > 0 ? formatCurrency(totalDebt) : "Al día ✓"}
             </p>
           </div>
-          {señaPagada > 0 && (
+          {(señaPagada > 0 || señaPagadaUSD > 0) && (
             <div className="flex justify-between items-center px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
               <span className="text-xs text-purple-700 font-medium">Seña pagada</span>
-              <span className="text-sm font-bold text-purple-700">{formatCurrency(señaPagada)}</span>
+              <span className="text-sm font-bold text-purple-700">{formatCurrency(señaPagada)}{señaPagadaUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(señaPagadaUSD)}` : ""}</span>
             </div>
           )}
           {provider.advance_percent && (
@@ -260,8 +266,8 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                 </button>
                 <div className="flex items-center gap-4 text-sm flex-wrap justify-end">
                   <span className="text-muted-foreground">Comprometido: {formatCurrency(bp.totalOwed)}</span>
-                  <span className="text-green-600">Pagado: {formatCurrency(bp.paid)}</span>
-                  {bp.seña > 0 && <span className="text-purple-600">Seña: {formatCurrency(bp.seña)}</span>}
+                  <span className="text-green-600">Pagado: {formatCurrency(bp.paid)}{bp.paidUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(bp.paidUSD)}` : ""}</span>
+                  {(bp.seña > 0 || bp.señaUSD > 0) && <span className="text-purple-600">Seña: {formatCurrency(bp.seña)}{bp.señaUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(bp.señaUSD)}` : ""}</span>}
                   <span className={`font-bold ${bp.pending > 0 ? "text-red-600" : "text-green-600"}`}>
                     {bp.pending > 0 ? `Pendiente: ${formatCurrency(bp.pending)}` : "Al día ✓"}
                   </span>
