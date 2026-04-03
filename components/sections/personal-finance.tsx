@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useApp } from "@/lib/app-context"
 import { formatCurrency, formatDate, generateId, today, filterByDateRange } from "@/lib/helpers"
 import { Stat, SecHead, Btn, Empty, Modal, FormInput, HR, PeriodFilter, type PeriodValue, EditableSelect } from "@/components/nitia-ui"
-import { Plus, Pencil, Trash2, FileSpreadsheet } from "lucide-react"
+import { Plus, Pencil, Trash2, FileSpreadsheet, Search } from "lucide-react"
 import type { PersonalFinanceMovement } from "@/lib/types"
 
 export function PersonalFinance() {
@@ -22,15 +22,18 @@ export function PersonalFinance() {
   const [showVariableDialog, setShowVariableDialog] = useState(false)
   const [showIncomeDialog, setShowIncomeDialog] = useState(false)
   const [editingItem, setEditingItem] = useState<PersonalFinanceMovement | null>(null)
+  const [searchQ, setSearchQ] = useState("")
 
   const ownerData = data.personalFinanceMovements.filter(m => m.owner === effectiveTab)
-  const fixedExpenses = ownerData.filter(m => m.type === "egreso" && m.is_fixed && m.active !== false)
+  const matchesSearch = (m: PersonalFinanceMovement) =>
+    !searchQ || m.description.toLowerCase().includes(searchQ.toLowerCase()) || (m.category || "").toLowerCase().includes(searchQ.toLowerCase())
+  const fixedExpenses = ownerData.filter(m => m.type === "egreso" && m.is_fixed && m.active !== false).filter(matchesSearch)
   const variableExpenses = filterByDateRange(
     ownerData.filter(m => m.type === "egreso" && !m.is_fixed), period, customStart, customEnd
-  )
+  ).filter(matchesSearch)
   const incomes = filterByDateRange(
     ownerData.filter(m => m.type === "ingreso"), period, customStart, customEnd
-  )
+  ).filter(matchesSearch)
 
   // Auto-calculate income from projects (50% split)
   const projectIncomes = data.movements
@@ -57,7 +60,9 @@ export function PersonalFinance() {
   }
 
   const deleteItem = async (id: string) => {
-    await deleteRow("personal_finance_movements", id, "personalFinanceMovements")
+    if (confirm("¿Eliminar este movimiento?")) {
+      await deleteRow("personal_finance_movements", id, "personalFinanceMovements")
+    }
   }
 
   const handleExportXLSX = async () => {
@@ -81,7 +86,17 @@ export function PersonalFinance() {
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Finanzas Personales</h1>
           <p className="text-sm text-[#76746A] mt-1">Control de gastos e ingresos personales</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar movimiento..."
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              className="pl-8 pr-3 py-1.5 text-sm border border-border rounded-lg bg-card focus:outline-none focus:ring-1 focus:ring-[#5F5A46] w-full sm:w-52"
+            />
+          </div>
           <Btn variant="soft" size="sm" onClick={handleExportXLSX}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
           <PeriodFilter value={period} onChange={setPeriod} onCustomRange={(s,e) => { setCustomStart(s); setCustomEnd(e) }} />
         </div>
@@ -119,9 +134,9 @@ export function PersonalFinance() {
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{formatCurrency(item.amount)}</span>
                 <button onClick={() => { setEditingItem(item); setShowFixedDialog(true) }}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
                 <button onClick={() => deleteItem(item.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 text-red-600 rounded"><Trash2 size={12} /></button>
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-red-50 text-red-600 rounded"><Trash2 size={12} /></button>
               </div>
             </div>
           )) : <Empty title="Sin gastos fijos" />}
@@ -146,9 +161,9 @@ export function PersonalFinance() {
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{formatCurrency(item.amount)}</span>
                 <button onClick={() => { setEditingItem(item); setShowVariableDialog(true) }}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
                 <button onClick={() => deleteItem(item.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 text-red-600 rounded"><Trash2 size={12} /></button>
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-red-50 text-red-600 rounded"><Trash2 size={12} /></button>
               </div>
             </div>
           )) : <Empty title="Sin gastos variables" />}
@@ -188,9 +203,9 @@ export function PersonalFinance() {
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-green-700">{formatCurrency(item.amount)}</span>
               <button onClick={() => { setEditingItem(item); setShowIncomeDialog(true) }}
-                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
+                className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
               <button onClick={() => deleteItem(item.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 text-red-600 rounded"><Trash2 size={12} /></button>
+                className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-red-50 text-red-600 rounded"><Trash2 size={12} /></button>
             </div>
           </div>
         )) : !projectIncomes.length && <Empty title="Sin ingresos registrados" />}

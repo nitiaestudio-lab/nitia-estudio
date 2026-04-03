@@ -138,13 +138,24 @@ export function Settings() {
             {allUsers.map(user => (
               <div key={user.id} className="flex items-center justify-between py-3 border-b border-border last:border-0">
                 <div>
-                  <p className="text-sm font-medium">{user.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">{user.name}</p>
+                    {user.totp_enabled && <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full flex items-center gap-1"><Shield size={10} />2FA</span>}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     {user.role === "paula" || user.role === "cami" ? "Administradora" : "Agente"}
                     {user.email && ` • ${user.email}`}
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  {user.totp_enabled && (
+                    <button onClick={async () => {
+                      if (confirm(`¿Resetear 2FA de ${user.name}?`)) {
+                        await disableTOTP(user.role)
+                        setAllUsers(prev => prev.map(u => u.id === user.id ? { ...u, totp_enabled: false } : u))
+                      }
+                    }} className="text-xs px-2 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded">Reset 2FA</button>
+                  )}
                   {user.role !== "paula" && user.role !== "cami" && (
                     <>
                       <button onClick={() => setEditingUser(user)}
@@ -346,6 +357,7 @@ function UserModal({ user, onClose, onSave }: {
     ver_finanzas_personales: existingPerms.ver_finanzas_personales ?? false,
     ver_costos_nitia: existingPerms.ver_costos_nitia ?? false,
     editar: existingPerms.editar ?? false,
+    requiere_2fa: existingPerms.requiere_2fa ?? false,
   })
 
   const PERM_LABELS: Record<string, string> = {
@@ -357,6 +369,7 @@ function UserModal({ user, onClose, onSave }: {
     ver_finanzas_personales: "Ver Finanzas Personales",
     ver_costos_nitia: "Ver Costos Fijos Nitia",
     editar: "Puede editar datos",
+    requiere_2fa: "Requiere verificación en 2 pasos (2FA)",
   }
 
   const togglePerm = (key: string) => setPermissions(p => ({ ...p, [key]: !p[key] }))

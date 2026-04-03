@@ -669,9 +669,14 @@ function MovimientosTab({ project }: { project: Project }) {
   }
   const cancelEdit = () => setEditingCell(null)
 
-  const totalIngresos = movs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
-  const totalEgresos = movs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+  const arsMovs = movs.filter(m => m.medio_pago !== "USD")
+  const totalIngresos = arsMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
+  const totalEgresos = arsMovs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
   const balance = totalIngresos - totalEgresos
+  const usdMovs = movs.filter(m => m.medio_pago === "USD")
+  const usdIngresos = usdMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
+  const usdEgresos = usdMovs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+  const usdBalance = usdIngresos - usdEgresos
 
   return (
     <div className="space-y-4">
@@ -690,6 +695,22 @@ function MovimientosTab({ project }: { project: Project }) {
           <p className={`text-lg font-bold ${balance >= 0 ? "text-blue-700" : "text-amber-700"}`}>{formatCurrency(balance)}</p>
         </div>
       </div>
+      {usdMovs.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
+            <p className="text-xs text-green-600 mb-1">Ingresos U$D</p>
+            <p className="text-lg font-bold text-green-700">U$D {new Intl.NumberFormat("es-AR").format(usdIngresos)}</p>
+          </div>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+            <p className="text-xs text-red-600 mb-1">Egresos U$D</p>
+            <p className="text-lg font-bold text-red-700">U$D {new Intl.NumberFormat("es-AR").format(usdEgresos)}</p>
+          </div>
+          <div className={`${usdBalance >= 0 ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"} border rounded-xl p-3 text-center`}>
+            <p className="text-xs text-muted-foreground mb-1">Balance U$D</p>
+            <p className={`text-lg font-bold ${usdBalance >= 0 ? "text-blue-700" : "text-amber-700"}`}>U$D {new Intl.NumberFormat("es-AR").format(usdBalance)}</p>
+          </div>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -776,10 +797,13 @@ function MovimientosTab({ project }: { project: Project }) {
                             onBlur={() => saveEdit(mov.id)} onKeyDown={e => { if (e.key === "Enter") saveEdit(mov.id); if (e.key === "Escape") cancelEdit() }}
                             className="w-full px-1.5 py-0.5 text-sm border border-[#5F5A46] rounded bg-white text-right" />
                         ) : (
-                          <span className={`font-semibold cursor-pointer hover:underline ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}
-                            onDoubleClick={() => startEdit(mov.id, "amount", String(mov.amount))}>
-                            {mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}
-                          </span>
+                          <>
+                            <span className={`font-semibold cursor-pointer hover:underline ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}
+                              onDoubleClick={() => startEdit(mov.id, "amount", String(mov.amount))}>
+                              {mov.type === "ingreso" ? "+" : "-"}{mov.medio_pago === "USD" ? `U$D ${new Intl.NumberFormat("es-AR").format(mov.amount)}` : formatCurrency(mov.amount)}
+                            </span>
+                            {mov.medio_pago === "USD" && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">USD</span>}
+                          </>
                         )}
                       </td>
                       {/* Account */}
@@ -1030,11 +1054,12 @@ function QuoteModal({ projectId, providers, onClose, onSave }: { projectId: stri
 }
 
 function AddMovModal({ project, accounts, providers, onClose, onSave }: { project: Project; accounts: any[]; providers: any[]; onClose: () => void; onSave: (m: Movement) => void }) {
-  const { data, addRow } = useApp()
+  const { data, addRow, addMovement: addMov } = useApp()
   const [date, setDate] = useState(today()); const [desc, setDesc] = useState(""); const [amt, setAmt] = useState("")
   const [type, setType] = useState<"ingreso" | "egreso">("ingreso"); const [aid, setAid] = useState(accounts[0]?.id ?? ""); const [pid, setPid] = useState(""); const [split, setSplit] = useState(true)
   const [pagoDirecto, setPagoDirecto] = useState(false); const [pagoProvId, setPagoProvId] = useState("")
   const [selectedItemId, setSelectedItemId] = useState("")
+  const [currency, setCurrency] = useState<"ARS" | "USD">("ARS")
   // Seña tracking
   const [esSeña, setEsSeña] = useState(false)
   const [señaClientePct, setSeñaClientePct] = useState(String(project.sena_cliente_pct ?? 50))
@@ -1066,27 +1091,30 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
       concepto: concepto || null,
       sena_real_pct: esSeña ? señaProvPctNum : null,
       sena_cliente_pct: esSeña ? señaCliPctNum : null,
+      medio_pago: currency === "USD" ? "USD" : null,
     }
     onSave(mainMov)
 
     // Pago directo: create egreso for provider
     if (type === "ingreso" && pagoDirecto && pagoProvId) {
-      await addRow("movements", {
+      await addMov({
         id: generateId(), date, description: `[Pago directo] ${desc}`, amount, type: "egreso" as const,
         project_id: project.id, account_id: aid || null, provider_id: pagoProvId, category: "Pago directo",
         auto_split: false, split_percentage: 0,
         concepto: selectedItemId ? `item:${selectedItemId}` : null,
-      }, "movements")
+        medio_pago: currency === "USD" ? "USD" : null,
+      } as Movement)
     }
 
     // Seña: if provider seña > client seña, register the difference from own money
     if (esSeña && señaDiff > 0 && señaPagadaProv && activeProvId) {
-      await addRow("movements", {
+      await addMov({
         id: generateId(), date, description: `[Diferencia seña] ${desc} (${señaProvPctNum}% prov - ${señaCliPctNum}% cli)`,
         amount: señaDiff, type: "egreso" as const,
         project_id: project.id, account_id: aid || null, provider_id: activeProvId,
         category: "Diferencia seña", auto_split: false, split_percentage: 0,
-      }, "movements")
+        medio_pago: currency === "USD" ? "USD" : null,
+      } as Movement)
     }
   }
 
@@ -1149,6 +1177,10 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
       <FormInput label="Descripción" value={desc} onChange={setDesc} />
       <div className="grid grid-cols-2 gap-4"><FormInput label="Monto" type="number" value={amt} onChange={setAmt} inputMode="decimal" />
         <FormSelect label="Cuenta" value={aid} onChange={setAid} options={accounts.map(a => ({ value: a.id, label: a.name }))} /></div>
+      <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+        <button type="button" onClick={() => setCurrency("ARS")} className={`px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
+        <button type="button" onClick={() => setCurrency("USD")} className={`px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
+      </div>
 
       {/* Egreso: provider + item selection */}
       {type === "egreso" && <>

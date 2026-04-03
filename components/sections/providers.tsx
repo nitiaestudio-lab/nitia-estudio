@@ -2,7 +2,7 @@
 
 import { useState, useRef, useMemo } from "react"
 import { useApp } from "@/lib/app-context"
-import { formatCurrency, formatDate, generateId, today } from "@/lib/helpers"
+import { formatCurrency, formatDate, generateId, today, filterByDateRange } from "@/lib/helpers"
 import { SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect, FormTextarea, EditableSelect, HR, Stat, PeriodFilter, type PeriodValue } from "@/components/nitia-ui"
 import type { Provider, ProviderDocument } from "@/lib/types"
 import { Plus, Phone, Mail, ArrowLeft, Trash2, Pencil, Upload, FileText, Download, Search, FolderOpen, Eye, FileSpreadsheet, ExternalLink, MapPin } from "lucide-react"
@@ -100,6 +100,11 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
   const [showUpload, setShowUpload] = useState(false)
   const [searchDoc, setSearchDoc] = useState("")
   const [filterDocType, setFilterDocType] = useState("")
+  const [paySearchQ, setPaySearchQ] = useState("")
+  const [payFilterType, setPayFilterType] = useState<"all"|"egreso"|"ingreso">("all")
+  const [payPeriod, setPayPeriod] = useState<PeriodValue>("all")
+  const [payCustomStart, setPayCustomStart] = useState("")
+  const [payCustomEnd, setPayCustomEnd] = useState("")
 
   const docs = data.providerDocuments.filter(d => d.provider_id === provider.id)
   const filteredDocs = docs
@@ -133,6 +138,14 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
 
   const totalDebt = balanceByProject.reduce((s, bp) => s + Math.max(0, bp.pending), 0)
   const totalOwedAll = balanceByProject.reduce((s, bp) => s + bp.totalOwed, 0)
+
+  const filteredMovements = useMemo(() => {
+    let items = movements
+    items = filterByDateRange(items, payPeriod, payCustomStart, payCustomEnd)
+    if (paySearchQ) items = items.filter(m => m.description.toLowerCase().includes(paySearchQ.toLowerCase()))
+    if (payFilterType !== "all") items = items.filter(m => m.type === payFilterType)
+    return items
+  }, [movements, payPeriod, payCustomStart, payCustomEnd, paySearchQ, payFilterType])
 
   const handleExportPayments = async () => {
     try {
@@ -179,7 +192,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
           <SecHead title="Resumen Financiero" />
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="Comprometido Total" value={formatCurrency(totalOwedAll)} />
+            <Stat label="Total a Pagar" value={formatCurrency(totalOwedAll)} />
             <Stat label="Total Pagado" value={formatCurrency(totalPaid)} />
             <Stat label="Deuda Pendiente" value={formatCurrency(totalDebt)} highlight={totalDebt === 0} />
             <Stat label="Movimientos" value={String(movements.length)} />
@@ -251,7 +264,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                   <p className="text-sm font-medium truncate">{doc.name}</p>
                   <p className="text-xs text-muted-foreground">{doc.type}{doc.date ? ` · ${formatDate(doc.date)}` : ""}{doc.file_size ? ` · ${(doc.file_size / 1024 / 1024).toFixed(1)} MB` : ""}</p>
                 </div>
-                {doc.url && (isImage(doc.mime_type) || isPDF(doc.mime_type)) && (
+                {doc.url && (
                   <button onClick={() => setPreviewDoc(doc)} className="p-1 hover:bg-accent rounded"><Eye size={14} /></button>
                 )}
                 {doc.url && <a href={doc.url} target="_blank" rel="noopener" className="p-1 hover:bg-accent rounded"><Download size={14} /></a>}
@@ -268,7 +281,25 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
         <SecHead title="Historial de Pagos" right={
           movements.length > 0 ? <Btn variant="soft" size="sm" onClick={handleExportPayments}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn> : undefined
         } />
-        {movements.length > 0 ? movements.map(mov => (
+        {movements.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            <div className="flex-1 min-w-[150px] relative">
+              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input value={paySearchQ} onChange={e => setPaySearchQ(e.target.value)} placeholder="Buscar pagos..."
+                className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-[#E0DDD0] text-xs bg-white" />
+            </div>
+            <select value={payFilterType} onChange={e => setPayFilterType(e.target.value as "all"|"egreso"|"ingreso")}
+              className="px-2 py-1.5 rounded-lg border border-[#E0DDD0] text-xs bg-white">
+              <option value="all">Todos</option>
+              <option value="egreso">Pagos</option>
+              <option value="ingreso">Ingresos</option>
+            </select>
+            <PeriodFilter value={payPeriod} onChange={setPayPeriod}
+              customStart={payCustomStart} customEnd={payCustomEnd}
+              onCustomStartChange={setPayCustomStart} onCustomEndChange={setPayCustomEnd} />
+          </div>
+        )}
+        {filteredMovements.length > 0 ? filteredMovements.map(mov => (
           <div key={mov.id} className="flex items-center justify-between py-2.5 border-b border-border last:border-0 text-sm group">
             <div className="min-w-0 flex-1">
               <span className="font-medium">{mov.description}</span>
@@ -331,7 +362,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                   ? <img src={previewDoc.url} alt={previewDoc.name} className="w-full h-auto" />
                   : isPDF(previewDoc.mime_type)
                     ? <iframe src={previewDoc.url} className="w-full h-[75vh]" title={previewDoc.name} />
-                    : <div className="p-8 text-center text-muted-foreground">Vista previa no disponible</div>
+                    : <iframe src={`https://docs.google.com/gview?url=${encodeURIComponent(previewDoc.url)}&embedded=true`} className="w-full h-[75vh]" title={previewDoc.name} />
                 }
               </div>
             </div>
