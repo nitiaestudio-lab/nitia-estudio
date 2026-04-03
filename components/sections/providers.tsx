@@ -100,7 +100,7 @@ export function Providers() {
 
 // =================== PROVIDER DETAIL ===================
 function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () => void }) {
-  const { data, updateRow, addRow, deleteRow, uploadFile, getCategoriesFor, addCategory, deleteCategory, setSection, setSelectedProjectId } = useApp()
+  const { data, updateRow, addRow, deleteRow, deleteMovement, uploadFile, getCategoriesFor, addCategory, deleteCategory, setSection, setSelectedProjectId } = useApp()
   const [showEdit, setShowEdit] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [searchDoc, setSearchDoc] = useState("")
@@ -110,6 +110,20 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
   const [payPeriod, setPayPeriod] = useState<PeriodValue>("all")
   const [payCustomStart, setPayCustomStart] = useState("")
   const [payCustomEnd, setPayCustomEnd] = useState("")
+  // Inline editing for movements
+  const [editingMov, setEditingMov] = useState<{ id: string; field: string } | null>(null)
+  const [editMovValue, setEditMovValue] = useState("")
+  const startEditMov = (id: string, field: string, value: string) => { setEditingMov({ id, field }); setEditMovValue(value) }
+  const saveEditMov = async (movId: string) => {
+    if (!editingMov) return
+    const updates: Record<string, any> = {}
+    if (editingMov.field === "description") updates.description = editMovValue
+    else if (editingMov.field === "amount") updates.amount = parseFloat(editMovValue) || 0
+    else if (editingMov.field === "date") updates.date = editMovValue
+    await updateRow("movements", movId, updates, "movements")
+    setEditingMov(null)
+  }
+  const deleteMov = async (id: string) => { if (confirm("¿Eliminar este movimiento?")) await deleteMovement(id) }
 
   const docs = data.providerDocuments.filter(d => d.provider_id === provider.id)
   const filteredDocs = docs
@@ -120,8 +134,9 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
 
   const movements = data.movements.filter(m => m.provider_id === provider.id)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  const totalPaid = movements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
-  const señaPagada = movements.filter(m => m.category === "Seña proveedor" || (m.concepto === "seña" && m.type === "egreso")).reduce((s, m) => s + m.amount, 0)
+  const isSeñaEgreso = (m: any) => m.type === "egreso" && (m.category === "Seña proveedor" || m.category === "Aporte propio seña" || m.category === "Diferencia seña" || (m.concepto === "seña" && m.type === "egreso"))
+  const totalPaidSinSeña = movements.filter(m => m.type === "egreso" && !isSeñaEgreso(m)).reduce((s, m) => s + m.amount, 0)
+  const señaPagada = movements.filter(m => isSeñaEgreso(m)).reduce((s, m) => s + m.amount, 0)
 
   // Saldo por proyecto
   const balanceByProject = useMemo(() => {
@@ -132,10 +147,11 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
       const itemsCost = data.projectItems.filter(i => i.project_id === pid && i.provider_id === provider.id).reduce((s, i) => s + i.cost, 0)
       const quotesCost = data.quoteComparisons.filter(q => q.project_id === pid && q.provider_id === provider.id && q.selected).reduce((s, q) => s + q.cost, 0)
       const totalOwed = itemsCost + quotesCost
-      const paid = movements.filter(m => m.project_id === pid && m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+      const paid = movements.filter(m => m.project_id === pid && m.type === "egreso" && !isSeñaEgreso(m)).reduce((s, m) => s + m.amount, 0)
+      const seña = movements.filter(m => m.project_id === pid && isSeñaEgreso(m)).reduce((s, m) => s + m.amount, 0)
       const pending = totalOwed - paid
-      return { project, totalOwed, paid, pending }
-    }).filter(Boolean) as { project: any; totalOwed: number; paid: number; pending: number }[]
+      return { project, totalOwed, paid, pending, seña }
+    }).filter(Boolean) as { project: any; totalOwed: number; paid: number; pending: number; seña: number }[]
   }, [data.projectItems, data.quoteComparisons, movements, provider.id, data.projects])
 
   const isImage = (mime?: string | null) => mime?.startsWith("image/")
@@ -200,13 +216,13 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
           {/* Barra de progreso */}
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Pagado: {formatCurrency(totalPaid)}</span>
+              <span>Pagado: {formatCurrency(totalPaidSinSeña)}{señaPagada > 0 ? ` + seña ${formatCurrency(señaPagada)}` : ""}</span>
               <span>Total: {formatCurrency(totalOwedAll)}</span>
             </div>
             <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${totalOwedAll > 0 ? Math.min((totalPaid / totalOwedAll) * 100, 100) : 0}%` }} />
+              <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${totalOwedAll > 0 ? Math.min((totalPaidSinSeña / totalOwedAll) * 100, 100) : 0}%` }} />
             </div>
-            <p className="text-xs text-muted-foreground text-right">{totalOwedAll > 0 ? ((totalPaid / totalOwedAll) * 100).toFixed(0) : 0}% pagado</p>
+            <p className="text-xs text-muted-foreground text-right">{totalOwedAll > 0 ? ((totalPaidSinSeña / totalOwedAll) * 100).toFixed(0) : 0}% pagado</p>
           </div>
           {/* Deuda destacada */}
           <div className={`text-center p-3 rounded-lg ${totalDebt > 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
@@ -242,9 +258,10 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                   className="text-sm font-medium text-blue-600 hover:underline flex items-center gap-1">
                   {bp.project.name}<ExternalLink size={10} />
                 </button>
-                <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-4 text-sm flex-wrap justify-end">
                   <span className="text-muted-foreground">Comprometido: {formatCurrency(bp.totalOwed)}</span>
                   <span className="text-green-600">Pagado: {formatCurrency(bp.paid)}</span>
+                  {bp.seña > 0 && <span className="text-purple-600">Seña: {formatCurrency(bp.seña)}</span>}
                   <span className={`font-bold ${bp.pending > 0 ? "text-red-600" : "text-green-600"}`}>
                     {bp.pending > 0 ? `Pendiente: ${formatCurrency(bp.pending)}` : "Al día ✓"}
                   </span>
@@ -343,17 +360,31 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                 .concat(data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).map(q => q.item))
             : []
           return (
-            <div key={mov.id} className={`py-3 border-b border-border last:border-0 text-sm ${isSeñaDiff ? "bg-amber-50/50" : isSeña ? "bg-purple-50/30" : ""}`}>
+            <div key={mov.id} className={`py-3 border-b border-border last:border-0 text-sm group ${isSeñaDiff ? "bg-amber-50/50" : isSeña ? "bg-purple-50/30" : ""}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`w-2 h-2 rounded-full shrink-0 ${isSeñaDiff ? "bg-amber-500" : mov.type === "egreso" ? "bg-red-500" : "bg-green-500"}`}></span>
-                    <span className="font-medium">{mov.description}</span>
+                    {editingMov?.id === mov.id && editingMov.field === "description" ? (
+                      <input value={editMovValue} onChange={e => setEditMovValue(e.target.value)} autoFocus
+                        onKeyDown={e => { if (e.key === "Enter") saveEditMov(mov.id); if (e.key === "Escape") setEditingMov(null) }}
+                        onBlur={() => saveEditMov(mov.id)}
+                        className="px-2 py-0.5 border border-border rounded text-sm bg-white font-medium flex-1" />
+                    ) : (
+                      <span className="font-medium cursor-pointer hover:underline" onDoubleClick={() => startEditMov(mov.id, "description", mov.description)}>{mov.description}</span>
+                    )}
                     {(isSeña || isSeñaDiff || isSeñaProv) && <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">{isSeñaDiff ? "Aporte propio" : isSeñaProv ? "Seña prov." : "Seña"}</span>}
                     {mov.category && !isSeñaDiff && !isSeñaProv && mov.category !== "Diferencia seña" && <span className="text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap mt-1 ml-4">
-                    <span>{formatDate(mov.date)}</span>
+                    {editingMov?.id === mov.id && editingMov.field === "date" ? (
+                      <input type="date" value={editMovValue} onChange={e => setEditMovValue(e.target.value)} autoFocus
+                        onKeyDown={e => { if (e.key === "Enter") saveEditMov(mov.id); if (e.key === "Escape") setEditingMov(null) }}
+                        onBlur={() => saveEditMov(mov.id)}
+                        className="px-1 py-0.5 border border-border rounded text-xs bg-white" />
+                    ) : (
+                      <span className="cursor-pointer hover:underline" onDoubleClick={() => startEditMov(mov.id, "date", mov.date)}>{formatDate(mov.date)}</span>
+                    )}
                     {project && <span className="text-blue-600">{project.name}</span>}
                     {account && <span>Cuenta: {account.name}</span>}
                     {mov.sena_real_pct != null && <span className="text-purple-600">Prov {mov.sena_real_pct}%</span>}
@@ -363,21 +394,29 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                   {señaItems.length > 0 && (
                     <div className="ml-4 mt-1 flex flex-wrap gap-1">
                       {señaItems.map((name, i) => (
-                        <span key={i} className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">📦 {name}</span>
+                        <span key={i} className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">{name}</span>
                       ))}
                     </div>
-                  )}
-                  {isSeñaDiff && account && (
-                    <p className="ml-4 mt-1 text-[10px] text-amber-600">Aporte propio — Cuenta: {account.name}</p>
                   )}
                   {isSeñaProv && account && (
                     <p className="ml-4 mt-1 text-[10px] text-purple-600">Pago seña — Cuenta: {account.name}</p>
                   )}
                 </div>
-                <span className={`font-bold shrink-0 ${isSeñaDiff ? "text-amber-700" : mov.type === "egreso" ? "text-red-600" : "text-green-600"}`}>
-                  {mov.type === "egreso" ? "-" : "+"}{formatAmount(mov)}
-                  {mov.medio_pago === "USD" && <span className="ml-1 text-[10px] px-1 py-0.5 bg-blue-100 text-blue-700 rounded">USD</span>}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {editingMov?.id === mov.id && editingMov.field === "amount" ? (
+                    <input type="number" value={editMovValue} onChange={e => setEditMovValue(e.target.value)} autoFocus
+                      onKeyDown={e => { if (e.key === "Enter") saveEditMov(mov.id); if (e.key === "Escape") setEditingMov(null) }}
+                      onBlur={() => saveEditMov(mov.id)}
+                      className="w-28 px-2 py-0.5 border border-border rounded text-sm bg-white text-right font-bold" />
+                  ) : (
+                    <span className={`font-bold cursor-pointer hover:underline ${isSeñaDiff ? "text-amber-700" : mov.type === "egreso" ? "text-red-600" : "text-green-600"}`}
+                      onDoubleClick={() => startEditMov(mov.id, "amount", String(mov.amount))}>
+                      {mov.type === "egreso" ? "-" : "+"}{formatAmount(mov)}
+                    </span>
+                  )}
+                  {mov.medio_pago === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-100 text-blue-700 rounded">USD</span>}
+                  <button onClick={() => deleteMov(mov.id)} className="p-1 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} className="text-red-500" /></button>
+                </div>
               </div>
             </div>
           )
