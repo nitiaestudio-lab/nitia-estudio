@@ -245,11 +245,12 @@ function BalancePanel({ project }: { project: Project }) {
   const sCli = calcSenaCliente(totalClient, sCliPct)
   const sCliIVA = sCli + calcIVACliente(sCli, ivaCli)
 
-  // Real seña amounts from movements
-  const señaMovs = data.movements.filter(m => m.project_id === project.id && (m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor" || m.category === "Aporte propio seña"))
+  // Real seña amounts from movements (unified filter)
+  const isSeñaMov = (m: Movement) => m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor" || m.category === "Aporte propio seña" || m.category === "Diferencia seña"
+  const señaMovs = projMovs.filter(m => isSeñaMov(m))
   const señaCobradaCli = señaMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
-  const señaPagadaProv = señaMovs.filter(m => m.type === "egreso" && m.category === "Seña proveedor").reduce((s, m) => s + m.amount, 0)
-  const señaAportePropio = señaMovs.filter(m => m.category === "Aporte propio seña").reduce((s, m) => s + m.amount, 0)
+  const señaPagadaProv = señaMovs.filter(m => m.type === "egreso" && (m.category === "Seña proveedor")).reduce((s, m) => s + m.amount, 0)
+  const señaAportePropio = señaMovs.filter(m => m.category === "Aporte propio seña" || m.category === "Diferencia seña").reduce((s, m) => s + m.amount, 0)
 
   const Bar = ({ value, max, color }: { value: number; max: number; color: string }) => {
     const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
@@ -357,10 +358,11 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
       {canSeeGanancias && <BalancePanel project={project} />}
       {/* Seguimiento de Señas */}
       {(() => {
-        const señaMovs = data.movements.filter(m => m.project_id === project.id && (m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor" || m.category === "Aporte propio seña" || m.category === "Diferencia seña"))
+        const isSeña = (m: Movement) => m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor" || m.category === "Aporte propio seña" || m.category === "Diferencia seña"
+        const señaMovs = data.movements.filter(m => m.project_id === project.id && isSeña(m))
         if (señaMovs.length === 0) return null
         const señaIngresos = señaMovs.filter(m => m.type === "ingreso")
-        const señaEgresos = señaMovs.filter(m => m.type === "egreso" && (m.category === "Seña proveedor"))
+        const señaEgresos = señaMovs.filter(m => m.type === "egreso" && m.category === "Seña proveedor")
         const señaDiffs = señaMovs.filter(m => m.category === "Aporte propio seña" || m.category === "Diferencia seña")
         return (
           <div className="bg-gradient-to-r from-purple-50 to-purple-50/50 border border-purple-200 rounded-xl p-4 sm:p-5">
@@ -1214,6 +1216,8 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
           project_id: project.id, account_id: aid || null, provider_id: señaActiveProvId,
           category: "Aporte propio seña", auto_split: false, split_percentage: 0,
           concepto: señaItemIds.length > 0 ? `seña:${señaItemIds.join(",")}` : "seña",
+          sena_real_pct: señaProvPctNum,
+          sena_cliente_pct: señaCliPctNum,
           medio_pago: currency === "USD" ? "USD" : null,
         } as Movement)
       }
