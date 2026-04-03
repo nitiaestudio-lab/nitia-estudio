@@ -109,8 +109,8 @@ export function PersonalFinance() {
     </th>
   )
 
-  // Fixed cost payment tracking
-  const currentMonth = new Date().getMonth()
+  // Fixed cost payment tracking (month is 1-indexed: January=1, April=4)
+  const currentMonth = new Date().getMonth() + 1
   const currentYear = new Date().getFullYear()
   const isFixedPaid = (fixedId: string) => {
     return data.fixedCostPayments?.some(p =>
@@ -133,9 +133,14 @@ export function PersonalFinance() {
       p.fixed_cost_id === item.id && p.month === currentMonth && p.year === currentYear
     )
     if (payment) {
-      // Remove linked movement if exists
+      // Remove linked movement from global movements (reverses account balance)
       if (payment.movement_id) {
         try { await deleteMovement(payment.movement_id) } catch {}
+        // Also remove the personal_finance_movements record
+        const pfMov = data.personalFinanceMovements.find(m => m.id === payment.movement_id)
+        if (pfMov) {
+          try { await deleteRow("personal_finance_movements", pfMov.id, "personalFinanceMovements") } catch {}
+        }
       }
       await deleteRow("fixed_cost_payments", payment.id, "fixedCostPayments")
     }
@@ -145,7 +150,7 @@ export function PersonalFinance() {
     // Check if already paid this month (prevent duplicates)
     if (isFixedPaid(item.id)) return
     const movId = generateId()
-    // Create movement (impacts account balance)
+    // Create global movement (impacts account balance)
     await addMovement({
       id: movId, date: today(), description: `[Gasto fijo] ${item.description}`,
       amount: item.amount, type: "egreso" as const,
@@ -153,6 +158,13 @@ export function PersonalFinance() {
       account_id: accountId || null,
       created_by: effectiveTab,
     } as any)
+    // Also create personal_finance_movements record so it shows in personal finance
+    await addRow("personal_finance_movements", {
+      id: movId, date: today(), description: `[Gasto fijo] ${item.description}`,
+      amount: item.amount, type: "egreso" as const,
+      category: item.category || "Gasto fijo",
+      owner: effectiveTab, is_fixed: false, active: true,
+    } as any, "personalFinanceMovements")
     // Create payment record linked to movement
     await addRow("fixed_cost_payments", {
       id: generateId(),

@@ -95,8 +95,11 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
   const [budgetValue, setBudgetValue] = useState(String(project.budget_final ?? ""))
   const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
   const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
-  const income = projectIncome(data.movements, project.id)
-  const expenses = projectExpenses(data.movements, project.id)
+  const detailMovs = data.movements.filter(m => m.project_id === project.id)
+  const income = detailMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
+  const expenses = detailMovs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+  const incomeUSD = detailMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+  const expensesUSD = detailMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
   const budgetFinal = project.budget_final ?? null
   const projectTasks = data.tasks.filter(t => t.project_id === project.id)
   const pendingProjectTasks = projectTasks.filter(t => t.status !== "completada")
@@ -148,8 +151,8 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
               {budgetFinal ? `Sugerido: ${formatCurrency(totalClient)}` : "Click para editar"}
             </p>
           </div>
-          <Stat label="Cobrado" value={formatCurrency(income)} sub={formatCurrency((budgetFinal || totalClient) - income) + " pendiente"} />
-          <Stat label="Pagado proveedores" value={formatCurrency(expenses)} />
+          <Stat label="Cobrado" value={formatCurrency(income - incomeUSD)} sub={incomeUSD > 0 ? `+ U$D ${new Intl.NumberFormat("es-AR").format(incomeUSD)}` : formatCurrency((budgetFinal || totalClient) - income) + " pendiente"} />
+          <Stat label="Pagado proveedores" value={formatCurrency(expenses - expensesUSD)} sub={expensesUSD > 0 ? `+ U$D ${new Intl.NumberFormat("es-AR").format(expensesUSD)}` : undefined} />
           {canSeeGanancias && <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
         </div>
       </div>}
@@ -199,8 +202,13 @@ function BalancePanel({ project }: { project: Project }) {
   const totalCost = projectTotalCost(project, data.projectItems, data.quoteComparisons)
   const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
   const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
-  const income = projectIncome(data.movements, project.id)
-  const expenses = projectExpenses(data.movements, project.id)
+  const projMovs = data.movements.filter(m => m.project_id === project.id)
+  const income = projMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
+  const expenses = projMovs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+  const incomeUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+  const incomeARS = income - incomeUSD
+  const expensesUSD = projMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+  const expensesARS = expenses - expensesUSD
   const pc = project.partner_count ?? 2
   const ivaCli = project.iva_cliente_pct ?? 21
   const ivaGan = project.iva_ganancia_pct ?? 10.5
@@ -259,7 +267,9 @@ function BalancePanel({ project }: { project: Project }) {
         <Bar value={income} max={totalConIVA} color={income >= totalConIVA ? "green" : "amber"} />
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div><span className="text-muted-foreground">Total c/IVA:</span> <span className="font-medium">{formatCurrency(totalConIVA)}</span></div>
-          <div><span className="text-muted-foreground">Cobrado:</span> <span className="font-medium text-green-600">{formatCurrency(income)}</span></div>
+          <div><span className="text-muted-foreground">Cobrado:</span> <span className="font-medium text-green-600">{formatCurrency(incomeARS)}</span>
+            {incomeUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(incomeUSD)}</span>}
+          </div>
         </div>
         <div className={`text-sm font-bold ${clienteDebe > 0 ? "text-amber-600" : "text-green-600"}`}>
           {clienteDebe > 0 ? `Cliente debe: ${formatCurrency(clienteDebe)}` : clienteDebe < 0 ? `Cobrado de más: ${formatCurrency(Math.abs(clienteDebe))}` : "Al día ✓"}
@@ -279,7 +289,9 @@ function BalancePanel({ project }: { project: Project }) {
         <Bar value={expenses} max={totalCost} color={expenses >= totalCost ? "green" : "red"} />
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div><span className="text-muted-foreground">Total costo:</span> <span className="font-medium">{formatCurrency(totalCost)}</span></div>
-          <div><span className="text-muted-foreground">Pagado:</span> <span className="font-medium text-red-600">{formatCurrency(expenses)}</span></div>
+          <div><span className="text-muted-foreground">Pagado:</span> <span className="font-medium text-red-600">{formatCurrency(expensesARS)}</span>
+            {expensesUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(expensesUSD)}</span>}
+          </div>
         </div>
         <div className={`text-sm font-bold ${provDebe > 0 ? "text-red-600" : "text-green-600"}`}>
           {provDebe > 0 ? `Debemos a proveedores: ${formatCurrency(provDebe)}` : provDebe < 0 ? `Pagado de más: ${formatCurrency(Math.abs(provDebe))}` : "Al día ✓"}
@@ -452,12 +464,21 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                     <button onClick={() => deleteRow("project_items", item.id, "projectItems")} className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
                   </div></td>
                 </tr>))}</tbody></table></div>}
-            {sq.length > 0 && <div className="mt-2"><p className="text-xs text-muted-foreground mb-1">Desde Comparador:</p>
-              {sq.map(q => (<div key={q.id} className="flex items-center justify-between py-1.5 text-sm border-b border-border/30 last:border-0">
-                <div className="flex items-center gap-2 min-w-0"><Star size={12} className="text-amber-500 shrink-0" /><span className="truncate">{q.item}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">({q.provider_name})</span></div>
-                <div className="flex items-center gap-3 shrink-0"><span className="text-muted-foreground">{formatCurrency(q.cost)}</span><span className="font-medium">{formatCurrency(quoteClientPrice(q))}</span></div>
-              </div>))}</div>}
+            {sq.length > 0 && <div className={si.length > 0 ? "mt-1" : ""}><table className="w-full text-sm">
+              {si.length === 0 && <thead><tr className="text-xs text-muted-foreground border-b border-border">
+                <th className="text-left py-2 pr-2">Descripción</th><th className="text-right py-2 px-2">Costo</th>
+                <th className="text-right py-2 px-2">Precio</th>{hm && <th className="text-right py-2 px-2 hidden sm:table-cell">Ganancia</th>}
+              </tr></thead>}
+              <tbody>{sq.map(q => (
+                <tr key={q.id} className="border-b border-border/50 last:border-0">
+                  <td className="py-2 pr-2"><div className="flex items-center gap-1.5">
+                    <span className="truncate max-w-[200px]">{q.item}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">({q.provider_name})</span>
+                  </div></td>
+                  <td className="text-right py-2 px-2">{formatCurrency(q.cost)}</td>
+                  <td className="text-right py-2 px-2 font-medium">{formatCurrency(quoteClientPrice(q))}</td>
+                  {hm && <td className="text-right py-2 px-2 text-green-600 hidden sm:table-cell">{formatCurrency(quoteGanancia(q))}</td>}
+                </tr>))}</tbody></table></div>}
             {si.length === 0 && sq.length === 0 && <p className="text-sm text-muted-foreground">Sin ítems</p>}
             {(si.length > 0 || sq.length > 0) && <div className="flex justify-between pt-3 mt-2 border-t border-border text-sm">
               <span className="font-semibold text-muted-foreground">Subtotal</span>
@@ -625,8 +646,20 @@ function ComparadorTab({ project }: { project: Project }) {
 type SortField = "date" | "description" | "amount" | "type" | "provider"
 type SortDir = "asc" | "desc"
 
+function useDolarBlue() {
+  const [rate, setRate] = useState<number | null>(null)
+  useEffect(() => {
+    fetch("https://dolarapi.com/v1/dolares/blue")
+      .then(r => r.json())
+      .then(d => { if (d?.venta) setRate(d.venta) })
+      .catch(() => {})
+  }, [])
+  return rate
+}
+
 function MovimientosTab({ project }: { project: Project }) {
   const { data, addMovement, deleteMovement, updateRow } = useApp()
+  const dolarBlue = useDolarBlue()
   const [showAdd, setShowAdd] = useState(false)
   const [movPeriod, setMovPeriod] = useState<PeriodValue>("all"); const [cStart, setCStart] = useState(""); const [cEnd, setCEnd] = useState("")
   const [searchQ, setSearchQ] = useState("")
@@ -698,39 +731,33 @@ function MovimientosTab({ project }: { project: Project }) {
   const usdEgresos = usdMovs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
   const usdBalance = usdIngresos - usdEgresos
 
+  const totalEstimadoPesos = balance + (dolarBlue ? usdBalance * dolarBlue : 0)
+
   return (
     <div className="space-y-4">
-      {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-          <p className="text-xs text-green-600 mb-1">Ingresos</p>
-          <p className="text-lg font-bold text-green-700">{formatCurrency(totalIngresos)}</p>
+      {/* Summary */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Ingresos</p>
+            <p className="text-base font-semibold text-green-700">{formatCurrency(totalIngresos)}</p>
+            {usdIngresos > 0 && <p className="text-[10px] text-green-600">+ U$D {new Intl.NumberFormat("es-AR").format(usdIngresos)}</p>}
+          </div>
+          <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Egresos</p>
+            <p className="text-base font-semibold text-red-700">{formatCurrency(totalEgresos)}</p>
+            {usdEgresos > 0 && <p className="text-[10px] text-red-600">+ U$D {new Intl.NumberFormat("es-AR").format(usdEgresos)}</p>}
+          </div>
+          <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Balance</p>
+            <p className={`text-base font-semibold ${balance >= 0 ? "text-foreground" : "text-amber-700"}`}>{formatCurrency(balance)}</p>
+            {usdMovs.length > 0 && <p className={`text-[10px] ${usdBalance >= 0 ? "text-blue-600" : "text-amber-600"}`}>U$D {new Intl.NumberFormat("es-AR").format(usdBalance)}</p>}
+          </div>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-          <p className="text-xs text-red-600 mb-1">Egresos</p>
-          <p className="text-lg font-bold text-red-700">{formatCurrency(totalEgresos)}</p>
-        </div>
-        <div className={`${balance >= 0 ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"} border rounded-xl p-3 text-center`}>
-          <p className="text-xs text-muted-foreground mb-1">Balance</p>
-          <p className={`text-lg font-bold ${balance >= 0 ? "text-blue-700" : "text-amber-700"}`}>{formatCurrency(balance)}</p>
-        </div>
+        {usdMovs.length > 0 && dolarBlue && (
+          <div className="mt-3 pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+            <span>Total estimado en ARS: <span className="font-semibold text-foreground">{formatCurrency(totalEstimadoPesos)}</span></span>
+            <span>Blue: ${new Intl.NumberFormat("es-AR").format(dolarBlue)}</span>
+          </div>
+        )}
       </div>
-      {usdMovs.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-            <p className="text-xs text-green-600 mb-1">Ingresos U$D</p>
-            <p className="text-lg font-bold text-green-700">U$D {new Intl.NumberFormat("es-AR").format(usdIngresos)}</p>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-            <p className="text-xs text-red-600 mb-1">Egresos U$D</p>
-            <p className="text-lg font-bold text-red-700">U$D {new Intl.NumberFormat("es-AR").format(usdEgresos)}</p>
-          </div>
-          <div className={`${usdBalance >= 0 ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"} border rounded-xl p-3 text-center`}>
-            <p className="text-xs text-muted-foreground mb-1">Balance U$D</p>
-            <p className={`text-lg font-bold ${usdBalance >= 0 ? "text-blue-700" : "text-amber-700"}`}>U$D {new Intl.NumberFormat("es-AR").format(usdBalance)}</p>
-          </div>
-        </div>
-      )}
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">

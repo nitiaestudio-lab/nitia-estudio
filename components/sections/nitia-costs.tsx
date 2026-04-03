@@ -48,18 +48,23 @@ export function NitiaCosts() {
     const m = parseInt(viewMonth.split("-")[1])
     const y = parseInt(viewMonth.split("-")[0])
     const movId = generateId()
-    await addMovement({
-      id: movId, date: new Date().toISOString().split("T")[0],
-      description: `[Costo fijo Nitia] ${cost.description}`,
-      amount: cost.amount, type: "egreso" as const,
-      category: cost.category || "Costo fijo", account_id: accountId || null,
-    } as any)
-    await addRow("fixed_cost_payments", {
-      id: generateId(), fixed_cost_id: costId, movement_id: movId,
-      month: m, year: y, paid: true,
-      paid_date: new Date().toISOString().split("T")[0],
-      paid_amount: cost.amount, owner: "nitia",
-    }, "fixedCostPayments")
+    try {
+      await addMovement({
+        id: movId, date: new Date().toISOString().split("T")[0],
+        description: `[Costo fijo Nitia] ${cost.description}`,
+        amount: cost.amount, type: "egreso" as const,
+        category: cost.category || "Costo fijo", account_id: accountId || null,
+        fixed_cost_id: costId,
+      } as any)
+      await addRow("fixed_cost_payments", {
+        id: generateId(), fixed_cost_id: costId, movement_id: movId,
+        month: m, year: y, paid: true,
+        paid_date: new Date().toISOString().split("T")[0],
+        paid_amount: cost.amount,
+      }, "fixedCostPayments")
+    } catch (err) {
+      console.error("Error paying cost:", err)
+    }
     setPayingCostId(null)
     setPayAccountId("")
   }
