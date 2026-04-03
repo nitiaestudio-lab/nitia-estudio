@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useMemo, useCallback } from "react"
+import { useState, useRef, useMemo, useCallback, useEffect } from "react"
 import { useApp } from "@/lib/app-context"
 import {
   formatCurrency, formatDate, generateId, today,
@@ -1079,6 +1079,13 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
 
   // Seña calculations
   const señaActiveProvId = activeProvId || señaProvIdLocal
+  // Pre-populate seña % from provider's saved advance_percent
+  useEffect(() => {
+    if (señaActiveProvId) {
+      const prov = providers.find((p: any) => p.id === señaActiveProvId)
+      if (prov?.advance_percent != null) setSeñaProvPct(String(prov.advance_percent))
+    }
+  }, [señaActiveProvId, providers])
   const señaCliPctNum = parseFloat(señaClientePct) || 0
   const señaProvPctNum = parseFloat(señaProvPct) || 0
   const amount = parseFloat(amt) || 0
