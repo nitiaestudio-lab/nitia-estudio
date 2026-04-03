@@ -128,6 +128,11 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
   }, [data.projectItems, data.quoteComparisons, movements, provider.id, data.projects])
 
   const isImage = (mime?: string | null) => mime?.startsWith("image/")
+  const isPDF = (mime?: string | null) => mime === "application/pdf"
+  const [previewDoc, setPreviewDoc] = useState<any>(null)
+
+  const totalDebt = balanceByProject.reduce((s, bp) => s + Math.max(0, bp.pending), 0)
+  const totalOwedAll = balanceByProject.reduce((s, bp) => s + bp.totalOwed, 0)
 
   const handleExportPayments = async () => {
     try {
@@ -174,7 +179,9 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
           <SecHead title="Resumen Financiero" />
           <div className="grid grid-cols-2 gap-3">
+            <Stat label="Comprometido Total" value={formatCurrency(totalOwedAll)} />
             <Stat label="Total Pagado" value={formatCurrency(totalPaid)} />
+            <Stat label="Deuda Pendiente" value={formatCurrency(totalDebt)} highlight={totalDebt === 0} />
             <Stat label="Movimientos" value={String(movements.length)} />
           </div>
         </div>
@@ -238,12 +245,15 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
             {filteredDocs.map(doc => (
               <div key={doc.id} className="flex items-center gap-3 p-3 bg-[#F7F5ED] rounded-lg group">
                 {isImage(doc.mime_type) && doc.url
-                  ? <img src={doc.url} alt={doc.name} className="w-10 h-10 rounded object-cover shrink-0" />
+                  ? <img src={doc.url} alt={doc.name} className="w-10 h-10 rounded object-cover shrink-0 cursor-pointer" onClick={() => setPreviewDoc(doc)} />
                   : <FileText size={18} className="text-[#5F5A46] shrink-0" />}
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => doc.url && (isImage(doc.mime_type) || isPDF(doc.mime_type)) && setPreviewDoc(doc)}>
                   <p className="text-sm font-medium truncate">{doc.name}</p>
                   <p className="text-xs text-muted-foreground">{doc.type}{doc.date ? ` · ${formatDate(doc.date)}` : ""}{doc.file_size ? ` · ${(doc.file_size / 1024 / 1024).toFixed(1)} MB` : ""}</p>
                 </div>
+                {doc.url && (isImage(doc.mime_type) || isPDF(doc.mime_type)) && (
+                  <button onClick={() => setPreviewDoc(doc)} className="p-1 hover:bg-accent rounded"><Eye size={14} /></button>
+                )}
                 {doc.url && <a href={doc.url} target="_blank" rel="noopener" className="p-1 hover:bg-accent rounded"><Download size={14} /></a>}
                 <button onClick={() => deleteRow("provider_documents", doc.id, "providerDocuments")}
                   className="p-1 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 sm:opacity-100"><Trash2 size={12} className="text-red-600" /></button>
@@ -300,6 +310,34 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
           }
           setShowUpload(false)
         }} />}
+
+      {/* File Preview Modal */}
+      {previewDoc && previewDoc.url && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setPreviewDoc(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] w-full mx-4" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setPreviewDoc(null)}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 text-sm flex items-center gap-1">
+              Cerrar ✕
+            </button>
+            <div className="bg-white rounded-xl overflow-hidden shadow-2xl">
+              <div className="p-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-medium truncate">{previewDoc.name}</p>
+                <a href={previewDoc.url} target="_blank" rel="noopener" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                  <Download size={12} />Descargar
+                </a>
+              </div>
+              <div className="max-h-[80vh] overflow-auto">
+                {isImage(previewDoc.mime_type)
+                  ? <img src={previewDoc.url} alt={previewDoc.name} className="w-full h-auto" />
+                  : isPDF(previewDoc.mime_type)
+                    ? <iframe src={previewDoc.url} className="w-full h-[75vh]" title={previewDoc.name} />
+                    : <div className="p-8 text-center text-muted-foreground">Vista previa no disponible</div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

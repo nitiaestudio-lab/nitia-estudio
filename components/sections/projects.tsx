@@ -32,8 +32,10 @@ const TAB_LABELS: Record<ProjectTab, string> = {
 
 // =================== PROJECTS LIST ===================
 export function Projects() {
-  const { role, data, addRow, selectedProjectId, setSelectedProjectId } = useApp()
-  const isFull = canSee(role)
+  const { role, data, addRow, selectedProjectId, setSelectedProjectId, userPermissions } = useApp()
+  const isFull = canSee(role, userPermissions)
+  const isAdmin = role === "paula" || role === "cami"
+  const canSeeGanancias = isAdmin || userPermissions?.ver_ganancias === true
   const [showNew, setShowNew] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const projects = data.projects.filter(p =>
@@ -42,7 +44,7 @@ export function Projects() {
   )
   if (selectedProjectId) {
     const project = data.projects.find(p => p.id === selectedProjectId)
-    if (project) return <ProjectDetail project={project} onBack={() => setSelectedProjectId(null)} isFull={isFull} />
+    if (project) return <ProjectDetail project={project} onBack={() => setSelectedProjectId(null)} isFull={isFull} canSeeGanancias={canSeeGanancias} />
   }
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
@@ -83,7 +85,7 @@ export function Projects() {
 }
 
 // =================== PROJECT DETAIL ===================
-function ProjectDetail({ project, onBack, isFull }: { project: Project; onBack: () => void; isFull: boolean }) {
+function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: Project; onBack: () => void; isFull: boolean; canSeeGanancias: boolean }) {
   const { data, updateRow, deleteRow } = useApp()
   const [tab, setTab] = useState<ProjectTab>("desglose")
   const [showEdit, setShowEdit] = useState(false)
@@ -110,7 +112,7 @@ function ProjectDetail({ project, onBack, isFull }: { project: Project; onBack: 
       </div>
       {isFull && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Presupuesto" value={formatCurrency(totalClient)} />
-        <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />
+        {canSeeGanancias && <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
         <Stat label="Cobrado" value={formatCurrency(income)} sub={formatCurrency(totalClient - income) + " pendiente"} />
         <Stat label="Pagado proveedores" value={formatCurrency(expenses)} />
       </div>}
@@ -119,7 +121,7 @@ function ProjectDetail({ project, onBack, isFull }: { project: Project; onBack: 
           <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${tab === t ? "border-[#5F5A46] text-[#1C1A12]" : "border-transparent text-[#76746A] hover:text-[#1C1A12]"}`}>{TAB_LABELS[t]}</button>
         ))}
       </div>
-      {tab === "desglose" && <DesgloseTab project={project} isFull={isFull} />}
+      {tab === "desglose" && <DesgloseTab project={project} isFull={isFull} canSeeGanancias={canSeeGanancias} />}
       {tab === "comparador" && <ComparadorTab project={project} />}
       {tab === "movimientos" && <MovimientosTab project={project} />}
       {tab === "archivos" && <ArchivosTab project={project} />}
@@ -218,7 +220,7 @@ function BalancePanel({ project }: { project: Project }) {
 }
 
 // =================== TAB: DESGLOSE ===================
-function DesgloseTab({ project, isFull }: { project: Project; isFull: boolean }) {
+function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; isFull: boolean; canSeeGanancias: boolean }) {
   const { data, updateRow, addRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [showAddItem, setShowAddItem] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ProjectItem | null>(null)
@@ -247,7 +249,7 @@ function DesgloseTab({ project, isFull }: { project: Project; isFull: boolean })
 
   return (
     <div className="space-y-6">
-      {isFull && <BalancePanel project={project} />}
+      {canSeeGanancias && <BalancePanel project={project} />}
       <div className="flex items-center justify-between">
         <Btn variant="soft" size="sm" onClick={() => setShowManageSections(true)}><Settings2 size={14} className="mr-1 inline" />Secciones</Btn>
         <Btn variant="soft" size="sm" onClick={handleExport}><FileSpreadsheet size={14} className="mr-1 inline" />Exportar XLSX</Btn>
@@ -313,7 +315,7 @@ function DesgloseTab({ project, isFull }: { project: Project; isFull: boolean })
       })}
 
       {/* Config financiera */}
-      {isFull && <details className="bg-[#F0EDE4] rounded-xl p-4">
+      {canSeeGanancias && <details className="bg-[#F0EDE4] rounded-xl p-4">
         <summary className="text-sm font-semibold text-[#5F5A46] cursor-pointer">Configuración financiera</summary>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3">
           {[["IVA Cliente %", project.iva_cliente_pct ?? 21, "iva_cliente_pct"], ["IVA Ganancia %", project.iva_ganancia_pct ?? 10.5, "iva_ganancia_pct"],
@@ -379,16 +381,20 @@ function ComparadorTab({ project }: { project: Project }) {
     for (const q of quotes) { const k = `${q.category}::${q.item}`; if (!ig[k]) ig[k] = []; ig[k].push(q) }
     const bestPicks: { item: string; category: string; best: QuoteComparison; mult: number; gan: number }[] = []
     for (const [, group] of Object.entries(ig)) {
-      let best: QuoteComparison | null = null, bm = 1.4, bg = -Infinity
+      let best: QuoteComparison | null = null, bm = 1.4, bg = 0
       for (const q of group) {
-        if (!secHasMult(q.type || "mobiliario")) { if (q.cost < (best?.cost ?? Infinity)) { best = q; bm = 1; bg = 0 } }
-        else { const g = q.cost * 0.6; if (g > bg) { best = q; bm = 1.6; bg = g } }
+        if (!secHasMult(q.type || "mobiliario")) {
+          if (q.cost < (best?.cost ?? Infinity)) { best = q; bm = 1; bg = 0 }
+        } else {
+          // Pick cheapest cost (best deal), default x1.4
+          if (!best || q.cost < best.cost) { best = q; bm = 1.4; bg = q.cost * 0.4 }
+        }
       }
       if (best) bestPicks.push({ item: best.item, category: best.category, best, mult: bm, gan: bg })
     }
     const provs = [...new Set(quotes.map(q => q.provider_name))]
     const byProv = provs.map(p => {
-      let t = 0; for (const [, g] of Object.entries(ig)) { const q = g.find(x => x.provider_name === p); if (q && secHasMult(q.type || "mobiliario")) t += q.cost * 0.6 }
+      let t = 0; for (const [, g] of Object.entries(ig)) { const q = g.find(x => x.provider_name === p); if (q && secHasMult(q.type || "mobiliario")) t += q.cost * 0.4 }
       return { provider: p, ganancia: t }
     }).sort((a, b) => b.ganancia - a.ganancia)
     return { bestPicks, byProv, optTotal: bestPicks.reduce((s, p) => s + p.gan, 0) }

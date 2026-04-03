@@ -9,7 +9,12 @@ import type { PersonalFinanceMovement } from "@/lib/types"
 
 export function PersonalFinance() {
   const { role, data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
-  const [activeTab, setActiveTab] = useState<"paula" | "cami">(role === "cami" ? "cami" : "paula")
+  const isAdmin = role === "paula" || role === "cami"
+  const ownTab = role === "cami" ? "cami" : "paula"
+  const [activeTab, setActiveTab] = useState<"paula" | "cami">(ownTab)
+
+  // Force own tab only - admins can't see each other's finances
+  const effectiveTab = isAdmin ? ownTab : activeTab
   const [period, setPeriod] = useState<PeriodValue>("mes")
   const [customStart, setCustomStart] = useState("")
   const [customEnd, setCustomEnd] = useState("")
@@ -18,7 +23,7 @@ export function PersonalFinance() {
   const [showIncomeDialog, setShowIncomeDialog] = useState(false)
   const [editingItem, setEditingItem] = useState<PersonalFinanceMovement | null>(null)
 
-  const ownerData = data.personalFinanceMovements.filter(m => m.owner === activeTab)
+  const ownerData = data.personalFinanceMovements.filter(m => m.owner === effectiveTab)
   const fixedExpenses = ownerData.filter(m => m.type === "egreso" && m.is_fixed && m.active !== false)
   const variableExpenses = filterByDateRange(
     ownerData.filter(m => m.type === "egreso" && !m.is_fixed), period, customStart, customEnd
@@ -65,7 +70,7 @@ export function PersonalFinance() {
       }))
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(allItems), "Finanzas Personales")
       const today = new Date().toISOString().split("T")[0]
-      XLSX.writeFile(wb, `finanzas_${activeTab}_${today}.xlsx`)
+      XLSX.writeFile(wb, `finanzas_${effectiveTab}_${today}.xlsx`)
     } catch {}
   }
 
@@ -82,14 +87,11 @@ export function PersonalFinance() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tab - solo se muestra la propia */}
       <div className="flex gap-2">
-        {(["paula", "cami"] as const).map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === tab ? "bg-[#5F5A46] text-white" : "bg-[#F0EDE4] text-[#76746A] hover:bg-[#E0DDD0]"
-            }`}>{tab === "paula" ? "Paula" : "Cami"}</button>
-        ))}
+        <button className="px-4 py-2 rounded-lg text-sm font-medium bg-[#5F5A46] text-white">
+          {ownTab === "paula" ? "Paula" : "Cami"}
+        </button>
       </div>
 
       {/* Stats */}
@@ -197,7 +199,7 @@ export function PersonalFinance() {
       {/* Dialogs */}
       {showFixedDialog && (
         <FinanceItemModal
-          item={editingItem} type="fixed" owner={activeTab}
+          item={editingItem} type="fixed" owner={effectiveTab}
           categories={getCategoriesFor("gasto_fijo_personal")}
           onAddCategory={n => addCategory("gasto_fijo_personal", n)} onDeleteCategory={deleteCategory}
           onClose={() => { setShowFixedDialog(false); setEditingItem(null) }}
@@ -206,7 +208,7 @@ export function PersonalFinance() {
       )}
       {showVariableDialog && (
         <FinanceItemModal
-          item={editingItem} type="variable" owner={activeTab}
+          item={editingItem} type="variable" owner={effectiveTab}
           categories={getCategoriesFor("gasto_variable_personal")}
           onAddCategory={n => addCategory("gasto_variable_personal", n)} onDeleteCategory={deleteCategory}
           onClose={() => { setShowVariableDialog(false); setEditingItem(null) }}
@@ -215,7 +217,7 @@ export function PersonalFinance() {
       )}
       {showIncomeDialog && (
         <FinanceItemModal
-          item={editingItem} type="income" owner={activeTab}
+          item={editingItem} type="income" owner={effectiveTab}
           categories={getCategoriesFor("ingreso_personal")}
           onAddCategory={n => addCategory("ingreso_personal", n)} onDeleteCategory={deleteCategory}
           onClose={() => { setShowIncomeDialog(false); setEditingItem(null) }}
