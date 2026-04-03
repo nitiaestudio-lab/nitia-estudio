@@ -1,53 +1,83 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useApp } from "@/lib/app-context"
 import { formatCurrency, formatDate, generateId, today, filterByDateRange } from "@/lib/helpers"
-import { Stat, SecHead, Btn, Empty, Modal, FormInput, HR, PeriodFilter, type PeriodValue, EditableSelect } from "@/components/nitia-ui"
-import { Plus, Pencil, Trash2, FileSpreadsheet, Search } from "lucide-react"
+import { Stat, SecHead, Btn, Empty, Modal, FormInput, HR, PeriodFilter, type PeriodValue, EditableSelect, ConfirmDeleteModal } from "@/components/nitia-ui"
+import { Plus, Pencil, Trash2, FileSpreadsheet, Search, Check, ArrowUpDown, ChevronDown, ChevronUp, X, Filter } from "lucide-react"
 import type { PersonalFinanceMovement } from "@/lib/types"
 
 export function PersonalFinance() {
   const { role, data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const isAdmin = role === "paula" || role === "cami"
   const ownTab = role === "cami" ? "cami" : "paula"
-  const [activeTab, setActiveTab] = useState<"paula" | "cami">(ownTab)
 
-  // Force own tab only - admins can't see each other's finances
-  const effectiveTab = isAdmin ? ownTab : activeTab
+  const effectiveTab = isAdmin ? ownTab : ownTab
   const [period, setPeriod] = useState<PeriodValue>("mes")
   const [customStart, setCustomStart] = useState("")
   const [customEnd, setCustomEnd] = useState("")
-  const [showFixedDialog, setShowFixedDialog] = useState(false)
-  const [showVariableDialog, setShowVariableDialog] = useState(false)
-  const [showIncomeDialog, setShowIncomeDialog] = useState(false)
+  const [showAddDialog, setShowAddDialog] = useState(false)
   const [editingItem, setEditingItem] = useState<PersonalFinanceMovement | null>(null)
+  const [addType, setAddType] = useState<"fixed" | "variable" | "income">("variable")
   const [searchQ, setSearchQ] = useState("")
+  const [filterType, setFilterType] = useState<"all" | "ingreso" | "egreso" | "fijo">("all")
+  const [sortField, setSortField] = useState<"date" | "amount" | "description">("date")
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
   const ownerData = data.personalFinanceMovements.filter(m => m.owner === effectiveTab)
-  const matchesSearch = (m: PersonalFinanceMovement) =>
-    !searchQ || m.description.toLowerCase().includes(searchQ.toLowerCase()) || (m.category || "").toLowerCase().includes(searchQ.toLowerCase())
-  const fixedExpenses = ownerData.filter(m => m.type === "egreso" && m.is_fixed && m.active !== false).filter(matchesSearch)
-  const variableExpenses = filterByDateRange(
-    ownerData.filter(m => m.type === "egreso" && !m.is_fixed), period, customStart, customEnd
-  ).filter(matchesSearch)
-  const incomes = filterByDateRange(
-    ownerData.filter(m => m.type === "ingreso"), period, customStart, customEnd
-  ).filter(matchesSearch)
+
+  // Fixed costs (always show, not filtered by period)
+  const fixedExpenses = ownerData.filter(m => m.type === "egreso" && m.is_fixed && m.active !== false)
+
+  // All movements (variable + incomes) filtered by period
+  const periodFiltered = filterByDateRange(
+    ownerData.filter(m => !m.is_fixed),
+    period, customStart, customEnd
+  )
 
   // Auto-calculate income from projects (50% split)
   const projectIncomes = data.movements
     .filter(m => m.type === "ingreso" && m.auto_split && m.project_id)
     .map(m => ({
+      id: `proj_${m.id}`,
       description: `Proyecto: ${data.projects.find(p => p.id === m.project_id)?.name || "—"}`,
       amount: m.amount * ((m.split_percentage || 50) / 100),
       date: m.date,
+      type: "ingreso" as const,
+      category: "Proyecto",
+      isAuto: true,
     }))
+  const periodProjectIncomes = filterByDateRange(
+    projectIncomes, period, customStart, customEnd
+  )
+
+  // Unified movements list
+  const allMovements = useMemo(() => {
+    let items = [
+      ...periodFiltered.map(m => ({ ...m, isAuto: false })),
+      ...periodProjectIncomes,
+    ]
+    if (searchQ) {
+      const q = searchQ.toLowerCase()
+      items = items.filter(m => m.description.toLowerCase().includes(q) || (m.category || "").toLowerCase().includes(q))
+    }
+    if (filterType === "ingreso") items = items.filter(m => m.type === "ingreso")
+    else if (filterType === "egreso") items = items.filter(m => m.type === "egreso")
+    // sort
+    items.sort((a, b) => {
+      let cmp = 0
+      if (sortField === "date") cmp = new Date(a.date).getTime() - new Date(b.date).getTime()
+      else if (sortField === "amount") cmp = a.amount - b.amount
+      else cmp = a.description.localeCompare(b.description)
+      return sortDir === "asc" ? cmp : -cmp
+    })
+    return items
+  }, [periodFiltered, periodProjectIncomes, searchQ, filterType, sortField, sortDir])
 
   const totalFixed = fixedExpenses.reduce((s, m) => s + m.amount, 0)
-  const totalVariable = variableExpenses.reduce((s, m) => s + m.amount, 0)
-  const totalIncome = incomes.reduce((s, m) => s + m.amount, 0)
-  const totalProjectIncome = projectIncomes.reduce((s, m) => s + m.amount, 0)
+  const totalVariable = periodFiltered.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+  const totalIncome = periodFiltered.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
+  const totalProjectIncome = periodProjectIncomes.reduce((s, m) => s + m.amount, 0)
   const balance = totalIncome + totalProjectIncome - totalFixed - totalVariable
 
   const saveItem = async (item: PersonalFinanceMovement) => {
@@ -56,7 +86,7 @@ export function PersonalFinance() {
     } else {
       await addRow("personal_finance_movements", item, "personalFinanceMovements")
     }
-    setShowFixedDialog(false); setShowVariableDialog(false); setShowIncomeDialog(false); setEditingItem(null)
+    setShowAddDialog(false); setEditingItem(null)
   }
 
   const deleteItem = async (id: string) => {
@@ -65,177 +95,290 @@ export function PersonalFinance() {
     }
   }
 
+  const toggleSort = (field: "date" | "amount" | "description") => {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc")
+    else { setSortField(field); setSortDir(field === "amount" ? "desc" : "asc") }
+  }
+
+  const SortHeader = ({ field, label, className }: { field: "date" | "amount" | "description"; label: string; className?: string }) => (
+    <th className={`px-3 py-2.5 text-left cursor-pointer hover:bg-[#E0DDD0]/50 select-none ${className || ""}`} onClick={() => toggleSort(field)}>
+      <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase">
+        {label}
+        {sortField === field ? (sortDir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ArrowUpDown size={10} className="opacity-30" />}
+      </div>
+    </th>
+  )
+
+  // Fixed cost payment tracking
+  const currentMonth = new Date().getMonth()
+  const currentYear = new Date().getFullYear()
+  const isFixedPaid = (fixedId: string) => {
+    return data.fixedCostPayments?.some(p =>
+      p.fixed_cost_id === fixedId && p.month === currentMonth && p.year === currentYear && p.paid
+    ) || false
+  }
+  const getFixedPaymentDate = (fixedId: string) => {
+    const payment = data.fixedCostPayments?.find(p =>
+      p.fixed_cost_id === fixedId && p.month === currentMonth && p.year === currentYear && p.paid
+    )
+    return payment?.paid_date || null
+  }
+
+  const toggleFixedPaid = async (item: PersonalFinanceMovement) => {
+    const paid = isFixedPaid(item.id)
+    if (paid) {
+      // Remove payment record
+      const payment = data.fixedCostPayments?.find(p =>
+        p.fixed_cost_id === item.id && p.month === currentMonth && p.year === currentYear
+      )
+      if (payment) await deleteRow("fixed_cost_payments", payment.id, "fixedCostPayments")
+    } else {
+      // Create payment record
+      await addRow("fixed_cost_payments", {
+        id: generateId(),
+        fixed_cost_id: item.id,
+        month: currentMonth,
+        year: currentYear,
+        paid: true,
+        paid_date: today(),
+        paid_amount: item.amount,
+      }, "fixedCostPayments")
+    }
+  }
+
+  const [editingPayDate, setEditingPayDate] = useState<string | null>(null)
+  const [payDateValue, setPayDateValue] = useState("")
+
+  const savePayDate = async (fixedId: string) => {
+    const payment = data.fixedCostPayments?.find(p =>
+      p.fixed_cost_id === fixedId && p.month === currentMonth && p.year === currentYear
+    )
+    if (payment) {
+      await updateRow("fixed_cost_payments", payment.id, { paid_date: payDateValue }, "fixedCostPayments")
+    }
+    setEditingPayDate(null)
+  }
+
   const handleExportXLSX = async () => {
     try {
       const XLSX = await import("xlsx")
       const wb = XLSX.utils.book_new()
-      const allItems = [...fixedExpenses, ...variableExpenses, ...incomes].map(m => ({
+      const allItems = [...fixedExpenses, ...periodFiltered].map(m => ({
         Fecha: m.date, Descripción: m.description, Tipo: m.type === "ingreso" ? "Ingreso" : "Egreso",
         Categoría: m.category || "", Monto: m.amount, Fijo: m.is_fixed ? "Sí" : "No",
       }))
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(allItems), "Finanzas Personales")
-      const today = new Date().toISOString().split("T")[0]
-      XLSX.writeFile(wb, `finanzas_${effectiveTab}_${today}.xlsx`)
+      const td = new Date().toISOString().split("T")[0]
+      XLSX.writeFile(wb, `finanzas_${effectiveTab}_${td}.xlsx`)
     } catch {}
   }
 
+  const paidCount = fixedExpenses.filter(f => isFixedPaid(f.id)).length
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
   return (
-    <div className="p-6 lg:p-8 space-y-8">
+    <div className="p-6 lg:p-8 space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl font-light text-[#1C1A12]">Finanzas Personales</h1>
-          <p className="text-sm text-[#76746A] mt-1">Control de gastos e ingresos personales</p>
+          <p className="text-sm text-[#76746A] mt-1">{ownTab === "paula" ? "Paula" : "Cami"} — Control de gastos e ingresos</p>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Buscar movimiento..."
-              value={searchQ}
-              onChange={e => setSearchQ(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-sm border border-border rounded-lg bg-card focus:outline-none focus:ring-1 focus:ring-[#5F5A46] w-full sm:w-52"
-            />
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
           <Btn variant="soft" size="sm" onClick={handleExportXLSX}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
           <PeriodFilter value={period} onChange={setPeriod} onCustomRange={(s,e) => { setCustomStart(s); setCustomEnd(e) }} />
         </div>
       </div>
 
-      {/* Tab - solo se muestra la propia */}
-      <div className="flex gap-2">
-        <button className="px-4 py-2 rounded-lg text-sm font-medium bg-[#5F5A46] text-white">
-          {ownTab === "paula" ? "Paula" : "Cami"}
-        </button>
-      </div>
-
       {/* Stats */}
-      <div className="grid md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Ingresos" value={formatCurrency(totalIncome + totalProjectIncome)} />
         <Stat label="Gastos Fijos" value={formatCurrency(totalFixed)} />
         <Stat label="Gastos Variables" value={formatCurrency(totalVariable)} />
         <Stat label="Balance" value={formatCurrency(balance)} highlight={balance >= 0} />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Gastos Fijos */}
-        <div className="bg-card border border-border rounded-xl p-6">
-          <SecHead n="1" title="Gastos Fijos Mensuales" right={
-            <Btn size="sm" onClick={() => { setEditingItem(null); setShowFixedDialog(true) }}>
-              <Plus size={14} className="mr-1 inline" />Agregar
-            </Btn>
-          } />
-          {fixedExpenses.length > 0 ? fixedExpenses.map(item => (
-            <div key={item.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 group">
-              <div>
-                <span className="text-sm">{item.description}</span>
-                <span className="text-xs text-muted-foreground ml-2">{item.category}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{formatCurrency(item.amount)}</span>
-                <button onClick={() => { setEditingItem(item); setShowFixedDialog(true) }}
-                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
-                <button onClick={() => deleteItem(item.id)}
-                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-red-50 text-red-600 rounded"><Trash2 size={12} /></button>
-              </div>
-            </div>
-          )) : <Empty title="Sin gastos fijos" />}
-          <HR />
-          <div className="flex justify-between"><span className="text-xs font-semibold uppercase text-muted-foreground">Total Mensual</span>
-            <span className="text-sm font-semibold">{formatCurrency(totalFixed)}</span></div>
-        </div>
-
-        {/* Gastos Variables */}
-        <div className="bg-card border border-border rounded-xl p-6">
-          <SecHead n="2" title="Gastos Variables" right={
-            <Btn size="sm" onClick={() => { setEditingItem(null); setShowVariableDialog(true) }}>
-              <Plus size={14} className="mr-1 inline" />Agregar
-            </Btn>
-          } />
-          {variableExpenses.length > 0 ? variableExpenses.map(item => (
-            <div key={item.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 group">
-              <div>
-                <span className="text-sm">{item.description}</span>
-                <span className="text-xs text-muted-foreground ml-2">{formatDate(item.date)} - {item.category}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{formatCurrency(item.amount)}</span>
-                <button onClick={() => { setEditingItem(item); setShowVariableDialog(true) }}
-                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
-                <button onClick={() => deleteItem(item.id)}
-                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-red-50 text-red-600 rounded"><Trash2 size={12} /></button>
-              </div>
-            </div>
-          )) : <Empty title="Sin gastos variables" />}
-          <HR />
-          <div className="flex justify-between"><span className="text-xs font-semibold uppercase text-muted-foreground">Total</span>
-            <span className="text-sm font-semibold">{formatCurrency(totalVariable)}</span></div>
-        </div>
-      </div>
-
-      {/* Ingresos */}
-      <div className="bg-card border border-border rounded-xl p-6">
-        <SecHead n="3" title="Ingresos" right={
-          <Btn size="sm" onClick={() => { setEditingItem(null); setShowIncomeDialog(true) }}>
+      {/* ============ COSTOS FIJOS - Cards checkables ============ */}
+      <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-sm text-foreground">Gastos Fijos Mensuales</h3>
+            <p className="text-xs text-muted-foreground">{monthNames[currentMonth]} {currentYear} — {paidCount}/{fixedExpenses.length} pagados</p>
+          </div>
+          <Btn size="sm" onClick={() => { setEditingItem(null); setAddType("fixed"); setShowAddDialog(true) }}>
             <Plus size={14} className="mr-1 inline" />Agregar
           </Btn>
-        } />
-        {/* Auto from projects */}
-        {projectIncomes.length > 0 && (
+        </div>
+
+        {/* Progress bar */}
+        {fixedExpenses.length > 0 && (
           <div className="mb-4">
-            <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Desde Proyectos (automático)</p>
-            {projectIncomes.map((pi, i) => (
-              <div key={i} className="flex justify-between py-1.5 text-sm">
-                <span className="text-green-700">{pi.description}</span>
-                <span className="font-medium text-green-700">{formatCurrency(pi.amount)}</span>
-              </div>
-            ))}
-            <HR />
+            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${fixedExpenses.length > 0 ? (paidCount / fixedExpenses.length) * 100 : 0}%` }} />
+            </div>
           </div>
         )}
-        {/* Manual incomes */}
-        {incomes.length > 0 ? incomes.map(item => (
-          <div key={item.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 group">
-            <div>
-              <span className="text-sm">{item.description}</span>
-              <span className="text-xs text-muted-foreground ml-2">{formatDate(item.date)}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-green-700">{formatCurrency(item.amount)}</span>
-              <button onClick={() => { setEditingItem(item); setShowIncomeDialog(true) }}
-                className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
-              <button onClick={() => deleteItem(item.id)}
-                className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-red-50 text-red-600 rounded"><Trash2 size={12} /></button>
-            </div>
-          </div>
-        )) : !projectIncomes.length && <Empty title="Sin ingresos registrados" />}
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {fixedExpenses.map(item => {
+            const paid = isFixedPaid(item.id)
+            const payDate = getFixedPaymentDate(item.id)
+            return (
+              <div key={item.id} className={`relative border rounded-xl p-4 transition-all group ${paid ? "bg-green-50 border-green-200" : "bg-white border-border hover:border-[#5F5A46]"}`}>
+                {/* Checkbox */}
+                <div className="flex items-start gap-3">
+                  <button onClick={() => toggleFixedPaid(item)}
+                    className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${paid ? "bg-green-600 border-green-600 text-white" : "border-[#E0DDD0] hover:border-[#5F5A46]"}`}>
+                    {paid && <Check size={12} />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${paid ? "line-through text-muted-foreground" : ""}`}>{item.description}</p>
+                    <p className="text-xs text-muted-foreground">{item.category}</p>
+                    <p className={`text-base font-bold mt-1 ${paid ? "text-green-600" : "text-foreground"}`}>{formatCurrency(item.amount)}</p>
+                    {/* Fecha de pago */}
+                    {paid && (
+                      <div className="mt-1">
+                        {editingPayDate === item.id ? (
+                          <div className="flex items-center gap-1">
+                            <input type="date" value={payDateValue} onChange={e => setPayDateValue(e.target.value)}
+                              className="text-xs px-1.5 py-0.5 border border-green-300 rounded bg-white" autoFocus
+                              onKeyDown={e => { if (e.key === "Enter") savePayDate(item.id); if (e.key === "Escape") setEditingPayDate(null) }} />
+                            <button onClick={() => savePayDate(item.id)} className="text-green-600 p-0.5"><Check size={12} /></button>
+                            <button onClick={() => setEditingPayDate(null)} className="text-red-500 p-0.5"><X size={12} /></button>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setEditingPayDate(item.id); setPayDateValue(payDate || today()) }}
+                            className="text-xs text-green-600 hover:underline">
+                            Pagado: {payDate ? formatDate(payDate) : "hoy"} ✎
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Edit/Delete */}
+                <div className="absolute top-2 right-2 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                  <button onClick={() => { setEditingItem(item); setAddType("fixed"); setShowAddDialog(true) }}
+                    className="p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
+                  <button onClick={() => deleteItem(item.id)}
+                    className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
+                </div>
+              </div>
+            )
+          })}
+          {fixedExpenses.length === 0 && <div className="col-span-full"><Empty title="Sin gastos fijos" description="Agregá tus gastos fijos mensuales" /></div>}
+        </div>
+        <HR />
+        <div className="flex justify-between text-sm">
+          <span className="font-semibold text-muted-foreground">Total mensual</span>
+          <span className="font-bold">{formatCurrency(totalFixed)}</span>
+        </div>
       </div>
 
-      {/* Dialogs */}
-      {showFixedDialog && (
+      {/* ============ MOVIMIENTOS - Tabla tipo Excel ============ */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar movimientos..."
+              className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" /></div>
+          <div className="flex flex-wrap gap-2">
+            <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+              {(["all", "ingreso", "egreso"] as const).map(t => (
+                <button key={t} onClick={() => setFilterType(t)} className={`px-3 py-1.5 text-xs font-medium ${filterType === t ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A] hover:bg-[#F0EDE4]"}`}>
+                  {t === "all" ? "Todos" : t === "ingreso" ? "Ingresos" : "Egresos"}
+                </button>
+              ))}
+            </div>
+            <Btn size="sm" variant="soft" onClick={() => { setEditingItem(null); setAddType("variable"); setShowAddDialog(true) }}>
+              <Plus size={14} className="mr-1 inline" />Gasto
+            </Btn>
+            <Btn size="sm" onClick={() => { setEditingItem(null); setAddType("income"); setShowAddDialog(true) }}>
+              <Plus size={14} className="mr-1 inline" />Ingreso
+            </Btn>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          {allMovements.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-[#F0EDE4]">
+                  <tr>
+                    <SortHeader field="date" label="Fecha" className="w-28" />
+                    <SortHeader field="description" label="Descripción" />
+                    <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground uppercase hidden sm:table-cell">Categoría</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground uppercase w-20">Tipo</th>
+                    <SortHeader field="amount" label="Monto" className="w-32" />
+                    <th className="px-3 py-2.5 w-16"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {allMovements.map(mov => (
+                    <tr key={mov.id} className={`group hover:bg-[#FAFAF9] transition-colors ${mov.isAuto ? "bg-green-50/30" : ""}`}>
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{formatDate(mov.date)}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={`font-medium ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>{mov.description}</span>
+                        {mov.isAuto && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 bg-green-100 text-green-600 rounded">auto</span>}
+                      </td>
+                      <td className="px-3 py-2.5 hidden sm:table-cell">
+                        {mov.category && <span className="text-xs px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${mov.type === "ingreso" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                          {mov.type === "ingreso" ? "Ingreso" : "Egreso"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className={`font-semibold ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>
+                          {mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {!mov.isAuto && (
+                          <div className="flex gap-1 justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                            <button onClick={() => {
+                              const orig = ownerData.find(m => m.id === mov.id)
+                              if (orig) {
+                                setEditingItem(orig)
+                                setAddType(orig.type === "ingreso" ? "income" : "variable")
+                                setShowAddDialog(true)
+                              }
+                            }} className="p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
+                            <button onClick={() => deleteItem(mov.id)}
+                              className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[#F0EDE4] font-semibold text-sm">
+                    <td className="px-3 py-3" colSpan={4}>
+                      <span className="text-muted-foreground">{allMovements.length} movimiento{allMovements.length !== 1 ? "s" : ""}</span>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <span className="text-green-700">+{formatCurrency(allMovements.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0))}</span>
+                      <span className="mx-1 text-muted-foreground">/</span>
+                      <span className="text-red-700">-{formatCurrency(allMovements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0))}</span>
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : <Empty title="Sin movimientos" description="Agregá gastos o ingresos" />}
+        </div>
+      </div>
+
+      {/* Add/Edit Dialog */}
+      {showAddDialog && (
         <FinanceItemModal
-          item={editingItem} type="fixed" owner={effectiveTab}
-          categories={getCategoriesFor("gasto_fijo_personal")}
-          onAddCategory={n => addCategory("gasto_fijo_personal", n)} onDeleteCategory={deleteCategory}
-          onClose={() => { setShowFixedDialog(false); setEditingItem(null) }}
-          onSave={saveItem}
-        />
-      )}
-      {showVariableDialog && (
-        <FinanceItemModal
-          item={editingItem} type="variable" owner={effectiveTab}
-          categories={getCategoriesFor("gasto_variable_personal")}
-          onAddCategory={n => addCategory("gasto_variable_personal", n)} onDeleteCategory={deleteCategory}
-          onClose={() => { setShowVariableDialog(false); setEditingItem(null) }}
-          onSave={saveItem}
-        />
-      )}
-      {showIncomeDialog && (
-        <FinanceItemModal
-          item={editingItem} type="income" owner={effectiveTab}
-          categories={getCategoriesFor("ingreso_personal")}
-          onAddCategory={n => addCategory("ingreso_personal", n)} onDeleteCategory={deleteCategory}
-          onClose={() => { setShowIncomeDialog(false); setEditingItem(null) }}
+          item={editingItem} type={addType} owner={effectiveTab}
+          categories={getCategoriesFor(addType === "fixed" ? "gasto_fijo_personal" : addType === "variable" ? "gasto_variable_personal" : "ingreso_personal")}
+          onAddCategory={n => addCategory(addType === "fixed" ? "gasto_fijo_personal" : addType === "variable" ? "gasto_variable_personal" : "ingreso_personal", n)}
+          onDeleteCategory={deleteCategory}
+          onClose={() => { setShowAddDialog(false); setEditingItem(null) }}
           onSave={saveItem}
         />
       )}
@@ -271,7 +414,7 @@ function FinanceItemModal({ item, type, owner, categories, onAddCategory, onDele
         </div>
         <EditableSelect label="Categoría" value={category} onChange={setCategory}
           options={categories.map(c => ({ value: c.name, label: c.name }))} onAddNew={onAddCategory} onDelete={onDeleteCategory} />
-        {type === "income" && <FormInput label="Nota" value={note} onChange={setNote} />}
+        <FormInput label="Nota (opcional)" value={note} onChange={setNote} />
         <div className="flex justify-end gap-3 pt-4">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={!description || !amount}>{item ? "Guardar" : "Agregar"}</Btn>

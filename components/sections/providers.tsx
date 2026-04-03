@@ -7,6 +7,11 @@ import { SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect, FormTextarea, E
 import type { Provider, ProviderDocument } from "@/lib/types"
 import { Plus, Phone, Mail, ArrowLeft, Trash2, Pencil, Upload, FileText, Download, Search, FolderOpen, Eye, FileSpreadsheet, ExternalLink, MapPin } from "lucide-react"
 
+function formatAmount(m: { amount: number; medio_pago?: string | null }) {
+  if (m.medio_pago === "USD") return `U$D ${new Intl.NumberFormat("es-AR").format(m.amount)}`
+  return formatCurrency(m.amount)
+}
+
 export function Providers() {
   const { data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -328,8 +333,9 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                 {mov.sena_cliente_pct && <span>Seña cli: {mov.sena_cliente_pct}%</span>}
               </div>
             </div>
-            <span className={`font-medium shrink-0 ${mov.type === "egreso" ? "text-red-600" : "text-green-600"}`}>
-              {mov.type === "egreso" ? "-" : "+"}{formatCurrency(mov.amount)}
+            <span className={`font-medium shrink-0 flex items-center ${mov.type === "egreso" ? "text-red-600" : "text-green-600"}`}>
+              {mov.type === "egreso" ? "-" : "+"}{formatAmount(mov)}
+              {mov.medio_pago === "USD" && <span className="ml-1 text-[10px] px-1 py-0.5 bg-blue-100 text-blue-700 rounded">USD</span>}
             </span>
           </div>
         )) : <Empty title="Sin pagos registrados" />}
