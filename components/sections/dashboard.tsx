@@ -38,7 +38,9 @@ export function Dashboard() {
   const personalIncome = personalMovements.filter(m => m.type === "ingreso" && m.date?.startsWith(monthPrefix)).reduce((s, m) => s + m.amount, 0)
   const personalBalance = personalIncome - personalFixed - personalVariable
 
-  const recentMovements = [...data.movements].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10)
+  const recentMovements = [...data.movements]
+    .filter(m => !m.description?.startsWith("[Gasto fijo]"))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10)
 
   return (
     <div className="p-6 lg:p-8 space-y-8">
