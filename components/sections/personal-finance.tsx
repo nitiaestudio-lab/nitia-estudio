@@ -124,41 +124,48 @@ export function PersonalFinance() {
     return payment?.paid_date || null
   }
 
-  const toggleFixedPaid = async (item: PersonalFinanceMovement) => {
-    const paid = isFixedPaid(item.id)
-    if (paid) {
-      const payment = data.fixedCostPayments?.find(p =>
-        p.fixed_cost_id === item.id && p.month === currentMonth && p.year === currentYear
-      )
-      if (payment) {
-        // Remove the auto-generated movement if exists
-        if (payment.movement_id) {
-          const mov = data.movements.find(m => m.id === payment.movement_id)
-          if (mov) await deleteMovement(payment.movement_id)
-        }
-        await deleteRow("fixed_cost_payments", payment.id, "fixedCostPayments")
+  // Account picker for fixed cost payment
+  const [payingFixedItem, setPayingFixedItem] = useState<PersonalFinanceMovement | null>(null)
+  const [payFixedAccountId, setPayFixedAccountId] = useState("")
+
+  const unpayFixed = async (item: PersonalFinanceMovement) => {
+    const payment = data.fixedCostPayments?.find(p =>
+      p.fixed_cost_id === item.id && p.month === currentMonth && p.year === currentYear
+    )
+    if (payment) {
+      // Remove linked movement if exists
+      if (payment.movement_id) {
+        try { await deleteMovement(payment.movement_id) } catch {}
       }
-    } else {
-      const movId = generateId()
-      // Create movement for this fixed cost payment
-      await addMovement({
-        id: movId, date: today(), description: `[Gasto fijo] ${item.description}`,
-        amount: item.amount, type: "egreso" as const,
-        category: item.category || "Gasto fijo", fixed_cost_id: item.id,
-        created_by: effectiveTab,
-      } as any)
-      // Create payment record linked to the movement
-      await addRow("fixed_cost_payments", {
-        id: generateId(),
-        fixed_cost_id: item.id,
-        movement_id: movId,
-        month: currentMonth,
-        year: currentYear,
-        paid: true,
-        paid_date: today(),
-        paid_amount: item.amount,
-      }, "fixedCostPayments")
+      await deleteRow("fixed_cost_payments", payment.id, "fixedCostPayments")
     }
+  }
+
+  const confirmPayFixed = async (item: PersonalFinanceMovement, accountId: string) => {
+    // Check if already paid this month (prevent duplicates)
+    if (isFixedPaid(item.id)) return
+    const movId = generateId()
+    // Create movement (impacts account balance)
+    await addMovement({
+      id: movId, date: today(), description: `[Gasto fijo] ${item.description}`,
+      amount: item.amount, type: "egreso" as const,
+      category: item.category || "Gasto fijo", fixed_cost_id: item.id,
+      account_id: accountId || null,
+      created_by: effectiveTab,
+    } as any)
+    // Create payment record linked to movement
+    await addRow("fixed_cost_payments", {
+      id: generateId(),
+      fixed_cost_id: item.id,
+      movement_id: movId,
+      month: currentMonth,
+      year: currentYear,
+      paid: true,
+      paid_date: today(),
+      paid_amount: item.amount,
+    }, "fixedCostPayments")
+    setPayingFixedItem(null)
+    setPayFixedAccountId("")
   }
 
   const [editingPayDate, setEditingPayDate] = useState<string | null>(null)
@@ -256,7 +263,10 @@ export function PersonalFinance() {
               <div key={item.id} className={`relative border rounded-xl p-4 transition-all group ${paid ? "bg-green-50 border-green-200" : "bg-white border-border hover:border-[#5F5A46]"}`}>
                 {/* Checkbox */}
                 <div className="flex items-start gap-3">
-                  <button onClick={() => toggleFixedPaid(item)}
+                  <button onClick={() => {
+                    if (paid) { unpayFixed(item) }
+                    else { setPayingFixedItem(item); setPayFixedAccountId(data.accounts[0]?.id || "") }
+                  }}
                     className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${paid ? "bg-green-600 border-green-600 text-white" : "border-[#E0DDD0] hover:border-[#5F5A46]"}`}>
                     {paid && <Check size={12} />}
                   </button>
@@ -264,6 +274,13 @@ export function PersonalFinance() {
                     <p className={`text-sm font-medium ${paid ? "line-through text-muted-foreground" : ""}`}>{item.description}</p>
                     <p className="text-xs text-muted-foreground">{item.category}</p>
                     <p className={`text-base font-bold mt-1 ${paid ? "text-green-600" : "text-foreground"}`}>{formatCurrency(item.amount)}</p>
+                    {/* Cuenta usada */}
+                    {paid && (() => {
+                      const payment = data.fixedCostPayments?.find(p => p.fixed_cost_id === item.id && p.month === currentMonth && p.year === currentYear && p.paid)
+                      const mov = payment?.movement_id ? data.movements.find(m => m.id === payment.movement_id) : null
+                      const acc = mov?.account_id ? data.accounts.find(a => a.id === mov.account_id) : null
+                      return acc ? <p className="text-[10px] text-green-600 mt-0.5">Cuenta: {acc.name}</p> : null
+                    })()}
                     {/* Fecha de pago */}
                     {paid && (
                       <div className="mt-1">
@@ -303,6 +320,27 @@ export function PersonalFinance() {
           <span className="font-bold">{formatCurrency(totalFixed)}</span>
         </div>
       </div>
+
+      {/* Account picker popup for fixed cost payment */}
+      {payingFixedItem && (
+        <Modal isOpen={true} title={`Pagar: ${payingFixedItem.description}`} onClose={() => setPayingFixedItem(null)}>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Monto: <strong className="text-foreground">{formatCurrency(payingFixedItem.amount)}</strong></p>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">¿Con qué cuenta se paga?</label>
+              <select value={payFixedAccountId} onChange={e => setPayFixedAccountId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white">
+                <option value="">Sin cuenta específica</option>
+                {data.accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>)}
+              </select>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Btn variant="ghost" onClick={() => setPayingFixedItem(null)}>Cancelar</Btn>
+              <Btn onClick={() => confirmPayFixed(payingFixedItem, payFixedAccountId)}>Confirmar Pago</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* ============ MOVIMIENTOS - Tabla tipo Excel ============ */}
       <div className="space-y-3">
