@@ -59,6 +59,7 @@ export interface ProjectItem {
   cost: number
   client_price: number
   multiplier: number
+  currency?: 'ARS' | 'USD'
   category?: string | null
   provider_id?: string | null
   paid: boolean
@@ -210,6 +211,7 @@ export interface QuoteComparison {
   ganancia_x16: number
   selected: boolean
   selected_multiplier?: number | null
+  currency?: 'ARS' | 'USD'
 }
 
 export interface AppData {

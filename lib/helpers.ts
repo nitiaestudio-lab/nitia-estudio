@@ -38,7 +38,50 @@ export const quoteGanancia = (q: QuoteComparison): number => {
   return quoteClientPrice(q) - q.cost
 }
 
-// Total calculations including items + selected quotes
+// Currency-aware type
+export type CurrencyAmount = { ars: number; usd: number }
+
+const isUSDItem = (i: { currency?: string }) => i.currency === "USD"
+const isARSItem = (i: { currency?: string }) => i.currency !== "USD"
+
+// Currency-aware totals
+export const projectCostByCurrency = (project: Project, items: ProjectItem[], quotes: QuoteComparison[] = []): CurrencyAmount => {
+  const pItems = items.filter(i => i.project_id === project.id)
+  const pQuotes = getSelectedQuotes(quotes, project.id)
+  return {
+    ars: (project.honorarios_cost ?? 0) + pItems.filter(isARSItem).reduce((s, i) => s + i.cost, 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + q.cost, 0),
+    usd: pItems.filter(isUSDItem).reduce((s, i) => s + i.cost, 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + q.cost, 0),
+  }
+}
+
+export const projectClientPriceByCurrency = (project: Project, items: ProjectItem[], quotes: QuoteComparison[] = []): CurrencyAmount => {
+  const pItems = items.filter(i => i.project_id === project.id)
+  const pQuotes = getSelectedQuotes(quotes, project.id)
+  return {
+    ars: (project.honorarios_client_price ?? 0) + pItems.filter(isARSItem).reduce((s, i) => s + i.client_price, 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + quoteClientPrice(q), 0),
+    usd: pItems.filter(isUSDItem).reduce((s, i) => s + i.client_price, 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + quoteClientPrice(q), 0),
+  }
+}
+
+export const projectGananciaByCurrency = (project: Project, items: ProjectItem[], quotes: QuoteComparison[] = []): CurrencyAmount => {
+  const pItems = items.filter(i => i.project_id === project.id)
+  const pQuotes = getSelectedQuotes(quotes, project.id)
+  const gan = (i: ProjectItem) => i.type === "material" ? 0 : i.client_price - i.cost
+  return {
+    ars: ((project.honorarios_client_price ?? 0) - (project.honorarios_cost ?? 0)) + pItems.filter(isARSItem).reduce((s, i) => s + gan(i), 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + quoteGanancia(q), 0),
+    usd: pItems.filter(isUSDItem).reduce((s, i) => s + gan(i), 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + quoteGanancia(q), 0),
+  }
+}
+
+// Format helper for currency amounts
+export const formatUSD = (n: number): string => `U$D ${new Intl.NumberFormat("es-AR").format(n)}`
+export const formatCurrencyAmount = (ca: CurrencyAmount): string => {
+  const parts = [formatCurrency(ca.ars)]
+  if (ca.usd > 0) parts.push(formatUSD(ca.usd))
+  return parts.join(" + ")
+}
+
+// Legacy functions (return combined ARS total for backward compat)
 export const projectTotalCost = (project: Project, items: ProjectItem[], quotes: QuoteComparison[] = []): number => {
   const honorarios = project.honorarios_cost ?? 0
   const itemsTotal = items.filter(i => i.project_id === project.id).reduce((s, i) => s + i.cost, 0)

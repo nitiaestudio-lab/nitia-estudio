@@ -8,6 +8,8 @@ import {
   projectIncome, projectExpenses, filterByDateRange,
   calcIVACliente, calcIVAGanancia, calcSenaProveedor, calcSenaCliente,
   calcGananciaIndividual, quoteClientPrice, quoteGanancia, getSelectedQuotes,
+  projectCostByCurrency, projectClientPriceByCurrency, projectGananciaByCurrency,
+  formatUSD, type CurrencyAmount,
 } from "@/lib/helpers"
 import {
   exportProjectDesgloseXLSX, exportProjectMovementsXLSX, exportComparadorXLSX,
@@ -199,16 +201,19 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
 // =================== BALANCE PANEL ===================
 function BalancePanel({ project }: { project: Project }) {
   const { data } = useApp()
-  const totalCost = projectTotalCost(project, data.projectItems, data.quoteComparisons)
-  const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
-  const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
+  // Currency-aware budget totals
+  const costBC = projectCostByCurrency(project, data.projectItems, data.quoteComparisons)
+  const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
+  const ganBC = projectGananciaByCurrency(project, data.projectItems, data.quoteComparisons)
+  // Legacy totals (ARS-only for core calculations)
+  const totalCost = costBC.ars
+  const totalClient = clientBC.ars
+  const totalGanancia = ganBC.ars
   const projMovs = data.movements.filter(m => m.project_id === project.id)
-  const income = projMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
-  const expenses = projMovs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
   const incomeUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
-  const incomeARS = income - incomeUSD
+  const incomeARS = projMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
   const expensesUSD = projMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
-  const expensesARS = expenses - expensesUSD
+  const expensesARS = projMovs.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
   const pc = project.partner_count ?? 2
   const ivaCli = project.iva_cliente_pct ?? 21
   const ivaGan = project.iva_ganancia_pct ?? 10.5
@@ -267,7 +272,9 @@ function BalancePanel({ project }: { project: Project }) {
         </div>
         <Bar value={incomeARS} max={totalConIVA} color={incomeARS >= totalConIVA ? "green" : "amber"} />
         <div className="grid grid-cols-2 gap-2 text-sm">
-          <div><span className="text-muted-foreground">Total c/IVA:</span> <span className="font-medium">{formatCurrency(totalConIVA)}</span></div>
+          <div><span className="text-muted-foreground">Total c/IVA:</span> <span className="font-medium">{formatCurrency(totalConIVA)}</span>
+            {clientBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(clientBC.usd)}</span>}
+          </div>
           <div><span className="text-muted-foreground">Cobrado:</span> <span className="font-medium text-green-600">{formatCurrency(incomeARS)}</span>
             {incomeUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(incomeUSD)}</span>}
           </div>
@@ -290,7 +297,9 @@ function BalancePanel({ project }: { project: Project }) {
         </div>
         <Bar value={expensesARS} max={totalCost} color={expensesARS >= totalCost ? "green" : "red"} />
         <div className="grid grid-cols-2 gap-2 text-sm">
-          <div><span className="text-muted-foreground">Total costo:</span> <span className="font-medium">{formatCurrency(totalCost)}</span></div>
+          <div><span className="text-muted-foreground">Total costo:</span> <span className="font-medium">{formatCurrency(totalCost)}</span>
+            {costBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(costBC.usd)}</span>}
+          </div>
           <div><span className="text-muted-foreground">Pagado:</span> <span className="font-medium text-red-600">{formatCurrency(expensesARS)}</span>
             {expensesUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(expensesUSD)}</span>}
           </div>
@@ -309,7 +318,7 @@ function BalancePanel({ project }: { project: Project }) {
       <div className="bg-[#295E29] text-white rounded-xl p-4 space-y-2 lg:col-span-2">
         <h4 className="font-semibold text-sm text-white/80">Ganancia Neta</h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div><p className="text-xs text-white/60">Bruta</p><p className="text-lg font-bold">{formatCurrency(totalGanancia)}</p></div>
+          <div><p className="text-xs text-white/60">Bruta</p><p className="text-lg font-bold">{formatCurrency(totalGanancia)}</p>{ganBC.usd > 0 && <p className="text-[10px] text-white/70">+ {formatUSD(ganBC.usd)}</p>}</div>
           <div><p className="text-xs text-white/60">IVA {ivaGan}% (RI)</p><p className="text-lg font-bold">-{formatCurrency(ivaGanancia)}</p></div>
           <div><p className="text-xs text-white/60">Neta</p><p className="text-xl font-bold">{formatCurrency(gananciaNeta)}</p></div>
           <div><p className="text-xs text-white/60">Por socia (÷{pc})</p><p className="text-xl font-bold">{formatCurrency(gananciaIndiv)}</p></div>
@@ -457,11 +466,12 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                   <td className="py-2 pr-2"><div className="flex items-center gap-1.5">
                     {item.paid && <Check size={12} className="text-green-600 shrink-0" />}
                     <span className={`${item.paid ? "line-through text-muted-foreground" : ""} truncate max-w-[200px]`}>{item.description}</span>
+                    {item.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded shrink-0">USD</span>}
                   </div></td>
-                  <td className="text-right py-2 px-2">{formatCurrency(item.cost)}</td>
+                  <td className="text-right py-2 px-2">{item.currency === "USD" ? formatUSD(item.cost) : formatCurrency(item.cost)}</td>
                   {hm && <td className="text-right py-2 px-2 hidden sm:table-cell text-muted-foreground">x{item.multiplier}</td>}
-                  <td className="text-right py-2 px-2 font-medium">{formatCurrency(item.client_price)}</td>
-                  {hm && <td className="text-right py-2 px-2 text-green-600 hidden sm:table-cell">{formatCurrency(item.client_price - item.cost)}</td>}
+                  <td className="text-right py-2 px-2 font-medium">{item.currency === "USD" ? formatUSD(item.client_price) : formatCurrency(item.client_price)}</td>
+                  {hm && <td className="text-right py-2 px-2 text-green-600 hidden sm:table-cell">{item.currency === "USD" ? formatUSD(item.client_price - item.cost) : formatCurrency(item.client_price - item.cost)}</td>}
                   <td className="py-2 text-right"><div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 sm:opacity-100">
                     <button onClick={() => setEditingItem(item)} className="p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
                     <button onClick={() => deleteRow("project_items", item.id, "projectItems")} className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
@@ -477,16 +487,21 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                   <td className="py-2 pr-2"><div className="flex items-center gap-1.5">
                     <span className="truncate max-w-[200px]">{q.item}</span>
                     <span className="text-xs text-muted-foreground shrink-0">({q.provider_name})</span>
+                    {q.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded shrink-0">USD</span>}
                   </div></td>
-                  <td className="text-right py-2 px-2">{formatCurrency(q.cost)}</td>
-                  <td className="text-right py-2 px-2 font-medium">{formatCurrency(quoteClientPrice(q))}</td>
-                  {hm && <td className="text-right py-2 px-2 text-green-600 hidden sm:table-cell">{formatCurrency(quoteGanancia(q))}</td>}
+                  <td className="text-right py-2 px-2">{q.currency === "USD" ? formatUSD(q.cost) : formatCurrency(q.cost)}</td>
+                  <td className="text-right py-2 px-2 font-medium">{q.currency === "USD" ? formatUSD(quoteClientPrice(q)) : formatCurrency(quoteClientPrice(q))}</td>
+                  {hm && <td className="text-right py-2 px-2 text-green-600 hidden sm:table-cell">{q.currency === "USD" ? formatUSD(quoteGanancia(q)) : formatCurrency(quoteGanancia(q))}</td>}
                 </tr>))}</tbody></table></div>}
             {si.length === 0 && sq.length === 0 && <p className="text-sm text-muted-foreground">Sin ítems</p>}
-            {(si.length > 0 || sq.length > 0) && <div className="flex justify-between pt-3 mt-2 border-t border-border text-sm">
-              <span className="font-semibold text-muted-foreground">Subtotal</span>
-              <span className="font-semibold">{formatCurrency(si.reduce((s, i) => s + i.client_price, 0) + sq.reduce((s, q) => s + quoteClientPrice(q), 0))}</span>
-            </div>}
+            {(si.length > 0 || sq.length > 0) && (() => {
+              const subARS = si.filter(i => i.currency !== "USD").reduce((s, i) => s + i.client_price, 0) + sq.filter(q => q.currency !== "USD").reduce((s, q) => s + quoteClientPrice(q), 0)
+              const subUSD = si.filter(i => i.currency === "USD").reduce((s, i) => s + i.client_price, 0) + sq.filter(q => q.currency === "USD").reduce((s, q) => s + quoteClientPrice(q), 0)
+              return <div className="flex justify-between pt-3 mt-2 border-t border-border text-sm">
+                <span className="font-semibold text-muted-foreground">Subtotal</span>
+                <span className="font-semibold">{formatCurrency(subARS)}{subUSD > 0 && <span className="text-blue-600 ml-1">+ {formatUSD(subUSD)}</span>}</span>
+              </div>
+            })()}
           </div>
         )
       })}
@@ -595,11 +610,11 @@ function ComparadorTab({ project }: { project: Project }) {
           </tr></thead><tbody>{pqs.map(q => { const hm = secHasMult(q.type || "mobiliario"); return (
             <tr key={q.id} className={`border-b last:border-0 ${q.selected ? "bg-green-50" : "hover:bg-[#FAFAF9]"}`}>
               <td className="px-3 py-2">{q.selected && <Check size={14} className="text-green-600" />}</td>
-              <td className="px-3 py-2"><span className="font-medium">{q.item}</span><span className="text-xs text-muted-foreground ml-1">({q.category})</span></td>
-              <td className="px-3 py-2 text-right">{formatCurrency(q.cost)}</td>
-              <td className="px-3 py-2 text-right">{formatCurrency(hm ? q.price_x14 : q.cost)}</td>
-              <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{formatCurrency(hm ? q.ganancia_x14 : 0)}</td>
-              <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{formatCurrency(hm ? q.ganancia_x16 : 0)}</td>
+              <td className="px-3 py-2"><span className="font-medium">{q.item}</span><span className="text-xs text-muted-foreground ml-1">({q.category})</span>{q.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded ml-1">USD</span>}</td>
+              <td className="px-3 py-2 text-right">{(q.currency === "USD" ? formatUSD : formatCurrency)(q.cost)}</td>
+              <td className="px-3 py-2 text-right">{(q.currency === "USD" ? formatUSD : formatCurrency)(hm ? q.price_x14 : q.cost)}</td>
+              <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{(q.currency === "USD" ? formatUSD : formatCurrency)(hm ? q.ganancia_x14 : 0)}</td>
+              <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{(q.currency === "USD" ? formatUSD : formatCurrency)(hm ? q.ganancia_x16 : 0)}</td>
               <td className="px-3 py-2 text-center"><SelBtns q={q} hm={hm} /></td>
             </tr>) })}</tbody></table></div></div>)
       })}
@@ -630,6 +645,7 @@ function ComparadorTab({ project }: { project: Project }) {
                   cost: q.cost, client_price: secHasMult(q.type || "mobiliario") ? q.cost * mult : q.cost,
                   multiplier: secHasMult(q.type || "mobiliario") ? mult : 1,
                   provider_id: data.providers.find(p => p.name === q.provider_name)?.id || null,
+                  currency: q.currency || "ARS",
                 }, "projectItems")
               }
             }}>Agregar selección al desglose</Btn>
@@ -1061,14 +1077,20 @@ function AddItemModal({ type, hasMultiplier, defaultMultiplier, providers, onClo
   type: string; hasMultiplier: boolean; defaultMultiplier: number; providers: { id: string; name: string }[]; onClose: () => void; onSave: (item: ProjectItem) => void
 }) {
   const [desc, setDesc] = useState(""); const [cost, setCost] = useState(""); const [mult, setMult] = useState(hasMultiplier ? String(defaultMultiplier) : "1"); const [prov, setProv] = useState("")
+  const [currency, setCurrency] = useState<"ARS" | "USD">("ARS")
   const c = parseFloat(cost) || 0; const m = hasMultiplier ? (parseFloat(mult) || defaultMultiplier) : 1; const cp = c * m
+  const fmtAmt = (n: number) => currency === "USD" ? `U$D ${new Intl.NumberFormat("es-AR").format(n)}` : formatCurrency(n)
   return (<Modal isOpen={true} title={`Agregar ${type}`} onClose={onClose}>
-    <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), project_id: "", type: type as any, description: desc, cost: c, client_price: hasMultiplier ? cp : c, multiplier: m, provider_id: prov || null, paid: false, sort_order: 0 })}} className="space-y-4">
+    <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), project_id: "", type: type as any, description: desc, cost: c, client_price: hasMultiplier ? cp : c, multiplier: m, currency, provider_id: prov || null, paid: false, sort_order: 0 })}} className="space-y-4">
       <FormInput label="Descripción" value={desc} onChange={setDesc} />
       <FormSelect label="Proveedor" value={prov} onChange={setProv} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
       <div className="grid grid-cols-2 gap-4"><FormInput label="Costo" type="number" value={cost} onChange={setCost} inputMode="decimal" />{hasMultiplier && <FormInput label="Multiplicador" type="number" value={mult} onChange={setMult} step="0.1" />}</div>
-      <div className="bg-[#F0EDE4] rounded-lg p-4"><div className="flex justify-between"><span className="text-sm text-muted-foreground">Precio cliente:</span><span className="text-lg font-semibold">{formatCurrency(cp)}</span></div>
-        {hasMultiplier ? <p className="text-xs text-muted-foreground mt-1">Ganancia: {formatCurrency(cp - c)}</p> : <p className="text-xs text-muted-foreground mt-1">Sin ganancia</p>}</div>
+      <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+        <button type="button" onClick={() => setCurrency("ARS")} className={`flex-1 px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
+        <button type="button" onClick={() => setCurrency("USD")} className={`flex-1 px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
+      </div>
+      <div className="bg-[#F0EDE4] rounded-lg p-4"><div className="flex justify-between"><span className="text-sm text-muted-foreground">Precio cliente:</span><span className="text-lg font-semibold">{fmtAmt(cp)}</span></div>
+        {hasMultiplier ? <p className="text-xs text-muted-foreground mt-1">Ganancia: {fmtAmt(cp - c)}</p> : <p className="text-xs text-muted-foreground mt-1">Sin ganancia</p>}</div>
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !cost}>Agregar</Btn></div>
     </form>
   </Modal>)
@@ -1079,12 +1101,17 @@ function EditItemModal({ item, hasMultiplier, providers, onClose, onSave }: {
 }) {
   const [desc, setDesc] = useState(item.description); const [cost, setCost] = useState(String(item.cost)); const [mult, setMult] = useState(String(item.multiplier))
   const [prov, setProv] = useState(item.provider_id ?? ""); const [paid, setPaid] = useState(item.paid)
+  const [currency, setCurrency] = useState<"ARS" | "USD">(item.currency || "ARS")
   const c = parseFloat(cost) || 0; const m = hasMultiplier ? (parseFloat(mult) || 1.4) : 1; const cp = c * m
   return (<Modal isOpen={true} title={`Editar ${item.type}`} onClose={onClose}>
-    <form onSubmit={e => { e.preventDefault(); onSave({ description: desc, cost: c, client_price: hasMultiplier ? cp : c, multiplier: m, provider_id: prov || null, paid })}} className="space-y-4">
+    <form onSubmit={e => { e.preventDefault(); onSave({ description: desc, cost: c, client_price: hasMultiplier ? cp : c, multiplier: m, currency, provider_id: prov || null, paid })}} className="space-y-4">
       <FormInput label="Descripción" value={desc} onChange={setDesc} />
       <FormSelect label="Proveedor" value={prov} onChange={setProv} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
       <div className="grid grid-cols-2 gap-4"><FormInput label="Costo" type="number" value={cost} onChange={setCost} />{hasMultiplier && <FormInput label="Mult" type="number" value={mult} onChange={setMult} step="0.1" />}</div>
+      <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+        <button type="button" onClick={() => setCurrency("ARS")} className={`flex-1 px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
+        <button type="button" onClick={() => setCurrency("USD")} className={`flex-1 px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
+      </div>
       <div className="flex items-center gap-3"><input type="checkbox" checked={paid} onChange={e => setPaid(e.target.checked)} className="w-4 h-4" /><label className="text-sm">Pagado</label></div>
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !cost}>Guardar</Btn></div>
     </form>
@@ -1094,22 +1121,26 @@ function EditItemModal({ item, hasMultiplier, providers, onClose, onSave }: {
 function QuoteModal({ projectId, providers, onClose, onSave }: { projectId: string; providers: any[]; onClose: () => void; onSave: (q: QuoteComparison) => void }) {
   const { getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [cat, setCat] = useState(""); const [item, setItem] = useState(""); const [pn, setPn] = useState(""); const [pid, setPid] = useState(""); const [cost, setCost] = useState("")
+  const [currency, setCurrency] = useState<"ARS" | "USD">("ARS")
   const itcs = getCategoriesFor("item_type"); const [it, setIt] = useState(itcs[0]?.name || "Mobiliario")
   const hm = itcs.find(c => c.name === it)?.has_multiplier !== false; const cn = parseFloat(cost) || 0; const qcs = getCategoriesFor("quote_category")
   return (<Modal isOpen={true} title="Nueva Cotización" onClose={onClose}>
     <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), date: today(), project_id: projectId, category: cat, item, type: it as any,
       provider_id: pid || null, provider_name: pn || providers.find(p => p.id === pid)?.name || "", cost: cn,
-      price_x14: cn * 1.4, price_x16: cn * 1.6, ganancia_x14: cn * 0.4, ganancia_x16: cn * 0.6, selected: false, selected_multiplier: null })}} className="space-y-4">
+      price_x14: cn * 1.4, price_x16: cn * 1.6, ganancia_x14: cn * 0.4, ganancia_x16: cn * 0.6, selected: false, selected_multiplier: null, currency })}} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <EditableSelect label="Categoría" value={cat} onChange={setCat} options={qcs.map(c => ({ value: c.name, label: c.name }))} onAddNew={n => addCategory("quote_category", n)} onDelete={n => deleteCategory(n)} placeholder="Ej: Carpintería" />
         <FormInput label="Ítem" value={item} onChange={setItem} placeholder="Ej: Mueble de TV" /></div>
       <FormSelect label="Sección" value={it} onChange={setIt} options={itcs.map(c => ({ value: c.name, label: `${c.name} ${c.has_multiplier !== false ? "(con ganancia)" : "(sin ganancia)"}` }))} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <FormSelect label="Proveedor" value={pid} onChange={v => { setPid(v); setPn(providers.find(p => p.id === v)?.name || "") }} options={providers.map(p => ({ value: p.id, label: p.name }))} />
-        <FormInput label="Costo" type="number" value={cost} onChange={setCost} inputMode="decimal" /></div>
-      {cn > 0 && <div className="bg-[#F0EDE4] rounded-lg p-4 text-sm">{!hm ? <p className="text-muted-foreground">Sin ganancia</p>
-        : <div className="grid grid-cols-2 gap-3"><div>x1.4: <strong>{formatCurrency(cn * 1.4)}</strong> <span className="text-green-600">+{formatCurrency(cn * 0.4)}</span></div>
-          <div>x1.6: <strong>{formatCurrency(cn * 1.6)}</strong> <span className="text-green-600">+{formatCurrency(cn * 0.6)}</span></div></div>}</div>}
+        <div><FormInput label="Costo" type="number" value={cost} onChange={setCost} inputMode="decimal" />
+          <div className="flex gap-1 mt-1">{(["ARS", "USD"] as const).map(c => (
+            <button key={c} type="button" onClick={() => setCurrency(c)} className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${currency === c ? (c === "USD" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700") : "text-muted-foreground hover:bg-gray-100"}`}>{c === "USD" ? "U$D" : "$ARS"}</button>
+          ))}</div></div></div>
+      {cn > 0 && (() => { const fmt = currency === "USD" ? formatUSD : formatCurrency; return <div className="bg-[#F0EDE4] rounded-lg p-4 text-sm">{!hm ? <p className="text-muted-foreground">Sin ganancia</p>
+        : <div className="grid grid-cols-2 gap-3"><div>x1.4: <strong>{fmt(cn * 1.4)}</strong> <span className="text-green-600">+{fmt(cn * 0.4)}</span></div>
+          <div>x1.6: <strong>{fmt(cn * 1.6)}</strong> <span className="text-green-600">+{fmt(cn * 0.6)}</span></div></div>}</div> })()}
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!item || !cost || !cat}>Agregar</Btn></div>
     </form>
   </Modal>)
