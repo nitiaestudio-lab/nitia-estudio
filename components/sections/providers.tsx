@@ -321,7 +321,8 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
           const project = data.projects.find(p => p.id === mov.project_id)
           const account = data.accounts.find(a => a.id === mov.account_id)
           const isSeña = mov.concepto === "seña" || mov.concepto?.startsWith("seña")
-          const isSeñaDiff = mov.category === "Diferencia seña"
+          const isSeñaDiff = mov.category === "Diferencia seña" || mov.category === "Aporte propio seña"
+          const isSeñaProv = mov.category === "Seña proveedor"
           // Parse item IDs from concepto like "seña:id1,id2"
           const señaItemIds = mov.concepto?.startsWith("seña:") ? mov.concepto.split(":")[1]?.split(",") || [] : []
           const señaItems = señaItemIds.length > 0
@@ -335,8 +336,8 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`w-2 h-2 rounded-full shrink-0 ${isSeñaDiff ? "bg-amber-500" : mov.type === "egreso" ? "bg-red-500" : "bg-green-500"}`}></span>
                     <span className="font-medium">{mov.description}</span>
-                    {(isSeña || isSeñaDiff) && <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">{isSeñaDiff ? "Dif. Seña" : "Seña"}</span>}
-                    {mov.category && mov.category !== "Diferencia seña" && <span className="text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
+                    {(isSeña || isSeñaDiff || isSeñaProv) && <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">{isSeñaDiff ? "Aporte propio" : isSeñaProv ? "Seña prov." : "Seña"}</span>}
+                    {mov.category && !isSeñaDiff && !isSeñaProv && mov.category !== "Diferencia seña" && <span className="text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap mt-1 ml-4">
                     <span>{formatDate(mov.date)}</span>
@@ -354,7 +355,10 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                     </div>
                   )}
                   {isSeñaDiff && account && (
-                    <p className="ml-4 mt-1 text-[10px] text-amber-600">💰 Cubierto con cuenta: {account.name}</p>
+                    <p className="ml-4 mt-1 text-[10px] text-amber-600">Aporte propio — Cuenta: {account.name}</p>
+                  )}
+                  {isSeñaProv && account && (
+                    <p className="ml-4 mt-1 text-[10px] text-purple-600">Pago seña — Cuenta: {account.name}</p>
                   )}
                 </div>
                 <span className={`font-bold shrink-0 ${isSeñaDiff ? "text-amber-700" : mov.type === "egreso" ? "text-red-600" : "text-green-600"}`}>

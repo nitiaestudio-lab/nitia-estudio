@@ -218,6 +218,12 @@ function BalancePanel({ project }: { project: Project }) {
   const sCli = calcSenaCliente(totalClient, sCliPct)
   const sCliIVA = sCli + calcIVACliente(sCli, ivaCli)
 
+  // Real seña amounts from movements
+  const señaMovs = data.movements.filter(m => m.project_id === project.id && (m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor" || m.category === "Aporte propio seña"))
+  const señaCobradaCli = señaMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
+  const señaPagadaProv = señaMovs.filter(m => m.type === "egreso" && m.category === "Seña proveedor").reduce((s, m) => s + m.amount, 0)
+  const señaAportePropio = señaMovs.filter(m => m.category === "Aporte propio seña").reduce((s, m) => s + m.amount, 0)
+
   const Bar = ({ value, max, color }: { value: number; max: number; color: string }) => {
     const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
     const c: Record<string, string> = { green: "bg-green-500", red: "bg-red-500", amber: "bg-amber-500" }
@@ -240,8 +246,9 @@ function BalancePanel({ project }: { project: Project }) {
           {clienteDebe > 0 ? `Cliente debe: ${formatCurrency(clienteDebe)}` : clienteDebe < 0 ? `Cobrado de más: ${formatCurrency(Math.abs(clienteDebe))}` : "Al día ✓"}
         </div>
         <div className="border-t border-border pt-2 text-xs text-muted-foreground space-y-1">
-          <div className="flex justify-between"><span>Seña ({sCliPct}% c/IVA):</span><span className="font-medium text-foreground">{formatCurrency(sCliIVA)}</span></div>
-          <div className="flex justify-between"><span>Saldo restante:</span><span className="font-medium text-foreground">{formatCurrency(totalConIVA - sCliIVA)}</span></div>
+          <div className="flex justify-between"><span>Seña esperada ({sCliPct}% c/IVA):</span><span className="font-medium text-foreground">{formatCurrency(sCliIVA)}</span></div>
+          <div className="flex justify-between"><span>Seña cobrada:</span><span className={`font-medium ${señaCobradaCli > 0 ? "text-green-600" : "text-foreground"}`}>{formatCurrency(señaCobradaCli)}</span></div>
+          {señaCobradaCli > 0 && <div className="flex justify-between"><span>Restante s/seña:</span><span className="font-medium text-foreground">{formatCurrency(totalConIVA - señaCobradaCli)}</span></div>}
         </div>
       </div>
 
@@ -259,8 +266,10 @@ function BalancePanel({ project }: { project: Project }) {
           {provDebe > 0 ? `Debemos a proveedores: ${formatCurrency(provDebe)}` : provDebe < 0 ? `Pagado de más: ${formatCurrency(Math.abs(provDebe))}` : "Al día ✓"}
         </div>
         <div className="border-t border-border pt-2 text-xs text-muted-foreground space-y-1">
-          <div className="flex justify-between"><span>Seña proveedores ({sProvPct}%):</span><span className="font-medium text-foreground">{formatCurrency(sProv)}</span></div>
-          <div className="flex justify-between"><span>Saldo restante:</span><span className="font-medium text-foreground">{formatCurrency(totalCost - sProv)}</span></div>
+          <div className="flex justify-between"><span>Seña esperada ({sProvPct}%):</span><span className="font-medium text-foreground">{formatCurrency(sProv)}</span></div>
+          <div className="flex justify-between"><span>Seña pagada:</span><span className={`font-medium ${señaPagadaProv > 0 ? "text-red-600" : "text-foreground"}`}>{formatCurrency(señaPagadaProv)}</span></div>
+          {señaAportePropio > 0 && <div className="flex justify-between"><span>Aporte propio (diferencia %):</span><span className="font-medium text-amber-600">{formatCurrency(señaAportePropio)}</span></div>}
+          {señaPagadaProv > 0 && <div className="flex justify-between"><span>Restante s/seña:</span><span className="font-medium text-foreground">{formatCurrency(totalCost - señaPagadaProv)}</span></div>}
         </div>
       </div>
 
@@ -274,7 +283,7 @@ function BalancePanel({ project }: { project: Project }) {
         </div>
         <div className="flex justify-between text-xs text-white/50 pt-2 border-t border-white/20">
           <span>Margen: {totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(1) : 0}%</span>
-          <span>Diferencia seña: {formatCurrency(sCli - sProv)}</span>
+          <span>Dif. seña (cli - prov): {formatCurrency(sCli - sProv)}</span>
         </div>
       </div>
     </div>
@@ -316,11 +325,11 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
       {canSeeGanancias && <BalancePanel project={project} />}
       {/* Seguimiento de Señas */}
       {(() => {
-        const señaMovs = data.movements.filter(m => m.project_id === project.id && (m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Diferencia seña"))
+        const señaMovs = data.movements.filter(m => m.project_id === project.id && (m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor" || m.category === "Aporte propio seña" || m.category === "Diferencia seña"))
         if (señaMovs.length === 0) return null
         const señaIngresos = señaMovs.filter(m => m.type === "ingreso")
-        const señaEgresos = señaMovs.filter(m => m.type === "egreso" && m.category !== "Diferencia seña")
-        const señaDiffs = señaMovs.filter(m => m.category === "Diferencia seña")
+        const señaEgresos = señaMovs.filter(m => m.type === "egreso" && (m.category === "Seña proveedor"))
+        const señaDiffs = señaMovs.filter(m => m.category === "Aporte propio seña" || m.category === "Diferencia seña")
         return (
           <div className="bg-gradient-to-r from-purple-50 to-purple-50/50 border border-purple-200 rounded-xl p-4 sm:p-5">
             <h4 className="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
@@ -337,7 +346,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                 <p className="text-lg font-bold text-red-700">{formatCurrency(señaEgresos.reduce((s, m) => s + m.amount, 0))}</p>
               </div>
               <div className="bg-white/80 rounded-lg p-3 text-center">
-                <p className="text-[10px] uppercase tracking-wider text-amber-600 mb-1">Puesto de bolsillo</p>
+                <p className="text-[10px] uppercase tracking-wider text-amber-600 mb-1">Aporte propio</p>
                 <p className="text-lg font-bold text-amber-700">{formatCurrency(señaDiffs.reduce((s, m) => s + m.amount, 0))}</p>
               </div>
             </div>
@@ -345,7 +354,8 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
               {señaMovs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(m => {
                 const prov = data.providers.find(p => p.id === m.provider_id)
                 const acc = data.accounts.find(a => a.id === m.account_id)
-                const isSeñaDiff = m.category === "Diferencia seña"
+                const isSeñaDiff = m.category === "Diferencia seña" || m.category === "Aporte propio seña"
+                const isSeñaProv = m.category === "Seña proveedor"
                 return (
                   <div key={m.id} className={`flex items-center justify-between py-2 px-3 rounded-lg text-sm ${isSeñaDiff ? "bg-amber-50/80" : m.type === "ingreso" ? "bg-green-50/80" : "bg-red-50/80"}`}>
                     <div className="flex items-center gap-2 min-w-0">
@@ -840,8 +850,11 @@ function MovimientosTab({ project }: { project: Project }) {
                         ) : null}
                         {mov.sena_real_pct != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">Prov {mov.sena_real_pct}%</span>}
                         {mov.sena_cliente_pct != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">Cli {mov.sena_cliente_pct}%</span>}
-                        {mov.category === "Diferencia seña" && (
-                          <p className="text-[10px] text-amber-600 mt-0.5">💰 Dinero propio — Cuenta: {accName || "sin cuenta"}</p>
+                        {(mov.category === "Diferencia seña" || mov.category === "Aporte propio seña") && (
+                          <p className="text-[10px] text-amber-600 mt-0.5">Aporte propio — Cuenta: {accName || "sin cuenta"}</p>
+                        )}
+                        {mov.category === "Seña proveedor" && (
+                          <p className="text-[10px] text-purple-600 mt-0.5">Pago seña a {provName || "proveedor"} — Cuenta: {accName || "sin cuenta"}</p>
                         )}
                       </td>
                       {/* Provider */}
@@ -1188,22 +1201,39 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
       } as Movement)
     }
 
-    // Seña: if provider seña > client seña, register the difference from own money
-    if (esSeña && señaDiff > 0 && señaPagadaProv && señaActiveProvId) {
+    // Seña: create provider payment egreso
+    if (esSeña && señaPagadaProv && señaActiveProvId) {
+      const señaProvAmount = (señaProvPctNum / 100) * señaOwedForCalc
       const itemNames = señaItemIds.length > 0
         ? data.projectItems.filter(i => señaItemIds.includes(i.id)).map(i => i.description)
             .concat(data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).map(q => q.item))
             .join(", ")
         : ""
+      const provName = providers.find((p: any) => p.id === señaActiveProvId)?.name || ""
+      // Egreso: pago de seña al proveedor (monto completo del proveedor)
       await addMov({
         id: generateId(), date,
-        description: `[Diferencia seña] ${desc} (${señaProvPctNum}% prov - ${señaCliPctNum}% cli)${itemNames ? ` → ${itemNames}` : ""}`,
-        amount: señaDiff, type: "egreso" as const,
+        description: `[Seña a proveedor] ${provName} — ${señaProvPctNum}%${itemNames ? ` → ${itemNames}` : ""}`,
+        amount: señaProvAmount, type: "egreso" as const,
         project_id: project.id, account_id: aid || null, provider_id: señaActiveProvId,
-        category: "Diferencia seña", auto_split: false, split_percentage: 0,
+        category: "Seña proveedor", auto_split: false, split_percentage: 0,
         concepto: señaItemIds.length > 0 ? `seña:${señaItemIds.join(",")}` : "seña",
+        sena_real_pct: señaProvPctNum,
+        sena_cliente_pct: señaCliPctNum,
         medio_pago: currency === "USD" ? "USD" : null,
       } as Movement)
+      // If provider% > client%, also register the difference from own funds
+      if (señaDiff > 0) {
+        await addMov({
+          id: generateId(), date,
+          description: `[Aporte propio seña] ${provName} (${señaProvPctNum}% prov - ${señaCliPctNum}% cli)${itemNames ? ` → ${itemNames}` : ""}`,
+          amount: señaDiff, type: "egreso" as const,
+          project_id: project.id, account_id: aid || null, provider_id: señaActiveProvId,
+          category: "Aporte propio seña", auto_split: false, split_percentage: 0,
+          concepto: señaItemIds.length > 0 ? `seña:${señaItemIds.join(",")}` : "seña",
+          medio_pago: currency === "USD" ? "USD" : null,
+        } as Movement)
+      }
     }
   }
 
@@ -1364,25 +1394,28 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
                 className="w-full px-3 py-1.5 rounded border border-purple-300 text-sm bg-white mt-1" />
             </div>
           </div>
-          {señaProvPctNum > señaCliPctNum && señaOwedForCalc > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
-              <p className="text-sm font-medium text-amber-800">
-                Diferencia: {señaProvPctNum - señaCliPctNum}% sale de dinero propio
-              </p>
-              <p className="text-xs text-amber-600">
-                Cliente paga {señaCliPctNum}% = {formatCurrency((señaCliPctNum / 100) * señaOwedForCalc)} · Proveedor cobra {señaProvPctNum}% = {formatCurrency((señaProvPctNum / 100) * señaOwedForCalc)}
-              </p>
-              <p className="text-sm font-bold text-amber-700">
-                Diferencia a cubrir: {formatCurrency(señaDiff)}
-              </p>
-              <div className="flex items-center gap-2 pt-1">
+          {/* Resumen de montos */}
+          {señaOwedForCalc > 0 && (
+            <div className="bg-purple-50/50 border border-purple-200 rounded-lg p-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div><span className="text-purple-600">Cliente paga ({señaCliPctNum}%):</span> <strong className="text-green-700">{formatCurrency((señaCliPctNum / 100) * señaOwedForCalc)}</strong></div>
+                <div><span className="text-purple-600">Proveedor cobra ({señaProvPctNum}%):</span> <strong className="text-red-700">{formatCurrency((señaProvPctNum / 100) * señaOwedForCalc)}</strong></div>
+              </div>
+              {señaProvPctNum > señaCliPctNum && (
+                <div className="bg-amber-50 border border-amber-200 rounded p-2">
+                  <p className="text-xs font-medium text-amber-800">
+                    Aporte propio: {señaProvPctNum - señaCliPctNum}% = {formatCurrency(señaDiff)}
+                  </p>
+                </div>
+              )}
+              {señaProvPctNum <= señaCliPctNum && (
+                <p className="text-xs text-green-600">La seña del cliente cubre la del proveedor.</p>
+              )}
+              <div className="flex items-center gap-2 pt-1 border-t border-purple-200">
                 <input type="checkbox" checked={señaPagadaProv} onChange={e => setSeñaPagadaProv(e.target.checked)} className="w-4 h-4" />
-                <span className="text-xs text-amber-700 font-medium">Ya le pagué la seña al proveedor (registrar diferencia como egreso)</span>
+                <span className="text-xs text-purple-700 font-medium">Ya le pagué la seña al proveedor (registrar egreso de {formatCurrency((señaProvPctNum / 100) * señaOwedForCalc)})</span>
               </div>
             </div>
-          )}
-          {señaProvPctNum <= señaCliPctNum && (
-            <p className="text-xs text-green-600">La seña del cliente cubre la del proveedor. Sin diferencia.</p>
           )}
         </div>
       )}
