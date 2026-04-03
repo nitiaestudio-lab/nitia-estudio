@@ -45,6 +45,7 @@ export interface Project {
   sena_proveedor_pct?: number
   sena_cliente_pct?: number
   partner_count?: number
+  budget_final?: number | null
   notes?: string | null
   created_at?: string
   updated_at?: string

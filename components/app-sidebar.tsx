@@ -15,7 +15,6 @@ import {
   Menu,
   X,
   Settings,
-  CheckSquare,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 
@@ -31,7 +30,6 @@ const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
   { id: "projects", label: "Proyectos", icon: <FolderKanban size={20} />, perm: "ver_proyectos" },
   { id: "providers", label: "Proveedores", icon: <Users size={20} />, perm: "ver_proveedores" },
-  { id: "tasks", label: "Tareas", icon: <CheckSquare size={20} />, perm: "ver_tareas" },
   { id: "accounts", label: "Cuentas", icon: <Wallet size={20} />, requiresFull: true, perm: "ver_finanzas" },
   { id: "personal", label: "Finanzas Personal", icon: <User size={20} />, requiresFull: true, perm: "ver_finanzas_personales" },
   { id: "nitia-costs", label: "Costos Nitia", icon: <Building2 size={20} />, requiresFull: true, perm: "ver_costos_nitia" },

@@ -25,9 +25,9 @@ import {
   Settings2,
 } from "lucide-react"
 
-type ProjectTab = "desglose" | "comparador" | "movimientos" | "archivos"
+type ProjectTab = "desglose" | "comparador" | "movimientos" | "archivos" | "tareas"
 const TAB_LABELS: Record<ProjectTab, string> = {
-  desglose: "Desglose", comparador: "Comparador", movimientos: "Movimientos", archivos: "Archivos",
+  desglose: "Desglose", comparador: "Comparador", movimientos: "Movimientos", archivos: "Archivos", tareas: "Tareas",
 }
 
 // =================== PROJECTS LIST ===================
@@ -86,14 +86,25 @@ export function Projects() {
 
 // =================== PROJECT DETAIL ===================
 function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: Project; onBack: () => void; isFull: boolean; canSeeGanancias: boolean }) {
-  const { data, updateRow, deleteRow } = useApp()
+  const { data, updateRow, deleteRow, addRow } = useApp()
   const [tab, setTab] = useState<ProjectTab>("desglose")
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteProject, setShowDeleteProject] = useState(false)
+  const [editingBudget, setEditingBudget] = useState(false)
+  const [budgetValue, setBudgetValue] = useState(String(project.budget_final ?? ""))
   const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
   const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
   const income = projectIncome(data.movements, project.id)
   const expenses = projectExpenses(data.movements, project.id)
+  const budgetFinal = project.budget_final ?? null
+  const projectTasks = data.tasks.filter(t => t.project_id === project.id)
+
+  const saveBudgetFinal = async () => {
+    const val = parseFloat(budgetValue) || null
+    await updateRow("projects", project.id, { budget_final: val }, "projects")
+    setEditingBudget(false)
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -110,21 +121,51 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
           <Btn variant="ghost" size="sm" onClick={() => setShowDeleteProject(true)}><Trash2 size={14} className="text-red-500" /></Btn>
         </div>
       </div>
-      {isFull && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="Presupuesto" value={formatCurrency(totalClient)} />
-        {canSeeGanancias && <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
-        <Stat label="Cobrado" value={formatCurrency(income)} sub={formatCurrency(totalClient - income) + " pendiente"} />
-        <Stat label="Pagado proveedores" value={formatCurrency(expenses)} />
+
+      {/* Stats */}
+      {isFull && <div className="space-y-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Stat label="Presupuesto Sugerido" value={formatCurrency(totalClient)} sub="(calculado de ítems)" />
+          <div className="bg-card border border-border rounded-xl p-4">
+            <p className="text-xs text-muted-foreground mb-1">Presupuesto Final</p>
+            {editingBudget ? (
+              <div className="flex items-center gap-2">
+                <input type="number" value={budgetValue} onChange={e => setBudgetValue(e.target.value)}
+                  className="w-full px-2 py-1 text-lg font-bold border border-border rounded bg-white" autoFocus
+                  onKeyDown={e => { if (e.key === "Enter") saveBudgetFinal(); if (e.key === "Escape") setEditingBudget(false) }} />
+                <button onClick={saveBudgetFinal} className="text-green-600 hover:bg-green-50 p-1 rounded"><Check size={16} /></button>
+                <button onClick={() => setEditingBudget(false)} className="text-red-500 hover:bg-red-50 p-1 rounded"><X size={16} /></button>
+              </div>
+            ) : (
+              <p className="text-lg font-bold cursor-pointer hover:text-[#5F5A46]" onClick={() => { setBudgetValue(String(budgetFinal ?? totalClient)); setEditingBudget(true) }}>
+                {budgetFinal ? formatCurrency(budgetFinal) : <span className="text-muted-foreground text-sm">Click para definir</span>}
+              </p>
+            )}
+          </div>
+          <Stat label="Cobrado" value={formatCurrency(income)} sub={formatCurrency((budgetFinal || totalClient) - income) + " pendiente"} />
+          <Stat label="Pagado proveedores" value={formatCurrency(expenses)} />
+        </div>
+        {canSeeGanancias && <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />
+          {budgetFinal && budgetFinal !== totalClient && (
+            <Stat label="Ganancia Real (s/final)" value={formatCurrency(budgetFinal - (totalClient - totalGanancia))} highlight />
+          )}
+        </div>}
       </div>}
+
+      {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto border-b border-border pb-0">
         {(Object.keys(TAB_LABELS) as ProjectTab[]).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${tab === t ? "border-[#5F5A46] text-[#1C1A12]" : "border-transparent text-[#76746A] hover:text-[#1C1A12]"}`}>{TAB_LABELS[t]}</button>
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${tab === t ? "border-[#5F5A46] text-[#1C1A12]" : "border-transparent text-[#76746A] hover:text-[#1C1A12]"}`}>
+            {TAB_LABELS[t]}{t === "tareas" && projectTasks.length > 0 ? ` (${projectTasks.length})` : ""}
+          </button>
         ))}
       </div>
       {tab === "desglose" && <DesgloseTab project={project} isFull={isFull} canSeeGanancias={canSeeGanancias} />}
       {tab === "comparador" && <ComparadorTab project={project} />}
       {tab === "movimientos" && <MovimientosTab project={project} />}
       {tab === "archivos" && <ArchivosTab project={project} />}
+      {tab === "tareas" && <TareasTab project={project} />}
       {showEdit && <ProjectFormModal project={project} onClose={() => setShowEdit(false)} onSave={async (p) => { await updateRow("projects", project.id, p, "projects"); setShowEdit(false) }} />}
       {showDeleteProject && <ConfirmDeleteModal message={`¿Eliminar "${project.name}"?`} onConfirm={async () => { await deleteRow("projects", project.id, "projects"); onBack() }} onCancel={() => setShowDeleteProject(false)} />}
     </div>
@@ -618,20 +659,20 @@ function ArchivosTab({ project }: { project: Project }) {
 // =================== MODALS ===================
 function ProjectFormModal({ project, onClose, onSave }: { project?: Project; onClose: () => void; onSave: (p: Project) => void }) {
   const [name, setName] = useState(project?.name ?? ""); const [client, setClient] = useState(project?.client ?? ""); const [address, setAddress] = useState(project?.address ?? "")
-  const [type, setType] = useState(project?.type ?? "interiorismo"); const [status, setStatus] = useState(project?.status ?? "activo"); const [margin, setMargin] = useState(String(project?.margin ?? "1.4"))
+  const [type, setType] = useState(project?.type ?? "interiorismo"); const [status, setStatus] = useState(project?.status ?? "activo")
   const [email, setEmail] = useState(project?.client_email ?? ""); const [phone, setPhone] = useState(project?.client_phone ?? ""); const [pc, setPc] = useState(String(project?.partner_count ?? "2"))
   return (<Modal isOpen={true} title={project ? "Editar Proyecto" : "Nuevo Proyecto"} onClose={onClose} size="lg">
-    <form onSubmit={e => { e.preventDefault(); onSave({ id: project?.id ?? generateId(), name, client, address, type, status, margin: parseFloat(margin) || 1.4,
+    <form onSubmit={e => { e.preventDefault(); onSave({ id: project?.id ?? generateId(), name, client, address, type, status, margin: project?.margin ?? 1.4,
       client_email: email || null, client_phone: phone || null, partner_count: parseInt(pc) || 2,
       iva_cliente_pct: project?.iva_cliente_pct ?? 21, iva_ganancia_pct: project?.iva_ganancia_pct ?? 10.5,
       sena_proveedor_pct: project?.sena_proveedor_pct ?? 60, sena_cliente_pct: project?.sena_cliente_pct ?? 50,
       created_at: project?.created_at ?? new Date().toISOString() })}} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><FormInput label="Nombre" value={name} onChange={setName} /><FormInput label="Cliente" value={client} onChange={setClient} /></div>
       <FormInput label="Dirección" value={address} onChange={setAddress} />
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <FormSelect label="Tipo" value={type || ""} onChange={setType} options={[{ value: "arquitectura", label: "Arquitectura" }, { value: "interiorismo", label: "Interiorismo" }, { value: "ambos", label: "Ambos" }]} />
         <FormSelect label="Estado" value={status || ""} onChange={setStatus} options={[{ value: "activo", label: "Activo" }, { value: "pausado", label: "Pausado" }, { value: "finalizado", label: "Finalizado" }]} />
-        <FormInput label="Multiplicador" type="number" value={margin} onChange={setMargin} step="0.1" /><FormInput label="Socias" type="number" value={pc} onChange={setPc} /></div>
+        <FormInput label="Socias" type="number" value={pc} onChange={setPc} /></div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><FormInput label="Email" type="email" value={email} onChange={setEmail} /><FormInput label="Teléfono" value={phone} onChange={setPhone} /></div>
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!name || !client}>{project ? "Guardar" : "Crear"}</Btn></div>
     </form>
@@ -745,4 +786,120 @@ function UploadModal({ projectId, onClose, onUpload }: { projectId: string; onCl
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!file}>Subir</Btn></div>
     </form>
   </Modal>)
+}
+
+// =================== TAREAS TAB ===================
+function TareasTab({ project }: { project: Project }) {
+  const { data, addRow, updateRow, deleteRow } = useApp()
+  const [showNew, setShowNew] = useState(false)
+  const [editingTask, setEditingTask] = useState<any>(null)
+  const tasks = data.tasks.filter(t => t.project_id === project.id)
+    .sort((a, b) => {
+      const prio: Record<string, number> = { alta: 0, media: 1, baja: 2 }
+      const stat: Record<string, number> = { pendiente: 0, "en-curso": 1, completada: 2 }
+      return (stat[a.status] ?? 1) - (stat[b.status] ?? 1) || (prio[a.priority] ?? 1) - (prio[b.priority] ?? 1)
+    })
+
+  const pendientes = tasks.filter(t => t.status === "pendiente").length
+  const enCurso = tasks.filter(t => t.status === "en-curso").length
+  const completadas = tasks.filter(t => t.status === "completada").length
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4 text-sm">
+          <span className="text-yellow-600 font-medium">{pendientes} pendientes</span>
+          <span className="text-blue-600 font-medium">{enCurso} en curso</span>
+          <span className="text-green-600 font-medium">{completadas} completadas</span>
+        </div>
+        <Btn size="sm" onClick={() => { setEditingTask(null); setShowNew(true) }}>
+          <Plus size={14} className="mr-1 inline" />Nueva Tarea
+        </Btn>
+      </div>
+
+      {tasks.length > 0 ? (
+        <div className="space-y-2">
+          {tasks.map(task => (
+            <div key={task.id} className={`flex items-center gap-3 p-3 bg-card border border-border rounded-lg group ${task.status === "completada" ? "opacity-50" : ""}`}>
+              <button onClick={async () => {
+                const next: Record<string, string> = { pendiente: "en-curso", "en-curso": "completada", completada: "pendiente" }
+                await updateRow("task_items", task.id, { status: next[task.status] || "pendiente" }, "tasks")
+              }} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                task.status === "completada" ? "bg-green-600 border-green-600 text-white" : task.status === "en-curso" ? "border-blue-500 bg-blue-50" : "border-[#E0DDD0]"
+              }`}>
+                {task.status === "completada" && <Check size={12} />}
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium ${task.status === "completada" ? "line-through text-muted-foreground" : ""}`}>{task.title}</p>
+                {task.description && <p className="text-xs text-muted-foreground truncate">{task.description}</p>}
+                <div className="flex items-center gap-2 mt-1">
+                  <Tag label={task.priority} color={task.priority === "alta" ? "red" : task.priority === "media" ? "yellow" : "gray"} />
+                  {task.due_date && <span className="text-xs text-muted-foreground">{formatDate(task.due_date)}</span>}
+                  {task.assigned_to && <span className="text-xs text-muted-foreground">→ {task.assigned_to}</span>}
+                </div>
+              </div>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 sm:opacity-100">
+                <button onClick={() => { setEditingTask(task); setShowNew(true) }} className="p-1.5 hover:bg-accent rounded"><Pencil size={12} /></button>
+                <button onClick={async () => { if (confirm("¿Eliminar tarea?")) await deleteRow("task_items", task.id, "tasks") }}
+                  className="p-1.5 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Empty title="Sin tareas" description="Agregá tareas para este proyecto" action={
+          <Btn onClick={() => setShowNew(true)}>Nueva Tarea</Btn>
+        } />
+      )}
+
+      {showNew && (
+        <Modal isOpen={true} title={editingTask ? "Editar Tarea" : "Nueva Tarea"} onClose={() => { setShowNew(false); setEditingTask(null) }}>
+          <TaskForm task={editingTask} projectId={project.id}
+            onSave={async (t) => {
+              if (editingTask) await updateRow("task_items", t.id, t, "tasks")
+              else await addRow("task_items", t, "tasks")
+              setShowNew(false); setEditingTask(null)
+            }}
+            onClose={() => { setShowNew(false); setEditingTask(null) }}
+          />
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+function TaskForm({ task, projectId, onSave, onClose }: { task: any; projectId: string; onSave: (t: any) => void; onClose: () => void }) {
+  const [title, setTitle] = useState(task?.title ?? "")
+  const [desc, setDesc] = useState(task?.description ?? "")
+  const [status, setStatus] = useState(task?.status ?? "pendiente")
+  const [priority, setPriority] = useState(task?.priority ?? "media")
+  const [dueDate, setDueDate] = useState(task?.due_date ?? "")
+  const [assignee, setAssignee] = useState(task?.assigned_to ?? "")
+
+  return (
+    <form onSubmit={e => { e.preventDefault(); onSave({
+      id: task?.id ?? generateId(), project_id: projectId, title, description: desc || null,
+      status, priority, due_date: dueDate || null, assigned_to: assignee || null,
+      created_at: task?.created_at ?? new Date().toISOString(),
+    })}} className="space-y-4">
+      <FormInput label="Título" value={title} onChange={setTitle} />
+      <FormInput label="Descripción (opcional)" value={desc} onChange={setDesc} />
+      <div className="grid grid-cols-2 gap-4">
+        <FormSelect label="Estado" value={status} onChange={setStatus} options={[
+          { value: "pendiente", label: "Pendiente" }, { value: "en-curso", label: "En Curso" }, { value: "completada", label: "Completada" }
+        ]} />
+        <FormSelect label="Prioridad" value={priority} onChange={setPriority} options={[
+          { value: "alta", label: "Alta" }, { value: "media", label: "Media" }, { value: "baja", label: "Baja" }
+        ]} />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <FormInput label="Fecha límite" type="date" value={dueDate} onChange={setDueDate} />
+        <FormInput label="Asignada a" value={assignee} onChange={setAssignee} />
+      </div>
+      <div className="flex justify-end gap-3 pt-4">
+        <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+        <Btn type="submit" disabled={!title}>{task ? "Guardar" : "Crear"}</Btn>
+      </div>
+    </form>
+  )
 }
