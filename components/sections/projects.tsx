@@ -1122,6 +1122,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   const [pagoDirecto, setPagoDirecto] = useState(false); const [pagoProvId, setPagoProvId] = useState("")
   const [selectedItemId, setSelectedItemId] = useState("")
   const [currency, setCurrency] = useState<"ARS" | "USD">("ARS")
+  const [conceptoSel, setConceptoSel] = useState("")
   // Seña tracking
   const [esSeña, setEsSeña] = useState(false)
   const [señaClientePct, setSeñaClientePct] = useState(String(project.sena_cliente_pct ?? 50))
@@ -1163,7 +1164,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const concepto = esSeña ? `seña` : undefined
+    const concepto = esSeña ? `seña` : (conceptoSel || undefined)
     const mainMov: Movement = {
       id: generateId(), date, description: desc, amount, type, project_id: project.id,
       account_id: aid || null, provider_id: type === "egreso" ? (pid || null) : (esSeña && señaActiveProvId ? señaActiveProvId : null),
@@ -1221,6 +1222,15 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
           medio_pago: currency === "USD" ? "USD" : null,
         } as Movement)
       }
+    }
+
+    // If money goes to a personal account, also create personal finance record
+    const targetAccount = accounts.find((a: any) => a.id === aid)
+    if (targetAccount?.owner && targetAccount.owner !== "nitia") {
+      await addRow("personal_finance_movements", {
+        id: generateId(), owner: targetAccount.owner, date, description: `${desc} — ${project.name}`,
+        amount, type: type, category: "Ingreso Nitia", is_fixed: false, active: true, created_by: targetAccount.owner,
+      } as any, "personalFinanceMovements")
     }
 
     // Save main movement LAST (this closes the modal)
@@ -1290,6 +1300,9 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         <button type="button" onClick={() => setCurrency("ARS")} className={`px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
         <button type="button" onClick={() => setCurrency("USD")} className={`px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
       </div>
+
+      <FormSelect label="Concepto del pago" value={conceptoSel} onChange={setConceptoSel}
+        options={[{ value: "", label: "Sin especificar" }, { value: "mano_de_obra", label: "Mano de obra" }, { value: "mobiliario", label: "Mobiliario" }, { value: "material", label: "Materiales" }, { value: "honorarios", label: "Honorarios" }, { value: "varios", label: "Varios" }]} />
 
       {/* Egreso: provider + item selection */}
       {type === "egreso" && <>
