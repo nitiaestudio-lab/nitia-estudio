@@ -121,6 +121,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
   const movements = data.movements.filter(m => m.provider_id === provider.id)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   const totalPaid = movements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+  const señaPagada = movements.filter(m => m.category === "Seña proveedor" || (m.concepto === "seña" && m.type === "egreso")).reduce((s, m) => s + m.amount, 0)
 
   // Saldo por proyecto
   const balanceByProject = useMemo(() => {
@@ -214,6 +215,18 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
               {totalDebt > 0 ? formatCurrency(totalDebt) : "Al día ✓"}
             </p>
           </div>
+          {señaPagada > 0 && (
+            <div className="flex justify-between items-center px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
+              <span className="text-xs text-purple-700 font-medium">Seña pagada</span>
+              <span className="text-sm font-bold text-purple-700">{formatCurrency(señaPagada)}</span>
+            </div>
+          )}
+          {provider.advance_percent && (
+            <div className="flex justify-between items-center px-2 text-xs text-muted-foreground">
+              <span>Seña requerida ({provider.advance_percent}%)</span>
+              <span>{formatCurrency(totalOwedAll * (provider.advance_percent / 100))}</span>
+            </div>
+          )}
           <div className="text-xs text-muted-foreground text-center">{movements.length} movimiento{movements.length !== 1 ? "s" : ""} registrado{movements.length !== 1 ? "s" : ""}</div>
         </div>
       </div>

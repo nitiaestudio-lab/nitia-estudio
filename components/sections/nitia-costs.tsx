@@ -8,10 +8,12 @@ import type { FixedExpense } from "@/lib/types"
 import { Plus, Pencil, Check, X, FileSpreadsheet, History } from "lucide-react"
 
 export function NitiaCosts() {
-  const { data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
+  const { data, addRow, updateRow, deleteRow, addMovement, deleteMovement, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [showNew, setShowNew] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
+  const [payingCostId, setPayingCostId] = useState<string | null>(null)
+  const [payAccountId, setPayAccountId] = useState("")
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -29,19 +31,37 @@ export function NitiaCosts() {
 
   const isMonthPaid = (costId: string) => monthPayments.some(p => p.fixed_cost_id === costId && p.paid)
 
-  const toggleMonthPaid = async (costId: string) => {
+  const unpayMonth = async (costId: string) => {
     const existing = monthPayments.find(p => p.fixed_cost_id === costId)
+    if (existing) {
+      if (existing.movement_id) {
+        try { await deleteMovement(existing.movement_id) } catch {}
+      }
+      await deleteRow("fixed_cost_payments", existing.id, "fixedCostPayments")
+    }
+  }
+
+  const confirmPayCost = async (costId: string, accountId: string) => {
+    if (isMonthPaid(costId)) return
+    const cost = activeCosts.find(c => c.id === costId)
+    if (!cost) return
     const m = parseInt(viewMonth.split("-")[1])
     const y = parseInt(viewMonth.split("-")[0])
-    if (existing) {
-      await updateRow("fixed_cost_payments", existing.id, { paid: !existing.paid, paid_date: !existing.paid ? new Date().toISOString().split("T")[0] : null }, "fixedCostPayments")
-    } else {
-      await addRow("fixed_cost_payments", {
-        id: generateId(), fixed_cost_id: costId,
-        month: m, year: y, paid: true,
-        paid_date: new Date().toISOString().split("T")[0],
-      }, "fixedCostPayments")
-    }
+    const movId = generateId()
+    await addMovement({
+      id: movId, date: new Date().toISOString().split("T")[0],
+      description: `[Costo fijo Nitia] ${cost.description}`,
+      amount: cost.amount, type: "egreso" as const,
+      category: cost.category || "Costo fijo", account_id: accountId || null,
+    } as any)
+    await addRow("fixed_cost_payments", {
+      id: generateId(), fixed_cost_id: costId, movement_id: movId,
+      month: m, year: y, paid: true,
+      paid_date: new Date().toISOString().split("T")[0],
+      paid_amount: cost.amount, owner: "nitia",
+    }, "fixedCostPayments")
+    setPayingCostId(null)
+    setPayAccountId("")
   }
 
   const byCategory = activeCosts.reduce((acc, cost) => {
@@ -169,7 +189,10 @@ export function NitiaCosts() {
             return (
               <div key={cost.id} className={`relative border rounded-xl p-4 transition-all group ${paid ? "bg-green-50 border-green-200" : "bg-white border-border hover:border-[#5F5A46]"}`}>
                 <div className="flex items-start gap-3">
-                  <button onClick={() => toggleMonthPaid(cost.id)}
+                  <button onClick={() => {
+                    if (paid) { unpayMonth(cost.id) }
+                    else { setPayingCostId(cost.id); setPayAccountId(data.accounts[0]?.id || "") }
+                  }}
                     className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${paid ? "bg-green-600 border-green-600 text-white" : "border-[#E0DDD0] hover:border-[#5F5A46]"}`}>
                     {paid && <Check size={12} />}
                   </button>
@@ -180,6 +203,12 @@ export function NitiaCosts() {
                     {paid && payment?.paid_date && (
                       <p className="text-xs text-green-600 mt-0.5">Pagado: {new Date(payment.paid_date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}</p>
                     )}
+                    {paid && (() => {
+                      const p = monthPayments.find(pp => pp.fixed_cost_id === cost.id && pp.paid)
+                      const mov = p?.movement_id ? data.movements.find(mm => mm.id === p.movement_id) : null
+                      const acc = mov?.account_id ? data.accounts.find(a => a.id === mov.account_id) : null
+                      return acc ? <p className="text-[10px] text-green-600">Cuenta: {acc.name}</p> : null
+                    })()}
                   </div>
                 </div>
                 <div className="absolute top-2 right-2 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
@@ -197,6 +226,30 @@ export function NitiaCosts() {
           <span className="font-bold">{formatCurrency(totalActive)}</span>
         </div>
       </div>
+
+      {payingCostId && (() => {
+        const cost = activeCosts.find(c => c.id === payingCostId)
+        if (!cost) return null
+        return (
+          <Modal isOpen={true} title={`Pagar: ${cost.description}`} onClose={() => setPayingCostId(null)}>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Monto: <strong className="text-foreground">{formatCurrency(cost.amount)}</strong></p>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">¿Con qué cuenta se paga?</label>
+                <select value={payAccountId} onChange={e => setPayAccountId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white">
+                  <option value="">Sin cuenta específica</option>
+                  {data.accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>)}
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <Btn variant="ghost" onClick={() => setPayingCostId(null)}>Cancelar</Btn>
+                <Btn onClick={() => confirmPayCost(payingCostId, payAccountId)}>Confirmar Pago</Btn>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {inactiveCosts.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-6 opacity-60">

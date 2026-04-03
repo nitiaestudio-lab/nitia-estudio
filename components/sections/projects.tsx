@@ -21,7 +21,7 @@ import type { Project, ProjectItem, ProjectFile, Movement, QuoteComparison, Cate
 import {
   Plus, ArrowLeft, Trash2, Pencil, Download, Upload, FileText, Check,
   Search, FolderOpen, Eye, Star, X, FileSpreadsheet, ChevronDown, ChevronUp,
-  Lightbulb, ToggleLeft, ToggleRight, TrendingUp, AlertCircle, CheckCircle2,
+  ToggleLeft, ToggleRight, TrendingUp, AlertCircle, CheckCircle2,
   Settings2, ArrowUpDown, Info, Save, XCircle,
 } from "lucide-react"
 
@@ -204,7 +204,6 @@ function BalancePanel({ project }: { project: Project }) {
   const pc = project.partner_count ?? 2
   const ivaCli = project.iva_cliente_pct ?? 21
   const ivaGan = project.iva_ganancia_pct ?? 10.5
-  const sProvPct = project.sena_proveedor_pct ?? 60
   const sCliPct = project.sena_cliente_pct ?? 50
 
   const ivaCliente = calcIVACliente(totalClient, ivaCli)
@@ -214,7 +213,27 @@ function BalancePanel({ project }: { project: Project }) {
   const ivaGanancia = calcIVAGanancia(totalGanancia, ivaGan)
   const gananciaNeta = totalGanancia - ivaGanancia
   const gananciaIndiv = calcGananciaIndividual(gananciaNeta, pc)
-  const sProv = calcSenaProveedor(totalCost, sProvPct)
+  // Calculate seña per provider based on their individual advance_percent
+  const providerSeñaTotal = (() => {
+    const items = data.projectItems.filter(i => i.project_id === project.id)
+    const quotes = data.quoteComparisons.filter(q => q.project_id === project.id && q.selected)
+    // Group costs by provider
+    const byProv: Record<string, number> = {}
+    for (const i of items) { if (i.provider_id) byProv[i.provider_id] = (byProv[i.provider_id] || 0) + i.cost }
+    for (const q of quotes) { const pid = data.providers.find(p => p.name === q.provider_name)?.id; if (pid) byProv[pid] = (byProv[pid] || 0) + q.cost }
+    let total = 0
+    for (const [pid, cost] of Object.entries(byProv)) {
+      const prov = data.providers.find(p => p.id === pid)
+      const pct = prov?.advance_percent ?? project.sena_proveedor_pct ?? 60
+      total += cost * (pct / 100)
+    }
+    // Add costs without provider using project default
+    const costsWithProv = Object.values(byProv).reduce((s, c) => s + c, 0)
+    const costsWithoutProv = totalCost - costsWithProv
+    if (costsWithoutProv > 0) total += costsWithoutProv * ((project.sena_proveedor_pct ?? 60) / 100)
+    return total
+  })()
+  const sProv = providerSeñaTotal
   const sCli = calcSenaCliente(totalClient, sCliPct)
   const sCliIVA = sCli + calcIVACliente(sCli, ivaCli)
 
@@ -266,7 +285,7 @@ function BalancePanel({ project }: { project: Project }) {
           {provDebe > 0 ? `Debemos a proveedores: ${formatCurrency(provDebe)}` : provDebe < 0 ? `Pagado de más: ${formatCurrency(Math.abs(provDebe))}` : "Al día ✓"}
         </div>
         <div className="border-t border-border pt-2 text-xs text-muted-foreground space-y-1">
-          <div className="flex justify-between"><span>Seña esperada ({sProvPct}%):</span><span className="font-medium text-foreground">{formatCurrency(sProv)}</span></div>
+          <div className="flex justify-between"><span>Seña esperada (por proveedor):</span><span className="font-medium text-foreground">{formatCurrency(sProv)}</span></div>
           <div className="flex justify-between"><span>Seña pagada:</span><span className={`font-medium ${señaPagadaProv > 0 ? "text-red-600" : "text-foreground"}`}>{formatCurrency(señaPagadaProv)}</span></div>
           {señaAportePropio > 0 && <div className="flex justify-between"><span>Aporte propio (diferencia %):</span><span className="font-medium text-amber-600">{formatCurrency(señaAportePropio)}</span></div>}
           {señaPagadaProv > 0 && <div className="flex justify-between"><span>Restante s/seña:</span><span className="font-medium text-foreground">{formatCurrency(totalCost - señaPagadaProv)}</span></div>}
@@ -498,41 +517,12 @@ function ComparadorTab({ project }: { project: Project }) {
   const { data, addRow, updateRow, deleteRow, getCategoriesFor } = useApp()
   const [showNew, setShowNew] = useState(false)
   const [searchQ, setSearchQ] = useState("")
-  const [viewMode, setViewMode] = useState<"item" | "proveedor">("item")
-  const [showSuggestion, setShowSuggestion] = useState(false)
-  const pc = project.partner_count ?? 2
   const quotes = data.quoteComparisons.filter(q => q.project_id === project.id)
   const filtered = quotes.filter(q => !searchQ || q.item.toLowerCase().includes(searchQ.toLowerCase()) || q.category.toLowerCase().includes(searchQ.toLowerCase()) || q.provider_name.toLowerCase().includes(searchQ.toLowerCase()))
   const itemTypeCats = getCategoriesFor("item_type")
   const secHasMult = (t: string) => { const c = itemTypeCats.find(x => x.name === t); return c ? c.has_multiplier !== false : t !== "Material" && t !== "material" }
 
-  const groupedByItem = useMemo(() => { const a: Record<string, QuoteComparison[]> = {}; for (const q of filtered) { const k = `${q.category}::${q.item}`; if (!a[k]) a[k] = []; a[k].push(q) }; return a }, [filtered])
   const groupedByProv = useMemo(() => { const a: Record<string, QuoteComparison[]> = {}; for (const q of filtered) { if (!a[q.provider_name]) a[q.provider_name] = []; a[q.provider_name].push(q) }; return a }, [filtered])
-
-  // Optimization algorithm
-  const optimization = useMemo(() => {
-    const ig: Record<string, QuoteComparison[]> = {}
-    for (const q of quotes) { const k = `${q.category}::${q.item}`; if (!ig[k]) ig[k] = []; ig[k].push(q) }
-    const bestPicks: { item: string; category: string; best: QuoteComparison; mult: number; gan: number }[] = []
-    for (const [, group] of Object.entries(ig)) {
-      let best: QuoteComparison | null = null, bm = 1.4, bg = 0
-      for (const q of group) {
-        if (!secHasMult(q.type || "mobiliario")) {
-          if (q.cost < (best?.cost ?? Infinity)) { best = q; bm = 1; bg = 0 }
-        } else {
-          // Pick cheapest cost (best deal), default x1.4
-          if (!best || q.cost < best.cost) { best = q; bm = 1.4; bg = q.cost * 0.4 }
-        }
-      }
-      if (best) bestPicks.push({ item: best.item, category: best.category, best, mult: bm, gan: bg })
-    }
-    const provs = [...new Set(quotes.map(q => q.provider_name))]
-    const byProv = provs.map(p => {
-      let t = 0; for (const [, g] of Object.entries(ig)) { const q = g.find(x => x.provider_name === p); if (q && secHasMult(q.type || "mobiliario")) t += q.cost * 0.4 }
-      return { provider: p, ganancia: t }
-    }).sort((a, b) => b.ganancia - a.ganancia)
-    return { bestPicks, byProv, optTotal: bestPicks.reduce((s, p) => s + p.gan, 0) }
-  }, [quotes, itemTypeCats])
 
   const toggleSelect = async (q: QuoteComparison, m: number) => {
     const gq = quotes.filter(x => x.category === q.category && x.item === q.item)
@@ -540,17 +530,6 @@ function ComparadorTab({ project }: { project: Project }) {
       if (g.id === q.id) { const ns = !g.selected; await updateRow("quote_comparisons", g.id, { selected: ns, selected_multiplier: ns ? m : null }, "quoteComparisons") }
       else if (g.selected) await updateRow("quote_comparisons", g.id, { selected: false, selected_multiplier: null }, "quoteComparisons")
     }
-  }
-
-  const applySuggestion = async () => {
-    for (const p of optimization.bestPicks) {
-      const gq = quotes.filter(q => q.category === p.category && q.item === p.item)
-      for (const g of gq) {
-        if (g.id === p.best.id) await updateRow("quote_comparisons", g.id, { selected: true, selected_multiplier: p.mult }, "quoteComparisons")
-        else if (g.selected) await updateRow("quote_comparisons", g.id, { selected: false, selected_multiplier: null }, "quoteComparisons")
-      }
-    }
-    setShowSuggestion(false)
   }
 
   const SelBtns = ({ q, hm }: { q: QuoteComparison; hm: boolean }) => hm ? (
@@ -566,44 +545,13 @@ function ComparadorTab({ project }: { project: Project }) {
         <div className="flex-1 relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar..." className="w-full pl-9 pr-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" /></div>
         <div className="flex gap-2 flex-wrap">
-          <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
-            <button onClick={() => setViewMode("item")} className={`px-3 py-1.5 text-sm ${viewMode === "item" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>Por Ítem</button>
-            <button onClick={() => setViewMode("proveedor")} className={`px-3 py-1.5 text-sm ${viewMode === "proveedor" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>Por Proveedor</button>
-          </div>
-          {quotes.length > 1 && <Btn variant="soft" size="sm" onClick={() => setShowSuggestion(true)}><Lightbulb size={14} className="mr-1 inline" />Sugerir óptimo</Btn>}
           <Btn variant="soft" size="sm" onClick={() => exportComparadorXLSX(project.name, quotes.map(q => ({ category: q.category, item: q.item, type: q.type || "mobiliario", provider: q.provider_name, cost: q.cost, priceX14: q.price_x14, priceX16: q.price_x16, gananciaX14: q.ganancia_x14, gananciaX16: q.ganancia_x16, selected: q.selected })))}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
           <Btn size="sm" onClick={() => setShowNew(true)}><Plus size={14} className="mr-1 inline" />Cotización</Btn>
         </div>
       </div>
 
-      {/* By Item */}
-      {viewMode === "item" && Object.entries(groupedByItem).map(([key, its]) => {
-        const [cat, itm] = key.split("::"); const hm = secHasMult(its[0]?.type || "mobiliario")
-        return (<div key={key} className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 bg-[#F0EDE4] border-b border-border"><span className="font-semibold text-sm">{cat} — {itm}</span>
-            {!hm && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">sin ganancia</span>}</div>
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#FAFAF9]"><tr className="text-xs text-muted-foreground">
-            <th className="px-3 py-2 text-left w-8"></th><th className="px-3 py-2 text-left">Proveedor</th><th className="px-3 py-2 text-right">Costo</th>
-            {hm && <><th className="px-3 py-2 text-right">P.x1.4</th><th className="px-3 py-2 text-right">P.x1.6</th>
-            <th className="px-3 py-2 text-right hidden md:table-cell">G.x1.4</th><th className="px-3 py-2 text-right hidden md:table-cell">G.x1.6</th>
-            <th className="px-3 py-2 text-right hidden lg:table-cell">Indiv x1.4</th><th className="px-3 py-2 text-right hidden lg:table-cell">Indiv x1.6</th></>}
-            <th className="px-3 py-2 text-center">Elegir</th><th className="px-3 py-2 w-10"></th>
-          </tr></thead><tbody>{its.map(q => (
-            <tr key={q.id} className={`border-b last:border-0 ${q.selected ? "bg-green-50" : "hover:bg-[#FAFAF9]"}`}>
-              <td className="px-3 py-2.5">{q.selected && <Check size={14} className="text-green-600" />}</td>
-              <td className="px-3 py-2.5 font-medium">{q.provider_name}</td><td className="px-3 py-2.5 text-right">{formatCurrency(q.cost)}</td>
-              {hm && <><td className="px-3 py-2.5 text-right">{formatCurrency(q.price_x14)}</td><td className="px-3 py-2.5 text-right">{formatCurrency(q.price_x16)}</td>
-              <td className="px-3 py-2.5 text-right text-green-600 hidden md:table-cell">{formatCurrency(q.ganancia_x14)}</td>
-              <td className="px-3 py-2.5 text-right text-green-600 hidden md:table-cell">{formatCurrency(q.ganancia_x16)}</td>
-              <td className="px-3 py-2.5 text-right text-green-700 hidden lg:table-cell">{formatCurrency(q.ganancia_x14 / pc)}</td>
-              <td className="px-3 py-2.5 text-right text-green-700 hidden lg:table-cell">{formatCurrency(q.ganancia_x16 / pc)}</td></>}
-              <td className="px-3 py-2.5 text-center"><SelBtns q={q} hm={hm} /></td>
-              <td className="px-3 py-2.5"><button onClick={() => deleteRow("quote_comparisons", q.id, "quoteComparisons")} className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button></td>
-            </tr>))}</tbody></table></div></div>)
-      })}
-
       {/* By Provider */}
-      {viewMode === "proveedor" && Object.entries(groupedByProv).map(([pn, pqs]) => {
+      {Object.entries(groupedByProv).map(([pn, pqs]) => {
         const tc = pqs.reduce((s, q) => s + q.cost, 0)
         const tg14 = pqs.reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? q.ganancia_x14 : 0), 0)
         const tg16 = pqs.reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? q.ganancia_x16 : 0), 0)
@@ -632,33 +580,40 @@ function ComparadorTab({ project }: { project: Project }) {
             </tr>) })}</tbody></table></div></div>)
       })}
 
-      {quotes.length === 0 && <Empty title="Sin cotizaciones" description="Agregá cotizaciones para comparar proveedores" action={<Btn onClick={() => setShowNew(true)}>Agregar</Btn>} />}
-
-      {/* Suggestion Modal */}
-      {showSuggestion && <Modal isOpen={true} title="Sugerencia Óptima" onClose={() => setShowSuggestion(false)} size="lg">
-        <div className="space-y-4">
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2"><Lightbulb size={18} className="text-green-600" /><h4 className="font-semibold text-green-800">Mix Óptimo — Ganancia máxima</h4></div>
-            <p className="text-2xl font-bold text-green-700 mb-3">{formatCurrency(optimization.optTotal)}</p>
-            <div className="space-y-1.5">{optimization.bestPicks.map((p, i) => (
-              <div key={i} className="flex items-center justify-between text-sm bg-white/60 rounded px-3 py-1.5">
-                <span><strong>{p.item}</strong> <span className="text-muted-foreground">→ {p.best.provider_name}</span></span>
-                <span className="text-green-600 font-medium">{p.gan > 0 ? `+${formatCurrency(p.gan)} (x${p.mult})` : "Sin ganancia"}</span>
-              </div>))}</div>
+      {/* Running total of selections */}
+      {(() => {
+        const selected = quotes.filter(q => q.selected)
+        if (selected.length === 0) return null
+        const totalCost = selected.reduce((s, q) => s + q.cost, 0)
+        const totalPrice = selected.reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? (q.selected_multiplier === 1.6 ? q.price_x16 : q.price_x14) : q.cost), 0)
+        const totalGanancia = totalPrice - totalCost
+        return (
+          <div className="bg-[#295E29] text-white rounded-xl p-4 space-y-2 sticky bottom-4">
+            <h4 className="font-semibold text-sm text-white/80">Total Seleccionado ({selected.length} items)</h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div><p className="text-xs text-white/60">Costo</p><p className="text-lg font-bold">{formatCurrency(totalCost)}</p></div>
+              <div><p className="text-xs text-white/60">Precio</p><p className="text-lg font-bold">{formatCurrency(totalPrice)}</p></div>
+              <div><p className="text-xs text-white/60">Ganancia</p><p className="text-lg font-bold">{formatCurrency(totalGanancia)}</p></div>
+            </div>
+            <Btn variant="soft" size="sm" className="bg-white/20 text-white hover:bg-white/30" onClick={async () => {
+              for (const q of selected) {
+                if (!q.selected) continue
+                const exists = data.projectItems.some(i => i.project_id === project.id && i.description === q.item && i.provider_id === (data.providers.find(p => p.name === q.provider_name)?.id))
+                if (exists) continue
+                const mult = q.selected_multiplier || 1.4
+                await addRow("project_items", {
+                  id: generateId(), project_id: project.id, description: q.item, type: q.type || "Mobiliario",
+                  cost: q.cost, client_price: secHasMult(q.type || "mobiliario") ? q.cost * mult : q.cost,
+                  multiplier: secHasMult(q.type || "mobiliario") ? mult : 1,
+                  provider_id: data.providers.find(p => p.name === q.provider_name)?.id || null,
+                }, "projectItems")
+              }
+            }}>Agregar selección al desglose</Btn>
           </div>
-          {optimization.byProv.length > 1 && <div><h4 className="font-semibold text-sm mb-2">Todo con un solo proveedor</h4>
-            <div className="space-y-2">{optimization.byProv.map((p, i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-[#F7F5ED] rounded-lg">
-                <span className="font-medium text-sm">{p.provider}</span>
-                <div className="flex items-center gap-2">
-                  <span className={`font-bold ${i === 0 ? "text-green-600" : "text-muted-foreground"}`}>{formatCurrency(p.ganancia)}</span>
-                  {p.ganancia < optimization.optTotal && <span className="text-xs text-red-500">-{formatCurrency(optimization.optTotal - p.ganancia)}</span>}
-                </div>
-              </div>))}</div></div>}
-          <div className="flex justify-end gap-3 pt-2"><Btn variant="ghost" onClick={() => setShowSuggestion(false)}>Cerrar</Btn>
-            <Btn onClick={applySuggestion}><Check size={14} className="mr-1 inline" />Aplicar sugerencia</Btn></div>
-        </div>
-      </Modal>}
+        )
+      })()}
+
+      {quotes.length === 0 && <Empty title="Sin cotizaciones" description="Agregá cotizaciones para comparar proveedores" action={<Btn onClick={() => setShowNew(true)}>Agregar</Btn>} />}
 
       {showNew && <QuoteModal projectId={project.id} providers={data.providers} onClose={() => setShowNew(false)}
         onSave={async (q) => { await addRow("quote_comparisons", q, "quoteComparisons"); setShowNew(false) }} />}
