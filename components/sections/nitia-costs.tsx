@@ -26,8 +26,9 @@ export function NitiaCosts() {
   const editingCost = editingId ? costs.find(c => c.id === editingId) : null
 
   // Payment tracking for selected month
-  const [monthNum, yearNum] = viewMonth.split("-").map(Number).reverse()
-  const monthPayments = data.fixedCostPayments.filter(p => p.year === yearNum && p.month === (monthNum || parseInt(viewMonth.split("-")[1])))
+  const yearNum = parseInt(viewMonth.split("-")[0])
+  const monthNum = parseInt(viewMonth.split("-")[1])
+  const monthPayments = data.fixedCostPayments.filter(p => p.year === yearNum && p.month === monthNum)
 
   const isMonthPaid = (costId: string) => monthPayments.some(p => p.fixed_cost_id === costId && p.paid)
 

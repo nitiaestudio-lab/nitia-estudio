@@ -151,7 +151,7 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
               {budgetFinal ? `Sugerido: ${formatCurrency(totalClient)}` : "Click para editar"}
             </p>
           </div>
-          <Stat label="Cobrado" value={formatCurrency(income - incomeUSD)} sub={incomeUSD > 0 ? `+ U$D ${new Intl.NumberFormat("es-AR").format(incomeUSD)}` : formatCurrency((budgetFinal || totalClient) - income) + " pendiente"} />
+          <Stat label="Cobrado" value={formatCurrency(income - incomeUSD)} sub={`${formatCurrency((budgetFinal || totalClient) - (income - incomeUSD))} pendiente${incomeUSD > 0 ? ` · + U$D ${new Intl.NumberFormat("es-AR").format(incomeUSD)}` : ""}`} />
           <Stat label="Pagado proveedores" value={formatCurrency(expenses - expensesUSD)} sub={expensesUSD > 0 ? `+ U$D ${new Intl.NumberFormat("es-AR").format(expensesUSD)}` : undefined} />
           {canSeeGanancias && <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
         </div>
@@ -216,8 +216,8 @@ function BalancePanel({ project }: { project: Project }) {
 
   const ivaCliente = calcIVACliente(totalClient, ivaCli)
   const totalConIVA = totalClient + ivaCliente
-  const clienteDebe = totalConIVA - income
-  const provDebe = totalCost - expenses
+  const clienteDebe = totalConIVA - incomeARS
+  const provDebe = totalCost - expensesARS
   const ivaGanancia = calcIVAGanancia(totalGanancia, ivaGan)
   const gananciaNeta = totalGanancia - ivaGanancia
   const gananciaIndiv = calcGananciaIndividual(gananciaNeta, pc)
@@ -264,7 +264,7 @@ function BalancePanel({ project }: { project: Project }) {
           {clienteDebe > 0 ? <AlertCircle size={18} className="text-amber-500" /> : <CheckCircle2 size={18} className="text-green-600" />}
           <h4 className="font-semibold text-sm">Balance Cliente</h4>
         </div>
-        <Bar value={income} max={totalConIVA} color={income >= totalConIVA ? "green" : "amber"} />
+        <Bar value={incomeARS} max={totalConIVA} color={incomeARS >= totalConIVA ? "green" : "amber"} />
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div><span className="text-muted-foreground">Total c/IVA:</span> <span className="font-medium">{formatCurrency(totalConIVA)}</span></div>
           <div><span className="text-muted-foreground">Cobrado:</span> <span className="font-medium text-green-600">{formatCurrency(incomeARS)}</span>
@@ -273,6 +273,7 @@ function BalancePanel({ project }: { project: Project }) {
         </div>
         <div className={`text-sm font-bold ${clienteDebe > 0 ? "text-amber-600" : "text-green-600"}`}>
           {clienteDebe > 0 ? `Cliente debe: ${formatCurrency(clienteDebe)}` : clienteDebe < 0 ? `Cobrado de más: ${formatCurrency(Math.abs(clienteDebe))}` : "Al día ✓"}
+          {incomeUSD > 0 && <span className="text-[10px] font-normal text-blue-600 ml-1">(+ U$D {new Intl.NumberFormat("es-AR").format(incomeUSD)} cobrado)</span>}
         </div>
         <div className="border-t border-border pt-2 text-xs text-muted-foreground space-y-1">
           <div className="flex justify-between"><span>Seña esperada ({sCliPct}% c/IVA):</span><span className="font-medium text-foreground">{formatCurrency(sCliIVA)}</span></div>
@@ -286,7 +287,7 @@ function BalancePanel({ project }: { project: Project }) {
           {provDebe > 0 ? <AlertCircle size={18} className="text-red-500" /> : <CheckCircle2 size={18} className="text-green-600" />}
           <h4 className="font-semibold text-sm">Balance Proveedores</h4>
         </div>
-        <Bar value={expenses} max={totalCost} color={expenses >= totalCost ? "green" : "red"} />
+        <Bar value={expensesARS} max={totalCost} color={expensesARS >= totalCost ? "green" : "red"} />
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div><span className="text-muted-foreground">Total costo:</span> <span className="font-medium">{formatCurrency(totalCost)}</span></div>
           <div><span className="text-muted-foreground">Pagado:</span> <span className="font-medium text-red-600">{formatCurrency(expensesARS)}</span>

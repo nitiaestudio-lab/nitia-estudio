@@ -133,11 +133,19 @@ export function PersonalFinance() {
       p.fixed_cost_id === item.id && p.month === currentMonth && p.year === currentYear
     )
     if (payment) {
-      // Remove linked movement from global movements (reverses account balance)
+      // Remove linked global movement (reverses account balance)
       if (payment.movement_id) {
         try { await deleteMovement(payment.movement_id) } catch {}
-        // Also remove the personal_finance_movements record
-        const pfMov = data.personalFinanceMovements.find(m => m.id === payment.movement_id)
+      }
+      // Remove linked personal_finance_movements record
+      const pfId = payment.pf_movement_id
+      if (pfId) {
+        try { await deleteRow("personal_finance_movements", pfId, "personalFinanceMovements") } catch {}
+      } else if (payment.movement_id) {
+        // Fallback: search by description match for old records without pf_movement_id
+        const pfMov = data.personalFinanceMovements.find(m =>
+          m.description === `[Gasto fijo] ${item.description}` && m.type === "egreso"
+        )
         if (pfMov) {
           try { await deleteRow("personal_finance_movements", pfMov.id, "personalFinanceMovements") } catch {}
         }
@@ -150,6 +158,7 @@ export function PersonalFinance() {
     // Check if already paid this month (prevent duplicates)
     if (isFixedPaid(item.id)) return
     const movId = generateId()
+    const pfMovId = generateId()
     // Create global movement (impacts account balance)
     await addMovement({
       id: movId, date: today(), description: `[Gasto fijo] ${item.description}`,
@@ -160,16 +169,17 @@ export function PersonalFinance() {
     } as any)
     // Also create personal_finance_movements record so it shows in personal finance
     await addRow("personal_finance_movements", {
-      id: movId, date: today(), description: `[Gasto fijo] ${item.description}`,
+      id: pfMovId, date: today(), description: `[Gasto fijo] ${item.description}`,
       amount: item.amount, type: "egreso" as const,
       category: item.category || "Gasto fijo",
       owner: effectiveTab, is_fixed: false, active: true,
     } as any, "personalFinanceMovements")
-    // Create payment record linked to movement
+    // Create payment record linked to both movement IDs
     await addRow("fixed_cost_payments", {
       id: generateId(),
       fixed_cost_id: item.id,
       movement_id: movId,
+      pf_movement_id: pfMovId,
       month: currentMonth,
       year: currentYear,
       paid: true,
@@ -251,7 +261,7 @@ export function PersonalFinance() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-semibold text-sm text-foreground">Gastos Fijos Mensuales</h3>
-            <p className="text-xs text-muted-foreground">{monthNames[currentMonth]} {currentYear} — {paidCount}/{fixedExpenses.length} pagados</p>
+            <p className="text-xs text-muted-foreground">{monthNames[currentMonth - 1]} {currentYear} — {paidCount}/{fixedExpenses.length} pagados</p>
           </div>
           <Btn size="sm" onClick={() => { setEditingItem(null); setAddType("fixed"); setShowAddDialog(true) }}>
             <Plus size={14} className="mr-1 inline" />Agregar

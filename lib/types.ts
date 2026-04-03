@@ -170,6 +170,7 @@ export interface FixedCostPayment {
   id: string
   fixed_cost_id: string
   movement_id?: string | null
+  pf_movement_id?: string | null
   month: number
   year: number
   paid: boolean
