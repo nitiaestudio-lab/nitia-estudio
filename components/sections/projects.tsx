@@ -314,6 +314,61 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
   return (
     <div className="space-y-6">
       {canSeeGanancias && <BalancePanel project={project} />}
+      {/* Seguimiento de Señas */}
+      {(() => {
+        const señaMovs = data.movements.filter(m => m.project_id === project.id && (m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Diferencia seña"))
+        if (señaMovs.length === 0) return null
+        const señaIngresos = señaMovs.filter(m => m.type === "ingreso")
+        const señaEgresos = señaMovs.filter(m => m.type === "egreso" && m.category !== "Diferencia seña")
+        const señaDiffs = señaMovs.filter(m => m.category === "Diferencia seña")
+        return (
+          <div className="bg-gradient-to-r from-purple-50 to-purple-50/50 border border-purple-200 rounded-xl p-4 sm:p-5">
+            <h4 className="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+              Seguimiento de Señas
+            </h4>
+            <div className="grid sm:grid-cols-3 gap-3 mb-4">
+              <div className="bg-white/80 rounded-lg p-3 text-center">
+                <p className="text-[10px] uppercase tracking-wider text-purple-600 mb-1">Cobrado de clientes</p>
+                <p className="text-lg font-bold text-green-700">{formatCurrency(señaIngresos.reduce((s, m) => s + m.amount, 0))}</p>
+              </div>
+              <div className="bg-white/80 rounded-lg p-3 text-center">
+                <p className="text-[10px] uppercase tracking-wider text-purple-600 mb-1">Pagado a proveedores</p>
+                <p className="text-lg font-bold text-red-700">{formatCurrency(señaEgresos.reduce((s, m) => s + m.amount, 0))}</p>
+              </div>
+              <div className="bg-white/80 rounded-lg p-3 text-center">
+                <p className="text-[10px] uppercase tracking-wider text-amber-600 mb-1">Puesto de bolsillo</p>
+                <p className="text-lg font-bold text-amber-700">{formatCurrency(señaDiffs.reduce((s, m) => s + m.amount, 0))}</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {señaMovs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(m => {
+                const prov = data.providers.find(p => p.id === m.provider_id)
+                const acc = data.accounts.find(a => a.id === m.account_id)
+                const isSeñaDiff = m.category === "Diferencia seña"
+                return (
+                  <div key={m.id} className={`flex items-center justify-between py-2 px-3 rounded-lg text-sm ${isSeñaDiff ? "bg-amber-50/80" : m.type === "ingreso" ? "bg-green-50/80" : "bg-red-50/80"}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSeñaDiff ? "bg-amber-500" : m.type === "ingreso" ? "bg-green-500" : "bg-red-500"}`}></span>
+                      <span className="font-medium truncate">{m.description}</span>
+                      {prov && <span className="text-[10px] px-1.5 py-0.5 bg-white rounded text-purple-600 shrink-0">{prov.name}</span>}
+                      {isSeñaDiff && acc && <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 rounded text-amber-700 shrink-0">Cuenta: {acc.name}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {m.sena_real_pct != null && <span className="text-[10px] text-purple-600">Prov {m.sena_real_pct}%</span>}
+                      {m.sena_cliente_pct != null && <span className="text-[10px] text-purple-600">Cli {m.sena_cliente_pct}%</span>}
+                      <span className={`font-bold ${isSeñaDiff ? "text-amber-700" : m.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>
+                        {m.type === "ingreso" ? "+" : "-"}{formatCurrency(m.amount)}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{new Date(m.date).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -778,7 +833,16 @@ function MovimientosTab({ project }: { project: Project }) {
                           </span>
                         )}
                         {mov.category && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
-                        {mov.concepto && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">{mov.concepto}</span>}
+                        {mov.concepto === "seña" || mov.concepto?.startsWith("seña") ? (
+                          <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">Seña</span>
+                        ) : mov.concepto ? (
+                          <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">{mov.concepto}</span>
+                        ) : null}
+                        {mov.sena_real_pct != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">Prov {mov.sena_real_pct}%</span>}
+                        {mov.sena_cliente_pct != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">Cli {mov.sena_cliente_pct}%</span>}
+                        {mov.category === "Diferencia seña" && (
+                          <p className="text-[10px] text-amber-600 mt-0.5">💰 Dinero propio — Cuenta: {accName || "sin cuenta"}</p>
+                        )}
                       </td>
                       {/* Provider */}
                       <td className="px-3 py-2.5 hidden md:table-cell">
@@ -1104,7 +1168,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
     const concepto = esSeña ? `seña` : undefined
     const mainMov: Movement = {
       id: generateId(), date, description: desc, amount, type, project_id: project.id,
-      account_id: aid || null, provider_id: type === "egreso" ? (pid || null) : null,
+      account_id: aid || null, provider_id: type === "egreso" ? (pid || null) : (esSeña && señaActiveProvId ? señaActiveProvId : null),
       category: "Proyecto", auto_split: type === "ingreso" ? split : false, split_percentage: 50,
       concepto: concepto || null,
       sena_real_pct: esSeña ? señaProvPctNum : null,

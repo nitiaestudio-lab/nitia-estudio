@@ -8,7 +8,7 @@ import { Plus, Pencil, Trash2, FileSpreadsheet, Search, Check, ArrowUpDown, Chev
 import type { PersonalFinanceMovement } from "@/lib/types"
 
 export function PersonalFinance() {
-  const { role, data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
+  const { role, data, addRow, updateRow, deleteRow, addMovement, deleteMovement, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const isAdmin = role === "paula" || role === "cami"
   const ownTab = role === "cami" ? "cami" : "paula"
 
@@ -127,16 +127,31 @@ export function PersonalFinance() {
   const toggleFixedPaid = async (item: PersonalFinanceMovement) => {
     const paid = isFixedPaid(item.id)
     if (paid) {
-      // Remove payment record
       const payment = data.fixedCostPayments?.find(p =>
         p.fixed_cost_id === item.id && p.month === currentMonth && p.year === currentYear
       )
-      if (payment) await deleteRow("fixed_cost_payments", payment.id, "fixedCostPayments")
+      if (payment) {
+        // Remove the auto-generated movement if exists
+        if (payment.movement_id) {
+          const mov = data.movements.find(m => m.id === payment.movement_id)
+          if (mov) await deleteMovement(payment.movement_id)
+        }
+        await deleteRow("fixed_cost_payments", payment.id, "fixedCostPayments")
+      }
     } else {
-      // Create payment record
+      const movId = generateId()
+      // Create movement for this fixed cost payment
+      await addMovement({
+        id: movId, date: today(), description: `[Gasto fijo] ${item.description}`,
+        amount: item.amount, type: "egreso" as const,
+        category: item.category || "Gasto fijo", fixed_cost_id: item.id,
+        created_by: effectiveTab,
+      } as any)
+      // Create payment record linked to the movement
       await addRow("fixed_cost_payments", {
         id: generateId(),
         fixed_cost_id: item.id,
+        movement_id: movId,
         month: currentMonth,
         year: currentYear,
         paid: true,
@@ -175,6 +190,20 @@ export function PersonalFinance() {
 
   const paidCount = fixedExpenses.filter(f => isFixedPaid(f.id)).length
   const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
+  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
+  const [editValue, setEditValue] = useState("")
+  const startEdit = (id: string, field: string, value: string) => { setEditingCell({ id, field }); setEditValue(value) }
+  const saveEdit = async (movId: string) => {
+    if (!editingCell) return
+    const updates: Record<string, any> = {}
+    if (editingCell.field === "description") updates.description = editValue
+    else if (editingCell.field === "amount") updates.amount = parseFloat(editValue) || 0
+    else if (editingCell.field === "date") updates.date = editValue
+    await updateRow("personal_finance_movements", movId, updates, "personalFinanceMovements")
+    setEditingCell(null)
+  }
+  const cancelEdit = () => setEditingCell(null)
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -315,10 +344,31 @@ export function PersonalFinance() {
                 <tbody className="divide-y divide-border/50">
                   {allMovements.map(mov => (
                     <tr key={mov.id} className={`group hover:bg-[#FAFAF9] transition-colors ${mov.isAuto ? "bg-green-50/30" : ""}`}>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{formatDate(mov.date)}</td>
                       <td className="px-3 py-2.5">
-                        <span className={`font-medium ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>{mov.description}</span>
-                        {mov.isAuto && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 bg-green-100 text-green-600 rounded">auto</span>}
+                        {editingCell?.id === mov.id && editingCell.field === "date" ? (
+                          <input type="date" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus
+                            onBlur={() => saveEdit(mov.id)} onKeyDown={e => { if (e.key === "Enter") saveEdit(mov.id); if (e.key === "Escape") cancelEdit() }}
+                            className="w-full px-1.5 py-0.5 text-xs border border-[#5F5A46] rounded bg-white" />
+                        ) : (
+                          <span className="text-xs text-muted-foreground cursor-pointer hover:text-foreground" onDoubleClick={() => !mov.isAuto && startEdit(mov.id, "date", mov.date)}>
+                            {formatDate(mov.date)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {editingCell?.id === mov.id && editingCell.field === "description" ? (
+                          <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus
+                            onBlur={() => saveEdit(mov.id)} onKeyDown={e => { if (e.key === "Enter") saveEdit(mov.id); if (e.key === "Escape") cancelEdit() }}
+                            className="w-full px-1.5 py-0.5 text-sm border border-[#5F5A46] rounded bg-white" />
+                        ) : (
+                          <>
+                            <span className={`font-medium cursor-pointer hover:underline ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}
+                              onDoubleClick={() => !mov.isAuto && startEdit(mov.id, "description", mov.description)}>
+                              {mov.description}
+                            </span>
+                            {mov.isAuto && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 bg-green-100 text-green-600 rounded">auto</span>}
+                          </>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 hidden sm:table-cell">
                         {mov.category && <span className="text-xs px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
@@ -329,9 +379,16 @@ export function PersonalFinance() {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        <span className={`font-semibold ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>
-                          {mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}
-                        </span>
+                        {editingCell?.id === mov.id && editingCell.field === "amount" ? (
+                          <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus
+                            onBlur={() => saveEdit(mov.id)} onKeyDown={e => { if (e.key === "Enter") saveEdit(mov.id); if (e.key === "Escape") cancelEdit() }}
+                            className="w-full px-1.5 py-0.5 text-sm border border-[#5F5A46] rounded bg-white text-right" />
+                        ) : (
+                          <span className={`font-semibold cursor-pointer hover:underline ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}
+                            onDoubleClick={() => !mov.isAuto && startEdit(mov.id, "amount", String(mov.amount))}>
+                            {mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         {!mov.isAuto && (
@@ -368,6 +425,7 @@ export function PersonalFinance() {
               </table>
             </div>
           ) : <Empty title="Sin movimientos" description="Agregá gastos o ingresos" />}
+          <p className="text-xs text-muted-foreground px-3 py-2">Doble click en fecha, descripcion o monto para editar inline</p>
         </div>
       </div>
 

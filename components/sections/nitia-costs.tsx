@@ -147,42 +147,55 @@ export function NitiaCosts() {
         </div>
       )}
 
-      {/* Costs by Category */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {Object.entries(byCategory).map(([category, items]) => (
-          <div key={category} className="bg-card border border-border rounded-xl p-6">
-            <SecHead title={category} />
-            <div className="space-y-2">
-              {items.map(cost => (
-                <div key={cost.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 group">
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => toggleMonthPaid(cost.id)}
-                      className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                        isMonthPaid(cost.id) ? "bg-green-600 border-green-600 text-white" : "border-[#E0DDD0] hover:border-[#5F5A46]"
-                      }`}>
-                      {isMonthPaid(cost.id) && <Check size={12} />}
-                    </button>
-                    <span className={`text-sm ${isMonthPaid(cost.id) ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                      {cost.description}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-muted-foreground">{formatCurrency(cost.amount)}</span>
-                    <button onClick={() => setEditingId(cost.id)}
-                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 hover:bg-accent rounded transition-all">
-                      <Pencil size={14} className="text-muted-foreground" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <HR />
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Subtotal</span>
-              <span className="text-sm font-semibold">{formatCurrency(items.reduce((s, c) => s + c.amount, 0))}</span>
+      {/* Costos Fijos - Cards */}
+      <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-sm text-foreground">Gastos Fijos del Estudio</h3>
+            <p className="text-xs text-muted-foreground">{viewMonth.split("-").reverse().join("/")} — {paidCount}/{activeCosts.length} pagados</p>
+          </div>
+        </div>
+        {activeCosts.length > 0 && (
+          <div className="mb-4">
+            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${(paidCount / activeCosts.length) * 100}%` }} />
             </div>
           </div>
-        ))}
+        )}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {activeCosts.map(cost => {
+            const paid = isMonthPaid(cost.id)
+            const payment = monthPayments.find(p => p.fixed_cost_id === cost.id && p.paid)
+            return (
+              <div key={cost.id} className={`relative border rounded-xl p-4 transition-all group ${paid ? "bg-green-50 border-green-200" : "bg-white border-border hover:border-[#5F5A46]"}`}>
+                <div className="flex items-start gap-3">
+                  <button onClick={() => toggleMonthPaid(cost.id)}
+                    className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${paid ? "bg-green-600 border-green-600 text-white" : "border-[#E0DDD0] hover:border-[#5F5A46]"}`}>
+                    {paid && <Check size={12} />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${paid ? "line-through text-muted-foreground" : ""}`}>{cost.description}</p>
+                    <p className="text-xs text-muted-foreground">{cost.category || "Sin categoria"}{cost.due_day ? ` · Vence dia ${cost.due_day}` : ""}</p>
+                    <p className={`text-base font-bold mt-1 ${paid ? "text-green-600" : "text-foreground"}`}>{formatCurrency(cost.amount)}</p>
+                    {paid && payment?.paid_date && (
+                      <p className="text-xs text-green-600 mt-0.5">Pagado: {new Date(payment.paid_date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="absolute top-2 right-2 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                  <button onClick={() => setEditingId(cost.id)}
+                    className="p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
+                </div>
+              </div>
+            )
+          })}
+          {activeCosts.length === 0 && <div className="col-span-full"><Empty title="Sin costos fijos" description="Agrega los gastos fijos del estudio" /></div>}
+        </div>
+        <HR />
+        <div className="flex justify-between text-sm">
+          <span className="font-semibold text-muted-foreground">Total mensual</span>
+          <span className="font-bold">{formatCurrency(totalActive)}</span>
+        </div>
       </div>
 
       {inactiveCosts.length > 0 && (

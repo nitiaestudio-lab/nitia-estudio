@@ -317,28 +317,54 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
               onCustomStartChange={setPayCustomStart} onCustomEndChange={setPayCustomEnd} />
           </div>
         )}
-        {filteredMovements.length > 0 ? filteredMovements.map(mov => (
-          <div key={mov.id} className="flex items-center justify-between py-2.5 border-b border-border last:border-0 text-sm group">
-            <div className="min-w-0 flex-1">
-              <span className="font-medium">{mov.description}</span>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                <span>{formatDate(mov.date)}</span>
-                {mov.project_id && (
-                  <button onClick={() => { setSelectedProjectId(mov.project_id!); setSection("projects") }}
-                    className="text-blue-600 hover:underline flex items-center gap-0.5">
-                    {data.projects.find(p => p.id === mov.project_id)?.name}<ExternalLink size={8} />
-                  </button>
-                )}
-                {mov.sena_real_pct && <span>Seña real: {mov.sena_real_pct}%</span>}
-                {mov.sena_cliente_pct && <span>Seña cli: {mov.sena_cliente_pct}%</span>}
+        {filteredMovements.length > 0 ? filteredMovements.map(mov => {
+          const project = data.projects.find(p => p.id === mov.project_id)
+          const account = data.accounts.find(a => a.id === mov.account_id)
+          const isSeña = mov.concepto === "seña" || mov.concepto?.startsWith("seña")
+          const isSeñaDiff = mov.category === "Diferencia seña"
+          // Parse item IDs from concepto like "seña:id1,id2"
+          const señaItemIds = mov.concepto?.startsWith("seña:") ? mov.concepto.split(":")[1]?.split(",") || [] : []
+          const señaItems = señaItemIds.length > 0
+            ? data.projectItems.filter(i => señaItemIds.includes(i.id)).map(i => i.description)
+                .concat(data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).map(q => q.item))
+            : []
+          return (
+            <div key={mov.id} className={`py-3 border-b border-border last:border-0 text-sm ${isSeñaDiff ? "bg-amber-50/50" : isSeña ? "bg-purple-50/30" : ""}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${isSeñaDiff ? "bg-amber-500" : mov.type === "egreso" ? "bg-red-500" : "bg-green-500"}`}></span>
+                    <span className="font-medium">{mov.description}</span>
+                    {(isSeña || isSeñaDiff) && <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">{isSeñaDiff ? "Dif. Seña" : "Seña"}</span>}
+                    {mov.category && mov.category !== "Diferencia seña" && <span className="text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap mt-1 ml-4">
+                    <span>{formatDate(mov.date)}</span>
+                    {project && <span className="text-blue-600">{project.name}</span>}
+                    {account && <span>Cuenta: {account.name}</span>}
+                    {mov.sena_real_pct != null && <span className="text-purple-600">Prov {mov.sena_real_pct}%</span>}
+                    {mov.sena_cliente_pct != null && <span className="text-purple-600">Cli {mov.sena_cliente_pct}%</span>}
+                    {mov.medio_pago === "USD" && <span className="text-blue-600 font-medium">USD</span>}
+                  </div>
+                  {señaItems.length > 0 && (
+                    <div className="ml-4 mt-1 flex flex-wrap gap-1">
+                      {señaItems.map((name, i) => (
+                        <span key={i} className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">📦 {name}</span>
+                      ))}
+                    </div>
+                  )}
+                  {isSeñaDiff && account && (
+                    <p className="ml-4 mt-1 text-[10px] text-amber-600">💰 Cubierto con cuenta: {account.name}</p>
+                  )}
+                </div>
+                <span className={`font-bold shrink-0 ${isSeñaDiff ? "text-amber-700" : mov.type === "egreso" ? "text-red-600" : "text-green-600"}`}>
+                  {mov.type === "egreso" ? "-" : "+"}{formatAmount(mov)}
+                  {mov.medio_pago === "USD" && <span className="ml-1 text-[10px] px-1 py-0.5 bg-blue-100 text-blue-700 rounded">USD</span>}
+                </span>
               </div>
             </div>
-            <span className={`font-medium shrink-0 flex items-center ${mov.type === "egreso" ? "text-red-600" : "text-green-600"}`}>
-              {mov.type === "egreso" ? "-" : "+"}{formatAmount(mov)}
-              {mov.medio_pago === "USD" && <span className="ml-1 text-[10px] px-1 py-0.5 bg-blue-100 text-blue-700 rounded">USD</span>}
-            </span>
-          </div>
-        )) : <Empty title="Sin pagos registrados" />}
+          )
+        }) : <Empty title="Sin pagos registrados" />}
       </div>
 
       {/* Modals */}
