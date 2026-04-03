@@ -98,6 +98,8 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
   const expenses = projectExpenses(data.movements, project.id)
   const budgetFinal = project.budget_final ?? null
   const projectTasks = data.tasks.filter(t => t.project_id === project.id)
+  const pendingProjectTasks = projectTasks.filter(t => t.status !== "completada")
+    .sort((a, b) => { const p: Record<string, number> = { alta: 0, media: 1, baja: 2 }; return (p[a.priority] ?? 1) - (p[b.priority] ?? 1) })
 
   const saveBudgetFinal = async () => {
     const val = parseFloat(budgetValue) || null
@@ -125,9 +127,8 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
       {/* Stats */}
       {isFull && <div className="space-y-3">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat label="Presupuesto Sugerido" value={formatCurrency(totalClient)} sub="(calculado de ítems)" />
           <div className="bg-card border border-border rounded-xl p-4">
-            <p className="text-xs text-muted-foreground mb-1">Presupuesto Final</p>
+            <p className="text-xs text-muted-foreground mb-1">Presupuesto</p>
             {editingBudget ? (
               <div className="flex items-center gap-2">
                 <input type="number" value={budgetValue} onChange={e => setBudgetValue(e.target.value)}
@@ -138,20 +139,37 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
               </div>
             ) : (
               <p className="text-lg font-bold cursor-pointer hover:text-[#5F5A46]" onClick={() => { setBudgetValue(String(budgetFinal ?? totalClient)); setEditingBudget(true) }}>
-                {budgetFinal ? formatCurrency(budgetFinal) : <span className="text-muted-foreground text-sm">Click para definir</span>}
+                {formatCurrency(budgetFinal || totalClient)}
               </p>
             )}
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {budgetFinal ? `Sugerido: ${formatCurrency(totalClient)}` : "Click para editar"}
+            </p>
           </div>
           <Stat label="Cobrado" value={formatCurrency(income)} sub={formatCurrency((budgetFinal || totalClient) - income) + " pendiente"} />
           <Stat label="Pagado proveedores" value={formatCurrency(expenses)} />
+          {canSeeGanancias && <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
         </div>
-        {canSeeGanancias && <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />
-          {budgetFinal && budgetFinal !== totalClient && (
-            <Stat label="Ganancia Real (s/final)" value={formatCurrency(budgetFinal - (totalClient - totalGanancia))} highlight />
-          )}
-        </div>}
       </div>}
+
+      {/* Tareas pendientes */}
+      {pendingProjectTasks.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold text-amber-800">{pendingProjectTasks.length} tarea(s) pendiente(s)</p>
+            <button onClick={() => setTab("tareas")} className="text-xs text-amber-700 hover:underline">Ver todas</button>
+          </div>
+          <div className="space-y-1">
+            {pendingProjectTasks.slice(0, 3).map(t => (
+              <div key={t.id} className="flex items-center gap-2 text-sm">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${t.priority === "alta" ? "bg-red-500" : t.priority === "media" ? "bg-yellow-500" : "bg-gray-400"}`} />
+                <span className="text-amber-900 truncate">{t.title}</span>
+                {t.due_date && <span className="text-xs text-amber-600 shrink-0">{new Date(t.due_date).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto border-b border-border pb-0">
@@ -316,7 +334,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
 
       {/* Dynamic Sections */}
       {sections.map(sec => {
-        const si = items.filter(i => i.type === sec.name)
+        const si = items.filter(i => i.type === sec.name || i.type?.toLowerCase().replace(/[_ ]/g, '') === sec.name.toLowerCase().replace(/[_ ]/g, ''))
         const sq = selectedQuotes.filter(q => q.type === sec.name)
         const hm = sec.has_multiplier !== false
         return (
@@ -398,7 +416,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
       </Modal>}
 
       {showAddItem && <AddItemModal type={showAddItem} hasMultiplier={sections.find(s => s.name === showAddItem)?.has_multiplier !== false}
-        defaultMultiplier={project.margin || 1.4} providers={data.providers} onClose={() => setShowAddItem(null)}
+        defaultMultiplier={project.margin || 1} providers={data.providers} onClose={() => setShowAddItem(null)}
         onSave={async (item) => { await addRow("project_items", { ...item, project_id: project.id }, "projectItems"); setShowAddItem(null) }} />}
       {editingItem && <EditItemModal item={editingItem} hasMultiplier={sections.find(s => s.name === editingItem.type)?.has_multiplier !== false}
         providers={data.providers} onClose={() => setEditingItem(null)}
@@ -745,22 +763,28 @@ function QuoteModal({ projectId, providers, onClose, onSave }: { projectId: stri
 }
 
 function AddMovModal({ project, accounts, providers, onClose, onSave }: { project: Project; accounts: any[]; providers: any[]; onClose: () => void; onSave: (m: Movement) => void }) {
-  const { addRow } = useApp()
+  const { data, addRow } = useApp()
   const [date, setDate] = useState(today()); const [desc, setDesc] = useState(""); const [amt, setAmt] = useState("")
   const [type, setType] = useState<"ingreso" | "egreso">("ingreso"); const [aid, setAid] = useState(accounts[0]?.id ?? ""); const [pid, setPid] = useState(""); const [split, setSplit] = useState(true)
-  const [pasaManos, setPasaManos] = useState(false); const [pasaProvId, setPasaProvId] = useState("")
+  const [pagoDirecto, setPagoDirecto] = useState(false); const [pagoProvId, setPagoProvId] = useState("")
+
+  // Provider debt for this project
+  const selectedProv = pagoProvId ? providers.find(p => p.id === pagoProvId) : null
+  const provItems = pagoProvId ? data.projectItems.filter(i => i.project_id === project.id && i.provider_id === pagoProvId) : []
+  const provQuotes = pagoProvId ? data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === pagoProvId && q.selected) : []
+  const provOwed = provItems.reduce((s, i) => s + i.cost, 0) + provQuotes.reduce((s, q) => s + q.cost, 0)
+  const provPaid = pagoProvId ? data.movements.filter(m => m.project_id === project.id && m.provider_id === pagoProvId && m.type === "egreso").reduce((s, m) => s + m.amount, 0) : 0
+  const provDebt = provOwed - provPaid
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const amount = parseFloat(amt)
-    // Save the main movement
     const mainMov: Movement = { id: generateId(), date, description: desc, amount, type, project_id: project.id, account_id: aid || null, provider_id: type === "egreso" ? (pid || null) : null, category: "Proyecto", auto_split: type === "ingreso" ? split : false, split_percentage: 50 }
     onSave(mainMov)
-    // If pasa manos, also create an egreso to the provider
-    if (type === "ingreso" && pasaManos && pasaProvId) {
+    if (type === "ingreso" && pagoDirecto && pagoProvId) {
       await addRow("movements", {
-        id: generateId(), date, description: `[Pasa manos] ${desc}`, amount, type: "egreso" as const,
-        project_id: project.id, account_id: aid || null, provider_id: pasaProvId, category: "Pasa manos",
+        id: generateId(), date, description: `[Pago directo] ${desc}`, amount, type: "egreso" as const,
+        project_id: project.id, account_id: aid || null, provider_id: pagoProvId, category: "Pago directo",
         auto_split: false, split_percentage: 0
       }, "movements")
     }
@@ -775,9 +799,34 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         <FormSelect label="Cuenta" value={aid} onChange={setAid} options={accounts.map(a => ({ value: a.id, label: a.name }))} /></div>
       {type === "egreso" && <FormSelect label="Proveedor" value={pid} onChange={setPid} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />}
       {type === "ingreso" && <>
-        <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-green-800">Distribuir 50/50</p></div>
-        <div className="flex items-center gap-3 bg-amber-50 p-3 rounded-lg"><input type="checkbox" checked={pasaManos} onChange={e => setPasaManos(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-amber-800">Pasa manos (va directo a proveedor)</p></div>
-        {pasaManos && <FormSelect label="Proveedor destino" value={pasaProvId} onChange={setPasaProvId} options={[{ value: "", label: "Seleccionar..." }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />}
+        <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-green-800">Distribuir 50/50 entre socias</p></div>
+        <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg"><input type="checkbox" checked={pagoDirecto} onChange={e => setPagoDirecto(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-blue-800">Pago directo a proveedor</p></div>
+        {pagoDirecto && <>
+          <FormSelect label="Proveedor" value={pagoProvId} onChange={setPagoProvId} options={[{ value: "", label: "Seleccionar proveedor..." }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
+          {pagoProvId && (
+            <div className="bg-[#F7F5ED] rounded-lg p-3 space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Deuda con {selectedProv?.name}</p>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Comprometido: {formatCurrency(provOwed)}</span>
+                <span className="text-green-600">Pagado: {formatCurrency(provPaid)}</span>
+              </div>
+              <p className={`text-sm font-bold ${provDebt > 0 ? "text-red-600" : "text-green-600"}`}>
+                {provDebt > 0 ? `Pendiente: ${formatCurrency(provDebt)}` : "Al día ✓"}
+              </p>
+              {provItems.length > 0 && (
+                <div className="border-t border-border pt-2 space-y-1">
+                  <p className="text-[10px] text-muted-foreground uppercase">Ítems de este proveedor:</p>
+                  {provItems.map(item => (
+                    <div key={item.id} className="flex justify-between text-xs">
+                      <span>{item.description}</span>
+                      <span className="font-medium">{formatCurrency(item.cost)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>}
       </>}
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !amt}>Registrar</Btn></div>
     </form>
