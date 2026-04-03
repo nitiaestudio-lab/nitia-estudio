@@ -191,12 +191,25 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
 
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
           <SecHead title="Resumen Financiero" />
-          <div className="grid grid-cols-2 gap-3">
-            <Stat label="Total a Pagar" value={formatCurrency(totalOwedAll)} />
-            <Stat label="Total Pagado" value={formatCurrency(totalPaid)} />
-            <Stat label="Deuda Pendiente" value={formatCurrency(totalDebt)} highlight={totalDebt === 0} />
-            <Stat label="Movimientos" value={String(movements.length)} />
+          {/* Barra de progreso */}
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Pagado: {formatCurrency(totalPaid)}</span>
+              <span>Total: {formatCurrency(totalOwedAll)}</span>
+            </div>
+            <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${totalOwedAll > 0 ? Math.min((totalPaid / totalOwedAll) * 100, 100) : 0}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground text-right">{totalOwedAll > 0 ? ((totalPaid / totalOwedAll) * 100).toFixed(0) : 0}% pagado</p>
           </div>
+          {/* Deuda destacada */}
+          <div className={`text-center p-3 rounded-lg ${totalDebt > 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
+            <p className="text-xs text-muted-foreground mb-0.5">{totalDebt > 0 ? "Falta pagar" : "Estado"}</p>
+            <p className={`text-xl font-bold ${totalDebt > 0 ? "text-red-700" : "text-green-700"}`}>
+              {totalDebt > 0 ? formatCurrency(totalDebt) : "Al día ✓"}
+            </p>
+          </div>
+          <div className="text-xs text-muted-foreground text-center">{movements.length} movimiento{movements.length !== 1 ? "s" : ""} registrado{movements.length !== 1 ? "s" : ""}</div>
         </div>
       </div>
 

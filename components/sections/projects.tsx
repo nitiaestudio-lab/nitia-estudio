@@ -1065,6 +1065,8 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   const [señaClientePct, setSeñaClientePct] = useState(String(project.sena_cliente_pct ?? 50))
   const [señaProvPct, setSeñaProvPct] = useState(String(project.sena_proveedor_pct ?? 60))
   const [señaPagadaProv, setSeñaPagadaProv] = useState(false)
+  const [señaProvIdLocal, setSeñaProvIdLocal] = useState("") // proveedor de seña si no hay uno en egreso/pago directo
+  const [señaItemIds, setSeñaItemIds] = useState<string[]>([]) // productos seleccionados para la seña
 
   // Provider debt for this project
   const activeProvId = type === "egreso" ? pid : pagoProvId
@@ -1076,10 +1078,19 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   const provDebt = provOwed - provPaid
 
   // Seña calculations
+  const señaActiveProvId = activeProvId || señaProvIdLocal
   const señaCliPctNum = parseFloat(señaClientePct) || 0
   const señaProvPctNum = parseFloat(señaProvPct) || 0
   const amount = parseFloat(amt) || 0
-  const señaDiff = esSeña && señaProvPctNum > señaCliPctNum ? ((señaProvPctNum - señaCliPctNum) / 100) * provOwed : 0
+  // Si hay items seleccionados, calcular sobre esos; sino sobre todo lo del proveedor
+  const señaOwedForCalc = señaItemIds.length > 0
+    ? data.projectItems.filter(i => señaItemIds.includes(i.id)).reduce((s, i) => s + i.cost, 0)
+      + data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).reduce((s, q) => s + q.cost, 0)
+    : (señaActiveProvId
+      ? data.projectItems.filter(i => i.project_id === project.id && i.provider_id === señaActiveProvId).reduce((s, i) => s + i.cost, 0)
+        + data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === señaActiveProvId && q.selected).reduce((s, q) => s + q.cost, 0)
+      : provOwed)
+  const señaDiff = esSeña && señaProvPctNum > señaCliPctNum ? ((señaProvPctNum - señaCliPctNum) / 100) * señaOwedForCalc : 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1107,12 +1118,19 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
     }
 
     // Seña: if provider seña > client seña, register the difference from own money
-    if (esSeña && señaDiff > 0 && señaPagadaProv && activeProvId) {
+    if (esSeña && señaDiff > 0 && señaPagadaProv && señaActiveProvId) {
+      const itemNames = señaItemIds.length > 0
+        ? data.projectItems.filter(i => señaItemIds.includes(i.id)).map(i => i.description)
+            .concat(data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).map(q => q.item))
+            .join(", ")
+        : ""
       await addMov({
-        id: generateId(), date, description: `[Diferencia seña] ${desc} (${señaProvPctNum}% prov - ${señaCliPctNum}% cli)`,
+        id: generateId(), date,
+        description: `[Diferencia seña] ${desc} (${señaProvPctNum}% prov - ${señaCliPctNum}% cli)${itemNames ? ` → ${itemNames}` : ""}`,
         amount: señaDiff, type: "egreso" as const,
-        project_id: project.id, account_id: aid || null, provider_id: activeProvId,
+        project_id: project.id, account_id: aid || null, provider_id: señaActiveProvId,
         category: "Diferencia seña", auto_split: false, split_percentage: 0,
+        concepto: señaItemIds.length > 0 ? `seña:${señaItemIds.join(",")}` : "seña",
         medio_pago: currency === "USD" ? "USD" : null,
       } as Movement)
     }
@@ -1210,6 +1228,59 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
       </div>
       {esSeña && (
         <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-3">
+          {/* Proveedor de la seña - si no hay uno seleccionado arriba */}
+          {!activeProvId && (
+            <FormSelect label="¿A qué proveedor va esta seña?" value={señaProvIdLocal} onChange={v => { setSeñaProvIdLocal(v); setSeñaItemIds([]) }}
+              options={[{ value: "", label: "Seleccionar proveedor..." }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
+          )}
+
+          {/* Productos del proveedor - elegir a cuáles aplica la seña */}
+          {señaActiveProvId && (() => {
+            const sItems = data.projectItems.filter(i => i.project_id === project.id && i.provider_id === señaActiveProvId)
+            const sQuotes = data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === señaActiveProvId && q.selected)
+            const provName = providers.find((p: any) => p.id === señaActiveProvId)?.name || ""
+            const totalSeñaProv = sItems.filter(i => señaItemIds.includes(i.id)).reduce((s, i) => s + i.cost, 0)
+              + sQuotes.filter(q => señaItemIds.includes(q.id)).reduce((s, q) => s + q.cost, 0)
+            const totalAllProv = sItems.reduce((s, i) => s + i.cost, 0) + sQuotes.reduce((s, q) => s + q.cost, 0)
+            return (sItems.length > 0 || sQuotes.length > 0) ? (
+              <div className="bg-white/60 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-purple-700 uppercase">Productos de {provName}</p>
+                  <button type="button" onClick={() => {
+                    if (señaItemIds.length === sItems.length + sQuotes.length) setSeñaItemIds([])
+                    else setSeñaItemIds([...sItems.map(i => i.id), ...sQuotes.map(q => q.id)])
+                  }} className="text-[10px] text-purple-600 hover:underline">
+                    {señaItemIds.length === sItems.length + sQuotes.length ? "Deseleccionar todos" : "Seleccionar todos"}
+                  </button>
+                </div>
+                {sItems.map(item => (
+                  <label key={item.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" checked={señaItemIds.includes(item.id)}
+                      onChange={e => setSeñaItemIds(prev => e.target.checked ? [...prev, item.id] : prev.filter(x => x !== item.id))}
+                      className="w-3.5 h-3.5 accent-purple-600" />
+                    <span className="flex-1 truncate">{item.description}</span>
+                    <span className="font-medium shrink-0">{formatCurrency(item.cost)}</span>
+                  </label>
+                ))}
+                {sQuotes.map(q => (
+                  <label key={q.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" checked={señaItemIds.includes(q.id)}
+                      onChange={e => setSeñaItemIds(prev => e.target.checked ? [...prev, q.id] : prev.filter(x => x !== q.id))}
+                      className="w-3.5 h-3.5 accent-purple-600" />
+                    <span className="flex-1 truncate">{q.item} <span className="text-muted-foreground">(cotización)</span></span>
+                    <span className="font-medium shrink-0">{formatCurrency(q.cost)}</span>
+                  </label>
+                ))}
+                {señaItemIds.length > 0 && (
+                  <div className="border-t border-purple-200 pt-2 mt-1 flex justify-between text-xs font-semibold text-purple-700">
+                    <span>Seña aplica sobre:</span>
+                    <span>{formatCurrency(totalSeñaProv)} de {formatCurrency(totalAllProv)}</span>
+                  </div>
+                )}
+              </div>
+            ) : null
+          })()}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-purple-700">Seña cliente %</label>
@@ -1222,13 +1293,13 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
                 className="w-full px-3 py-1.5 rounded border border-purple-300 text-sm bg-white mt-1" />
             </div>
           </div>
-          {señaProvPctNum > señaCliPctNum && provOwed > 0 && (
+          {señaProvPctNum > señaCliPctNum && señaOwedForCalc > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
               <p className="text-sm font-medium text-amber-800">
                 Diferencia: {señaProvPctNum - señaCliPctNum}% sale de dinero propio
               </p>
               <p className="text-xs text-amber-600">
-                Cliente paga {señaCliPctNum}% = {formatCurrency((señaCliPctNum / 100) * provOwed)} · Proveedor cobra {señaProvPctNum}% = {formatCurrency((señaProvPctNum / 100) * provOwed)}
+                Cliente paga {señaCliPctNum}% = {formatCurrency((señaCliPctNum / 100) * señaOwedForCalc)} · Proveedor cobra {señaProvPctNum}% = {formatCurrency((señaProvPctNum / 100) * señaOwedForCalc)}
               </p>
               <p className="text-sm font-bold text-amber-700">
                 Diferencia a cubrir: {formatCurrency(señaDiff)}
