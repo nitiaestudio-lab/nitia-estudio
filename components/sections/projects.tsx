@@ -1173,8 +1173,8 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
       sena_cliente_pct: esSeña ? señaCliPctNum : null,
       medio_pago: currency === "USD" ? "USD" : null,
     }
-    onSave(mainMov)
 
+    // Create secondary movements FIRST (before onSave closes modal)
     // Pago directo: create egreso for provider
     if (type === "ingreso" && pagoDirecto && pagoProvId) {
       await addMov({
@@ -1222,6 +1222,9 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         } as Movement)
       }
     }
+
+    // Save main movement LAST (this closes the modal)
+    onSave(mainMov)
   }
 
   const ProviderDebtPanel = ({ provId }: { provId: string }) => {
