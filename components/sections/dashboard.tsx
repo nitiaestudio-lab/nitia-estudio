@@ -108,21 +108,35 @@ export function Dashboard() {
           </div>
         )}
         <div className="bg-card border border-border rounded-xl p-6">
-          <SecHead title="Tareas" right={<button onClick={() => setSection("tasks")} className="text-sm text-[#5F5A46] hover:underline">Ver todas</button>} />
+          <SecHead title="Tareas Pendientes" />
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div className="text-center p-3 bg-yellow-50 rounded-lg"><p className="text-2xl font-bold text-yellow-700">{pendingTasks}</p><p className="text-xs text-yellow-600">Pendientes</p></div>
             <div className="text-center p-3 bg-blue-50 rounded-lg"><p className="text-2xl font-bold text-blue-700">{inProgressTasks}</p><p className="text-xs text-blue-600">En curso</p></div>
             <div className="text-center p-3 bg-green-50 rounded-lg"><p className="text-2xl font-bold text-green-700">{completedTasks}</p><p className="text-xs text-green-600">Completadas</p></div>
           </div>
-          {data.tasks.filter(t => t.status !== "completada").slice(0, 5).map(task => (
-            <div key={task.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm">
-              <div className="flex items-center gap-2">
-                {task.status === "pendiente" ? <Clock size={14} className="text-yellow-600" /> : <AlertCircle size={14} className="text-blue-600" />}
-                <span>{task.title}</span>
+          {data.tasks.filter(t => t.status !== "completada").sort((a, b) => {
+            const prio: Record<string, number> = { alta: 0, media: 1, baja: 2 }
+            return (prio[a.priority] ?? 1) - (prio[b.priority] ?? 1)
+          }).slice(0, 8).map(task => {
+            const proj = data.projects.find(p => p.id === task.project_id)
+            return (
+              <div key={task.id} onClick={() => { if (proj) { setSelectedProjectId(proj.id); setSection("projects") } }}
+                className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm cursor-pointer hover:bg-[#F7F5ED] -mx-2 px-2 rounded">
+                <div className="flex items-center gap-2 min-w-0">
+                  {task.status === "pendiente" ? <Clock size={14} className="text-yellow-600 shrink-0" /> : <AlertCircle size={14} className="text-blue-600 shrink-0" />}
+                  <span className="truncate">{task.title}</span>
+                  {proj && <span className="text-xs text-muted-foreground shrink-0">· {proj.name}</span>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {task.due_date && <span className="text-xs text-muted-foreground">{new Date(task.due_date).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}</span>}
+                  <Tag label={task.priority} color={task.priority === "alta" ? "red" : task.priority === "media" ? "yellow" : "gray"} />
+                </div>
               </div>
-              <Tag label={task.priority} color={task.priority === "alta" ? "red" : task.priority === "media" ? "yellow" : "gray"} />
-            </div>
-          ))}
+            )
+          })}
+          {data.tasks.filter(t => t.status !== "completada").length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">Sin tareas pendientes</p>
+          )}
         </div>
       </div>
 

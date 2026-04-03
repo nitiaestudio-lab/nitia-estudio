@@ -268,8 +268,10 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
   const [showManageSections, setShowManageSections] = useState(false)
   const [newSectionName, setNewSectionName] = useState("")
   const [newSectionMult, setNewSectionMult] = useState(true)
+  const [searchItems, setSearchItems] = useState("")
 
-  const items = data.projectItems.filter(i => i.project_id === project.id)
+  const allItems = data.projectItems.filter(i => i.project_id === project.id)
+  const items = searchItems ? allItems.filter(i => i.description.toLowerCase().includes(searchItems.toLowerCase())) : allItems
   const selectedQuotes = getSelectedQuotes(data.quoteComparisons, project.id)
   const itemTypeCats = getCategoriesFor("item_type")
   const sections = itemTypeCats.length > 0 ? itemTypeCats.sort((a, b) => a.sort_order - b.sort_order)
@@ -291,8 +293,13 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
   return (
     <div className="space-y-6">
       {canSeeGanancias && <BalancePanel project={project} />}
-      <div className="flex items-center justify-between">
-        <Btn variant="soft" size="sm" onClick={() => setShowManageSections(true)}><Settings2 size={14} className="mr-1 inline" />Secciones</Btn>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input value={searchItems} onChange={e => setSearchItems(e.target.value)} placeholder="Buscar ítems..."
+              className="pl-9 pr-4 py-1.5 rounded-lg border border-[#E0DDD0] text-sm bg-white w-48" /></div>
+          <Btn variant="soft" size="sm" onClick={() => setShowManageSections(true)}><Settings2 size={14} className="mr-1 inline" />Secciones</Btn>
+        </div>
         <Btn variant="soft" size="sm" onClick={handleExport}><FileSpreadsheet size={14} className="mr-1 inline" />Exportar XLSX</Btn>
       </div>
 
@@ -738,17 +745,40 @@ function QuoteModal({ projectId, providers, onClose, onSave }: { projectId: stri
 }
 
 function AddMovModal({ project, accounts, providers, onClose, onSave }: { project: Project; accounts: any[]; providers: any[]; onClose: () => void; onSave: (m: Movement) => void }) {
+  const { addRow } = useApp()
   const [date, setDate] = useState(today()); const [desc, setDesc] = useState(""); const [amt, setAmt] = useState("")
   const [type, setType] = useState<"ingreso" | "egreso">("ingreso"); const [aid, setAid] = useState(accounts[0]?.id ?? ""); const [pid, setPid] = useState(""); const [split, setSplit] = useState(true)
+  const [pasaManos, setPasaManos] = useState(false); const [pasaProvId, setPasaProvId] = useState("")
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const amount = parseFloat(amt)
+    // Save the main movement
+    const mainMov: Movement = { id: generateId(), date, description: desc, amount, type, project_id: project.id, account_id: aid || null, provider_id: type === "egreso" ? (pid || null) : null, category: "Proyecto", auto_split: type === "ingreso" ? split : false, split_percentage: 50 }
+    onSave(mainMov)
+    // If pasa manos, also create an egreso to the provider
+    if (type === "ingreso" && pasaManos && pasaProvId) {
+      await addRow("movements", {
+        id: generateId(), date, description: `[Pasa manos] ${desc}`, amount, type: "egreso" as const,
+        project_id: project.id, account_id: aid || null, provider_id: pasaProvId, category: "Pasa manos",
+        auto_split: false, split_percentage: 0
+      }, "movements")
+    }
+  }
+
   return (<Modal isOpen={true} title="Movimiento" onClose={onClose}>
-    <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), date, description: desc, amount: parseFloat(amt), type, project_id: project.id, account_id: aid || null, provider_id: pid || null, category: "Proyecto", auto_split: type === "ingreso" ? split : false, split_percentage: 50 })}} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4"><FormInput label="Fecha" type="date" value={date} onChange={setDate} />
         <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)} options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} /></div>
       <FormInput label="Descripción" value={desc} onChange={setDesc} />
       <div className="grid grid-cols-2 gap-4"><FormInput label="Monto" type="number" value={amt} onChange={setAmt} inputMode="decimal" />
         <FormSelect label="Cuenta" value={aid} onChange={setAid} options={accounts.map(a => ({ value: a.id, label: a.name }))} /></div>
       {type === "egreso" && <FormSelect label="Proveedor" value={pid} onChange={setPid} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />}
-      {type === "ingreso" && <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-green-800">Distribuir 50/50</p></div>}
+      {type === "ingreso" && <>
+        <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-green-800">Distribuir 50/50</p></div>
+        <div className="flex items-center gap-3 bg-amber-50 p-3 rounded-lg"><input type="checkbox" checked={pasaManos} onChange={e => setPasaManos(e.target.checked)} className="w-4 h-4" /><p className="text-sm font-medium text-amber-800">Pasa manos (va directo a proveedor)</p></div>
+        {pasaManos && <FormSelect label="Proveedor destino" value={pasaProvId} onChange={setPasaProvId} options={[{ value: "", label: "Seleccionar..." }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />}
+      </>}
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !amt}>Registrar</Btn></div>
     </form>
   </Modal>)
