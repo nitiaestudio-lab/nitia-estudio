@@ -12,8 +12,10 @@ export function Dashboard() {
 
   const activeProjects = data.projects.filter(p => p.status === "activo")
   const totalBudget = data.projects.reduce((s, p) => s + projectTotalClientPrice(p, data.projectItems, data.quoteComparisons), 0)
-  const totalBalance = data.accounts.reduce((s, a) => s + (a.balance || 0), 0)
+  const totalBalanceARS = data.accounts.filter(a => a.type !== "dolares").reduce((s, a) => s + (a.balance || 0), 0)
+  const totalBalanceUSD = data.accounts.filter(a => a.type === "dolares").reduce((s, a) => s + (a.balance || 0), 0)
   const totalCollected = data.movements.filter(m => m.type === "ingreso" && m.project_id).reduce((s, m) => s + m.amount, 0)
+  const totalCollectedUSD = data.movements.filter(m => m.type === "ingreso" && m.project_id && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
   const estimatedPending = totalBudget - totalCollected
 
   const pendingTasks = data.tasks.filter(t => t.status === "pendiente").length
@@ -56,9 +58,9 @@ export function Dashboard() {
         {isFull && <>
           <Stat label="Presupuesto Total" value={formatCurrency(totalBudget)} highlight />
           <div onClick={() => setSection("accounts")} className="cursor-pointer">
-            <Stat label="Saldo en Cuentas" value={formatCurrency(totalBalance)} />
+            <Stat label="Saldo en Cuentas" value={formatCurrency(totalBalanceARS)} sub={totalBalanceUSD > 0 ? `+ U$D ${new Intl.NumberFormat("es-AR").format(totalBalanceUSD)}` : undefined} />
           </div>
-          <Stat label="Estimado por Cobrar" value={formatCurrency(Math.max(0, estimatedPending))} sub={`${formatCurrency(totalCollected)} cobrado`} />
+          <Stat label="Estimado por Cobrar" value={formatCurrency(Math.max(0, estimatedPending))} sub={`${formatCurrency(totalCollected - totalCollectedUSD)} cobrado${totalCollectedUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(totalCollectedUSD)}` : ""}`} />
         </>}
       </div>
 

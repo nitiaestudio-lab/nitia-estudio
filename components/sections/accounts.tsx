@@ -404,7 +404,7 @@ function MovementModal({ movement, accounts, projects, providers, categories, on
           options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
         <FormSelect label="Medio de pago" value={medioPago || ""} onChange={setMedioPago}
           options={[{ value: "", label: "—" }, { value: "efectivo", label: "Efectivo" }, { value: "transferencia", label: "Transferencia" },
-            { value: "cheque", label: "Cheque" }, { value: "tarjeta", label: "Tarjeta" }, { value: "mercadopago", label: "Mercado Pago" }]} />
+            { value: "cheque", label: "Cheque" }, { value: "tarjeta", label: "Tarjeta" }, { value: "mercadopago", label: "Mercado Pago" }, { value: "USD", label: "Dólares (U$D)" }]} />
         {type === "ingreso" && (
           <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg">
             <input type="checkbox" checked={autoSplit} onChange={e => setAutoSplit(e.target.checked)} className="w-4 h-4" />

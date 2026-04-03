@@ -188,6 +188,7 @@ export interface PersonalFinanceMovement {
   category?: string | null
   is_fixed?: boolean
   active?: boolean
+  medio_pago?: string | null
   note?: string | null
   created_by?: string | null
   created_at?: string

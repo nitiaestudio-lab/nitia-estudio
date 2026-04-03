@@ -444,10 +444,13 @@ export function PersonalFinance() {
                             onBlur={() => saveEdit(mov.id)} onKeyDown={e => { if (e.key === "Enter") saveEdit(mov.id); if (e.key === "Escape") cancelEdit() }}
                             className="w-full px-1.5 py-0.5 text-sm border border-[#5F5A46] rounded bg-white text-right" />
                         ) : (
-                          <span className={`font-semibold cursor-pointer hover:underline ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}
-                            onDoubleClick={() => !mov.isAuto && startEdit(mov.id, "amount", String(mov.amount))}>
-                            {mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}
-                          </span>
+                          <>
+                            <span className={`font-semibold cursor-pointer hover:underline ${mov.type === "ingreso" ? "text-green-700" : "text-red-700"}`}
+                              onDoubleClick={() => !mov.isAuto && startEdit(mov.id, "amount", String(mov.amount))}>
+                              {mov.type === "ingreso" ? "+" : "-"}{(mov as any).medio_pago === "USD" ? `U$D ${new Intl.NumberFormat("es-AR").format(mov.amount)}` : formatCurrency(mov.amount)}
+                            </span>
+                            {(mov as any).medio_pago === "USD" && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded font-medium">USD</span>}
+                          </>
                         )}
                       </td>
                       <td className="px-3 py-2.5">
@@ -515,6 +518,7 @@ function FinanceItemModal({ item, type, owner, categories, onAddCategory, onDele
   const [category, setCategory] = useState(item?.category ?? "")
   const [date, setDate] = useState(item?.date ?? today())
   const [note, setNote] = useState(item?.note ?? "")
+  const [currency, setCurrency] = useState<"ARS" | "USD">(item?.medio_pago === "USD" ? "USD" : "ARS")
 
   return (
     <Modal isOpen={true} title={`${item ? "Editar" : "Nuevo"} ${titles[type]}`} onClose={onClose}>
@@ -523,12 +527,17 @@ function FinanceItemModal({ item, type, owner, categories, onAddCategory, onDele
         description, amount: parseFloat(amount),
         type: type === "income" ? "ingreso" : "egreso",
         category, is_fixed: type === "fixed", active: true,
+        medio_pago: currency === "USD" ? "USD" : null,
         note, created_at: item?.created_at ?? new Date().toISOString(),
       })}} className="space-y-4">
         <FormInput label="Descripción" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Monto" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
           <FormInput label="Fecha" type="date" value={date} onChange={setDate} />
+        </div>
+        <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+          <button type="button" onClick={() => setCurrency("ARS")} className={`flex-1 px-4 py-1.5 text-sm font-medium transition-colors ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
+          <button type="button" onClick={() => setCurrency("USD")} className={`flex-1 px-4 py-1.5 text-sm font-medium transition-colors ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
         </div>
         <EditableSelect label="Categoría" value={category} onChange={setCategory}
           options={categories.map(c => ({ value: c.name, label: c.name }))} onAddNew={onAddCategory} onDelete={onDeleteCategory} />
