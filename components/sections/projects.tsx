@@ -641,14 +641,15 @@ function ComparadorTab({ project }: { project: Project }) {
         </div>
       </div>
 
-      {/* Category Tabs */}
-      {categories.length > 1 && (
+      {/* Category Tabs — each category acts as a separate comparison tab */}
+      {quotes.length > 0 && (
         <div className="flex gap-1 flex-wrap border-b border-border pb-1">
-          <button onClick={() => setActiveTab("todos")} className={`px-3 py-1.5 rounded-t-lg text-xs font-medium transition-colors ${activeTab === "todos" ? "bg-[#5F5A46] text-white" : "bg-[#F0EDE4] text-[#76746A] hover:bg-[#E0DDD0]"}`}>Todos ({quotes.length})</button>
+          {categories.length > 1 && <button onClick={() => setActiveTab("todos")} className={`px-3 py-1.5 rounded-t-lg text-xs font-medium transition-colors ${activeTab === "todos" ? "bg-[#5F5A46] text-white" : "bg-[#F0EDE4] text-[#76746A] hover:bg-[#E0DDD0]"}`}>Todos ({quotes.length})</button>}
           {categories.map(cat => {
             const cnt = quotes.filter(q => q.category === cat).length
             return <button key={cat} onClick={() => setActiveTab(cat)} className={`px-3 py-1.5 rounded-t-lg text-xs font-medium transition-colors ${activeTab === cat ? "bg-[#5F5A46] text-white" : "bg-[#F0EDE4] text-[#76746A] hover:bg-[#E0DDD0]"}`}>{cat} ({cnt})</button>
           })}
+          <span className="px-2 py-1.5 text-[10px] text-muted-foreground self-center">Usá distintas categorías para comparar por separado</span>
         </div>
       )}
 
