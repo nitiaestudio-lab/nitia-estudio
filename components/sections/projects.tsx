@@ -265,70 +265,69 @@ function BalancePanel({ project }: { project: Project }) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          {clienteDebe > 0 ? <AlertCircle size={18} className="text-amber-500" /> : <CheckCircle2 size={18} className="text-green-600" />}
-          <h4 className="font-semibold text-sm">Balance Cliente</h4>
-        </div>
-        <Bar value={incomeARS} max={totalConIVA} color={incomeARS >= totalConIVA ? "green" : "amber"} />
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div><span className="text-muted-foreground">Total c/IVA:</span> <span className="font-medium">{formatCurrency(totalConIVA)}</span>
-            {clientBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(clientBC.usd)}</span>}
+    <div className="space-y-4">
+      {/* Resumen financiero compacto */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase">Cliente</h4>
+            {clienteDebe > 0 ? <AlertCircle size={14} className="text-amber-500" /> : <CheckCircle2 size={14} className="text-green-600" />}
           </div>
-          <div><span className="text-muted-foreground">Cobrado:</span> <span className="font-medium text-green-600">{formatCurrency(incomeARS)}</span>
-            {incomeUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(incomeUSD)}</span>}
+          <Bar value={incomeARS} max={totalConIVA} color={incomeARS >= totalConIVA ? "green" : "amber"} />
+          <div className="flex justify-between text-sm mt-2">
+            <span className="text-muted-foreground">Total c/IVA: <span className="font-medium text-foreground">{formatCurrency(totalConIVA)}</span>{clientBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(clientBC.usd)}</span>}</span>
+            <span className="text-green-600 font-medium">{formatCurrency(incomeARS)}{incomeUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(incomeUSD)}</span>}</span>
           </div>
+          <p className={`text-sm font-bold mt-1 ${clienteDebe > 0 ? "text-amber-600" : "text-green-600"}`}>
+            {clienteDebe > 0 ? `Debe: ${formatCurrency(clienteDebe)}` : clienteDebe < 0 ? `De más: ${formatCurrency(Math.abs(clienteDebe))}` : "Al día ✓"}
+          </p>
         </div>
-        <div className={`text-sm font-bold ${clienteDebe > 0 ? "text-amber-600" : "text-green-600"}`}>
-          {clienteDebe > 0 ? `Cliente debe: ${formatCurrency(clienteDebe)}` : clienteDebe < 0 ? `Cobrado de más: ${formatCurrency(Math.abs(clienteDebe))}` : "Al día ✓"}
-          {incomeUSD > 0 && <span className="text-[10px] font-normal text-blue-600 ml-1">(+ U$D {new Intl.NumberFormat("es-AR").format(incomeUSD)} cobrado)</span>}
-        </div>
-        <div className="border-t border-border pt-2 text-xs text-muted-foreground space-y-1">
-          <div className="flex justify-between"><span>Seña esperada ({sCliPct}% c/IVA):</span><span className="font-medium text-foreground">{formatCurrency(sCliIVA)}</span></div>
-          <div className="flex justify-between"><span>Seña cobrada:</span><span className={`font-medium ${señaCobradaCli > 0 ? "text-green-600" : "text-foreground"}`}>{formatCurrency(señaCobradaCli)}</span></div>
-          {señaCobradaCli > 0 && <div className="flex justify-between"><span>Restante s/seña:</span><span className="font-medium text-foreground">{formatCurrency(totalConIVA - señaCobradaCli)}</span></div>}
+
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase">Proveedores</h4>
+            {provDebe > 0 ? <AlertCircle size={14} className="text-red-500" /> : <CheckCircle2 size={14} className="text-green-600" />}
+          </div>
+          <Bar value={expensesARS} max={totalCost} color={expensesARS >= totalCost ? "green" : "red"} />
+          <div className="flex justify-between text-sm mt-2">
+            <span className="text-muted-foreground">Costo: <span className="font-medium text-foreground">{formatCurrency(totalCost)}</span>{costBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(costBC.usd)}</span>}</span>
+            <span className="text-red-600 font-medium">{formatCurrency(expensesARS)}{expensesUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(expensesUSD)}</span>}</span>
+          </div>
+          <p className={`text-sm font-bold mt-1 ${provDebe > 0 ? "text-red-600" : "text-green-600"}`}>
+            {provDebe > 0 ? `Debemos: ${formatCurrency(provDebe)}` : provDebe < 0 ? `De más: ${formatCurrency(Math.abs(provDebe))}` : "Al día ✓"}
+          </p>
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          {provDebe > 0 ? <AlertCircle size={18} className="text-red-500" /> : <CheckCircle2 size={18} className="text-green-600" />}
-          <h4 className="font-semibold text-sm">Balance Proveedores</h4>
-        </div>
-        <Bar value={expensesARS} max={totalCost} color={expensesARS >= totalCost ? "green" : "red"} />
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div><span className="text-muted-foreground">Total costo:</span> <span className="font-medium">{formatCurrency(totalCost)}</span>
-            {costBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(costBC.usd)}</span>}
-          </div>
-          <div><span className="text-muted-foreground">Pagado:</span> <span className="font-medium text-red-600">{formatCurrency(expensesARS)}</span>
-            {expensesUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(expensesUSD)}</span>}
-          </div>
-        </div>
-        <div className={`text-sm font-bold ${provDebe > 0 ? "text-red-600" : "text-green-600"}`}>
-          {provDebe > 0 ? `Debemos a proveedores: ${formatCurrency(provDebe)}` : provDebe < 0 ? `Pagado de más: ${formatCurrency(Math.abs(provDebe))}` : "Al día ✓"}
-        </div>
-        <div className="border-t border-border pt-2 text-xs text-muted-foreground space-y-1">
-          <div className="flex justify-between"><span>Seña esperada (por proveedor):</span><span className="font-medium text-foreground">{formatCurrency(sProv)}</span></div>
-          <div className="flex justify-between"><span>Seña pagada:</span><span className={`font-medium ${señaPagadaProv > 0 ? "text-red-600" : "text-foreground"}`}>{formatCurrency(señaPagadaProv)}</span></div>
-          {señaAportePropio > 0 && <div className="flex justify-between"><span>Aporte propio (diferencia %):</span><span className="font-medium text-amber-600">{formatCurrency(señaAportePropio)}</span></div>}
-          {señaPagadaProv > 0 && <div className="flex justify-between"><span>Restante s/seña:</span><span className="font-medium text-foreground">{formatCurrency(totalCost - señaPagadaProv)}</span></div>}
-        </div>
+      {/* Ganancia — compacta */}
+      <div className="bg-[#295E29] text-white rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1">
+        <span className="text-xs text-white/60">Ganancia</span>
+        <span className="font-bold">{formatCurrency(totalGanancia)}{ganBC.usd > 0 && <span className="text-xs font-normal text-white/70 ml-1">+ {formatUSD(ganBC.usd)}</span>}</span>
+        <span className="text-xs text-white/50">IVA -{formatCurrency(ivaGanancia)}</span>
+        <span className="text-xs text-white/60">Neta</span>
+        <span className="font-bold">{formatCurrency(gananciaNeta)}</span>
+        <span className="text-xs text-white/60">÷{pc}</span>
+        <span className="font-bold">{formatCurrency(gananciaIndiv)}</span>
+        <span className="text-xs text-white/50 ml-auto">{totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen</span>
       </div>
 
-      <div className="bg-[#295E29] text-white rounded-xl p-4 space-y-2 lg:col-span-2">
-        <h4 className="font-semibold text-sm text-white/80">Ganancia Neta</h4>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div><p className="text-xs text-white/60">Bruta</p><p className="text-lg font-bold">{formatCurrency(totalGanancia)}</p>{ganBC.usd > 0 && <p className="text-[10px] text-white/70">+ {formatUSD(ganBC.usd)}</p>}</div>
-          <div><p className="text-xs text-white/60">IVA {ivaGan}% (RI)</p><p className="text-lg font-bold">-{formatCurrency(ivaGanancia)}</p></div>
-          <div><p className="text-xs text-white/60">Neta</p><p className="text-xl font-bold">{formatCurrency(gananciaNeta)}</p></div>
-          <div><p className="text-xs text-white/60">Por socia (÷{pc})</p><p className="text-xl font-bold">{formatCurrency(gananciaIndiv)}</p></div>
-        </div>
-        <div className="flex justify-between text-xs text-white/50 pt-2 border-t border-white/20">
-          <span>Margen: {totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(1) : 0}%</span>
-          <span>Dif. seña (cli - prov): {formatCurrency(sCli - sProv)}</span>
-        </div>
-      </div>
+      {/* Detalle señas — collapsible */}
+      {(señaCobradaCli > 0 || señaPagadaProv > 0) && (
+        <details className="bg-[#F0EDE4] rounded-xl p-3">
+          <summary className="text-xs font-semibold text-[#5F5A46] cursor-pointer">Detalle señas</summary>
+          <div className="grid grid-cols-2 gap-3 mt-2 text-xs">
+            <div className="space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Seña cliente esperada:</span><span className="font-medium">{formatCurrency(sCliIVA)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Seña cobrada:</span><span className="font-medium text-green-600">{formatCurrency(señaCobradaCli)}</span></div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Seña prov esperada:</span><span className="font-medium">{formatCurrency(sProv)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Seña pagada:</span><span className="font-medium text-red-600">{formatCurrency(señaPagadaProv)}</span></div>
+              {señaAportePropio > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Aporte propio:</span><span className="font-medium text-amber-600">{formatCurrency(señaAportePropio)}</span></div>}
+            </div>
+          </div>
+        </details>
+      )}
     </div>
   )
 }
@@ -368,51 +367,29 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
   return (
     <div className="space-y-6">
       {canSeeGanancias && <BalancePanel project={project} />}
-      {/* Seguimiento de Señas */}
+      {/* Seguimiento de Señas — collapsible */}
       {(() => {
         const isSeña = (m: Movement) => m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor" || m.category === "Aporte propio seña" || m.category === "Diferencia seña"
         const señaMovs = data.movements.filter(m => m.project_id === project.id && isSeña(m))
         if (señaMovs.length === 0) return null
-        const señaIngresos = señaMovs.filter(m => m.type === "ingreso")
-        const señaEgresos = señaMovs.filter(m => m.type === "egreso" && m.category === "Seña proveedor")
-        const señaDiffs = señaMovs.filter(m => m.category === "Aporte propio seña" || m.category === "Diferencia seña")
         return (
-          <div className="bg-gradient-to-r from-purple-50 to-purple-50/50 border border-purple-200 rounded-xl p-4 sm:p-5">
-            <h4 className="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
+          <details className="bg-purple-50/50 border border-purple-200 rounded-xl p-4">
+            <summary className="text-sm font-semibold text-purple-900 cursor-pointer flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-              Seguimiento de Señas
-            </h4>
-            <div className="grid sm:grid-cols-3 gap-3 mb-4">
-              <div className="bg-white/80 rounded-lg p-3 text-center">
-                <p className="text-[10px] uppercase tracking-wider text-purple-600 mb-1">Cobrado de clientes</p>
-                <p className="text-lg font-bold text-green-700">{formatCurrency(señaIngresos.reduce((s, m) => s + m.amount, 0))}</p>
-              </div>
-              <div className="bg-white/80 rounded-lg p-3 text-center">
-                <p className="text-[10px] uppercase tracking-wider text-purple-600 mb-1">Pagado a proveedores</p>
-                <p className="text-lg font-bold text-red-700">{formatCurrency(señaEgresos.reduce((s, m) => s + m.amount, 0))}</p>
-              </div>
-              <div className="bg-white/80 rounded-lg p-3 text-center">
-                <p className="text-[10px] uppercase tracking-wider text-amber-600 mb-1">Aporte propio</p>
-                <p className="text-lg font-bold text-amber-700">{formatCurrency(señaDiffs.reduce((s, m) => s + m.amount, 0))}</p>
-              </div>
-            </div>
-            <div className="space-y-2">
+              Movimientos de señas ({señaMovs.length})
+            </summary>
+            <div className="space-y-1.5 mt-3">
               {señaMovs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(m => {
                 const prov = data.providers.find(p => p.id === m.provider_id)
-                const acc = data.accounts.find(a => a.id === m.account_id)
                 const isSeñaDiff = m.category === "Diferencia seña" || m.category === "Aporte propio seña"
-                const isSeñaProv = m.category === "Seña proveedor"
                 return (
-                  <div key={m.id} className={`flex items-center justify-between py-2 px-3 rounded-lg text-sm ${isSeñaDiff ? "bg-amber-50/80" : m.type === "ingreso" ? "bg-green-50/80" : "bg-red-50/80"}`}>
+                  <div key={m.id} className="flex items-center justify-between py-1.5 px-2 rounded text-xs">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSeñaDiff ? "bg-amber-500" : m.type === "ingreso" ? "bg-green-500" : "bg-red-500"}`}></span>
-                      <span className="font-medium truncate">{m.description}</span>
-                      {prov && <span className="text-[10px] px-1.5 py-0.5 bg-white rounded text-purple-600 shrink-0">{prov.name}</span>}
-                      {isSeñaDiff && acc && <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 rounded text-amber-700 shrink-0">Cuenta: {acc.name}</span>}
+                      <span className="truncate">{m.description}</span>
+                      {prov && <span className="text-[10px] px-1 py-0.5 bg-white rounded text-purple-600 shrink-0">{prov.name}</span>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {m.sena_real_pct != null && <span className="text-[10px] text-purple-600">Prov {m.sena_real_pct}%</span>}
-                      {m.sena_cliente_pct != null && <span className="text-[10px] text-purple-600">Cli {m.sena_cliente_pct}%</span>}
                       <span className={`font-bold ${isSeñaDiff ? "text-amber-700" : m.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>
                         {m.type === "ingreso" ? "+" : "-"}{formatCurrency(m.amount)}
                       </span>
@@ -422,7 +399,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                 )
               })}
             </div>
-          </div>
+          </details>
         )
       })()}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -494,8 +471,8 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                 return (
                   <tr key={item.id} className="border-b border-border/50 last:border-0 group">
                     <td className="py-2 pr-2"><div className="flex items-center gap-1.5">
-                      {item.paid && <Check size={12} className="text-green-600 shrink-0" />}
-                      <span className={`${item.paid ? "line-through text-muted-foreground" : ""} truncate max-w-[200px]`}>{item.description}</span>
+                      {item.paid && <span className="text-[10px] px-1 py-0.5 bg-green-50 text-green-600 rounded shrink-0 font-medium">Pagado</span>}
+                      <span className="truncate max-w-[200px]">{item.description}</span>
                       {item.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded shrink-0">USD</span>}
                     </div></td>
                     <td className="py-2 px-2 hidden md:table-cell">{provName ? <button onClick={() => setSection("proveedores")} className="text-xs text-[#5F5A46] hover:underline truncate max-w-[120px] block">{provName}</button> : <span className="text-xs text-muted-foreground">—</span>}</td>
