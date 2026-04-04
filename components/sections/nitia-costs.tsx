@@ -247,17 +247,16 @@ export function NitiaCosts() {
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Monto: <strong className="text-foreground">{cost.currency === "USD" ? formatUSD(cost.amount) : formatCurrency(cost.amount)}</strong></p>
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">¿Con qué cuenta se paga?</label>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">¿Con qué cuenta se paga? <span className="text-muted-foreground font-normal">(opcional)</span></label>
                 <select value={payAccountId} onChange={e => setPayAccountId(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white">
-                  <option value="" disabled>Seleccionar cuenta...</option>
+                  <option value="">Sin cuenta específica</option>
                   {data.accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.type === "dolares" ? formatUSD(a.balance) : formatCurrency(a.balance)})</option>)}
                 </select>
-                {!payAccountId && <p className="text-xs text-red-500 mt-1">Seleccioná una cuenta para registrar el pago</p>}
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <Btn variant="ghost" onClick={() => setPayingCostId(null)}>Cancelar</Btn>
-                <Btn onClick={() => confirmPayCost(payingCostId, payAccountId)} disabled={!payAccountId}>Confirmar Pago</Btn>
+                <Btn onClick={() => confirmPayCost(payingCostId, payAccountId)}>Confirmar Pago</Btn>
               </div>
             </div>
           </Modal>

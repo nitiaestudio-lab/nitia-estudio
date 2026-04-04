@@ -226,7 +226,7 @@ export function Accounts() {
             <tbody>
               {filtered.map(mov => {
                 const acct = data.accounts.find(a => a.id === mov.account_id)
-                const isUSD = acct?.type === "dolares"
+                const isUSD = mov.medio_pago === "USD" || acct?.type === "dolares"
                 const projName = getProjectName(mov.project_id)
                 return (
                   <tr key={mov.id} className="border-b border-border last:border-0 hover:bg-[#FAFAF9] flex flex-col sm:table-row p-3 sm:p-0">
