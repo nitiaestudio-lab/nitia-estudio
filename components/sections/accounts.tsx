@@ -34,7 +34,7 @@ export function Accounts() {
 
   // Filtered & sorted movements
   const filtered = useMemo(() => {
-    let items = data.movements.filter(m => m.account_id)
+    let items = [...data.movements]
     items = filterByDateRange(items, period, customStart, customEnd)
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
