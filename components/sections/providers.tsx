@@ -163,8 +163,8 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
       const paidUSD = movements.filter(m => m.project_id === pid && m.type === "egreso" && !isSeñaEgreso(m) && isUSD(m)).reduce((s, m) => s + m.amount, 0)
       const seña = movements.filter(m => m.project_id === pid && isSeñaEgreso(m) && !isUSD(m)).reduce((s, m) => s + m.amount, 0)
       const señaUSD = movements.filter(m => m.project_id === pid && isSeñaEgreso(m) && isUSD(m)).reduce((s, m) => s + m.amount, 0)
-      const pending = totalOwed - paid
-      const pendingUSD = totalOwedUSD - paidUSD
+      const pending = totalOwed - paid - seña
+      const pendingUSD = totalOwedUSD - paidUSD - señaUSD
       return { project, totalOwed, totalOwedUSD, paid, paidUSD, pending, pendingUSD, seña, señaUSD }
     }).filter(Boolean) as { project: any; totalOwed: number; totalOwedUSD: number; paid: number; paidUSD: number; pending: number; pendingUSD: number; seña: number; señaUSD: number }[]
   }, [data.projectItems, data.quoteComparisons, movements, provider.id, data.projects])
@@ -238,9 +238,9 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
               <span>Total: {formatCurrency(totalOwedAll)}{totalOwedAllUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(totalOwedAllUSD)}` : ""}</span>
             </div>
             <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${totalOwedAll > 0 ? Math.min((totalPaidSinSeña / totalOwedAll) * 100, 100) : 0}%` }} />
+              <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${totalOwedAll > 0 ? Math.min(((totalPaidSinSeña + señaPagada) / totalOwedAll) * 100, 100) : 0}%` }} />
             </div>
-            <p className="text-xs text-muted-foreground text-right">{totalOwedAll > 0 ? ((totalPaidSinSeña / totalOwedAll) * 100).toFixed(0) : 0}% pagado</p>
+            <p className="text-xs text-muted-foreground text-right">{totalOwedAll > 0 ? (((totalPaidSinSeña + señaPagada) / totalOwedAll) * 100).toFixed(0) : 0}% pagado</p>
           </div>
           {/* Deuda destacada */}
           <div className={`text-center p-3 rounded-lg ${totalDebt > 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
