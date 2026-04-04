@@ -173,6 +173,7 @@ export function PersonalFinance() {
       amount: item.amount, type: "egreso" as const,
       category: item.category || "Gasto fijo", fixed_cost_id: item.id,
       account_id: accountId || null,
+      medio_pago: item.medio_pago || null,
       created_by: effectiveTab,
     } as any)
     // Also create personal_finance_movements record so it shows in personal finance
@@ -180,6 +181,7 @@ export function PersonalFinance() {
       id: pfMovId, date: today(), description: `[Gasto fijo] ${item.description}`,
       amount: item.amount, type: "egreso" as const,
       category: item.category || "Gasto fijo",
+      medio_pago: item.medio_pago || null,
       owner: effectiveTab, is_fixed: false, active: true,
     } as any, "personalFinanceMovements")
     // Create payment record linked to both movement IDs
@@ -486,9 +488,20 @@ export function PersonalFinance() {
                       <span className="text-muted-foreground">{allMovements.length} movimiento{allMovements.length !== 1 ? "s" : ""}</span>
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <span className="text-green-700">+{formatCurrency(allMovements.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0))}</span>
-                      <span className="mx-1 text-muted-foreground">/</span>
-                      <span className="text-red-700">-{formatCurrency(allMovements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0))}</span>
+                      {(() => {
+                        const isUSD = (m: any) => m.medio_pago === "USD"
+                        const ingARS = allMovements.filter(m => m.type === "ingreso" && !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+                        const ingUSD = allMovements.filter(m => m.type === "ingreso" && isUSD(m)).reduce((s, m) => s + m.amount, 0)
+                        const egrARS = allMovements.filter(m => m.type === "egreso" && !isUSD(m)).reduce((s, m) => s + m.amount, 0)
+                        const egrUSD = allMovements.filter(m => m.type === "egreso" && isUSD(m)).reduce((s, m) => s + m.amount, 0)
+                        return <>
+                          <span className="text-green-700">+{formatCurrency(ingARS)}</span>
+                          {ingUSD > 0 && <span className="text-green-600 text-[10px] ml-1">+U$D {new Intl.NumberFormat("es-AR").format(ingUSD)}</span>}
+                          <span className="mx-1 text-muted-foreground">/</span>
+                          <span className="text-red-700">-{formatCurrency(egrARS)}</span>
+                          {egrUSD > 0 && <span className="text-red-600 text-[10px] ml-1">-U$D {new Intl.NumberFormat("es-AR").format(egrUSD)}</span>}
+                        </>
+                      })()}
                     </td>
                     <td></td>
                   </tr>

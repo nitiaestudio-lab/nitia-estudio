@@ -1,7 +1,7 @@
 "use client"
 
 import { useApp } from "@/lib/app-context"
-import { formatCurrency, projectTotalClientPrice, projectTotalCost, projectIncome } from "@/lib/helpers"
+import { formatCurrency, formatUSD, projectTotalClientPrice, projectTotalCost, projectIncome, projectClientPriceByCurrency } from "@/lib/helpers"
 import { Stat, SecHead, Tag, HR } from "@/components/nitia-ui"
 import { canSee } from "@/lib/seed-data"
 import { TrendingUp, FolderOpen, Users, DollarSign, CheckCircle, Clock, AlertCircle, CalendarClock } from "lucide-react"
@@ -11,7 +11,8 @@ export function Dashboard() {
   const isFull = canSee(role, userPermissions)
 
   const activeProjects = data.projects.filter(p => p.status === "activo")
-  const totalBudget = data.projects.reduce((s, p) => s + projectTotalClientPrice(p, data.projectItems, data.quoteComparisons), 0)
+  const totalBudgetBC = data.projects.reduce((s, p) => { const bc = projectClientPriceByCurrency(p, data.projectItems, data.quoteComparisons); return { ars: s.ars + bc.ars, usd: s.usd + bc.usd } }, { ars: 0, usd: 0 })
+  const totalBudget = totalBudgetBC.ars
   const totalBalanceARS = data.accounts.filter(a => a.type !== "dolares").reduce((s, a) => s + (a.balance || 0), 0)
   const totalBalanceUSD = data.accounts.filter(a => a.type === "dolares").reduce((s, a) => s + (a.balance || 0), 0)
   const totalCollectedARS = data.movements.filter(m => m.type === "ingreso" && m.project_id && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
@@ -56,11 +57,11 @@ export function Dashboard() {
           <Stat label="Proyectos Activos" value={activeProjects.length} sub={`de ${data.projects.length} totales`} />
         </div>
         {isFull && <>
-          <Stat label="Presupuesto Total" value={formatCurrency(totalBudget)} highlight />
+          <Stat label="Presupuesto Total" value={formatCurrency(totalBudget)} sub={totalBudgetBC.usd > 0 ? `+ ${formatUSD(totalBudgetBC.usd)}` : undefined} highlight />
           <div onClick={() => setSection("accounts")} className="cursor-pointer">
-            <Stat label="Saldo en Cuentas" value={formatCurrency(totalBalanceARS)} sub={totalBalanceUSD > 0 ? `+ U$D ${new Intl.NumberFormat("es-AR").format(totalBalanceUSD)}` : undefined} />
+            <Stat label="Saldo en Cuentas" value={formatCurrency(totalBalanceARS)} sub={totalBalanceUSD > 0 ? `+ ${formatUSD(totalBalanceUSD)}` : undefined} />
           </div>
-          <Stat label="Estimado por Cobrar" value={formatCurrency(Math.max(0, estimatedPending))} sub={`${formatCurrency(totalCollectedARS)} cobrado${totalCollectedUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(totalCollectedUSD)}` : ""}`} />
+          <Stat label="Estimado por Cobrar" value={formatCurrency(Math.max(0, estimatedPending))} sub={`${formatCurrency(totalCollectedARS)} cobrado${totalCollectedUSD > 0 ? ` + ${formatUSD(totalCollectedUSD)}` : ""}`} />
         </>}
       </div>
 
@@ -105,7 +106,7 @@ export function Dashboard() {
                   {mov.project_id && <span className="text-xs text-muted-foreground ml-2">{data.projects.find(p => p.id === mov.project_id)?.name}</span>}
                 </div>
                 <span className={`font-medium ${mov.type === "ingreso" ? "text-green-600" : "text-red-600"}`}>
-                  {mov.type === "ingreso" ? "+" : "-"}{formatCurrency(mov.amount)}
+                  {mov.type === "ingreso" ? "+" : "-"}{mov.medio_pago === "USD" ? formatUSD(mov.amount) : formatCurrency(mov.amount)}
                 </span>
               </div>
             )) : <p className="text-sm text-muted-foreground text-center py-8">Sin movimientos</p>}
@@ -162,13 +163,14 @@ export function Dashboard() {
         <SecHead title="Proyectos" right={<button onClick={() => setSection("projects")} className="text-sm text-[#5F5A46] hover:underline">Ver todos</button>} />
         <div className="space-y-3">
           {data.projects.slice(0, 5).map(project => {
-            const total = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
+            const totalBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
+            const total = totalBC.ars
             return (
               <div key={project.id} onClick={() => { setSelectedProjectId(project.id); setSection("projects") }}
                 className="flex items-center justify-between py-3 border-b border-border last:border-0 cursor-pointer hover:bg-[#F7F5ED] -mx-2 px-2 rounded">
                 <div><h4 className="font-medium">{project.name}</h4><p className="text-sm text-muted-foreground">{project.client}</p></div>
                 <div className="flex items-center gap-3">
-                  {isFull && <span className="text-sm font-medium">{formatCurrency(total)}</span>}
+                  {isFull && <span className="text-sm font-medium">{formatCurrency(total)}{totalBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(totalBC.usd)}</span>}</span>}
                   <Tag label={project.status || "activo"} color={project.status === "activo" ? "green" : "yellow"} />
                 </div>
               </div>

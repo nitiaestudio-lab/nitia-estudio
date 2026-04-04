@@ -337,6 +337,8 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
   const { data, updateRow, addRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [showAddItem, setShowAddItem] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ProjectItem | null>(null)
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null)
+  const [inlineEdit, setInlineEdit] = useState<Partial<ProjectItem & { costStr: string; multStr: string }>>({})
   const [showManageSections, setShowManageSections] = useState(false)
   const [newSectionName, setNewSectionName] = useState("")
   const [newSectionMult, setNewSectionMult] = useState(true)
@@ -461,22 +463,48 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
               {hm && <th className="text-right py-2 px-2 hidden sm:table-cell">Mult</th>}
               <th className="text-right py-2 px-2">Precio</th>{hm && <th className="text-right py-2 px-2 hidden sm:table-cell">Ganancia</th>}
               <th className="w-16 py-2"></th></tr></thead>
-              <tbody>{si.map(item => (
-                <tr key={item.id} className="border-b border-border/50 last:border-0 group">
-                  <td className="py-2 pr-2"><div className="flex items-center gap-1.5">
-                    {item.paid && <Check size={12} className="text-green-600 shrink-0" />}
-                    <span className={`${item.paid ? "line-through text-muted-foreground" : ""} truncate max-w-[200px]`}>{item.description}</span>
-                    {item.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded shrink-0">USD</span>}
-                  </div></td>
-                  <td className="text-right py-2 px-2">{item.currency === "USD" ? formatUSD(item.cost) : formatCurrency(item.cost)}</td>
-                  {hm && <td className="text-right py-2 px-2 hidden sm:table-cell text-muted-foreground">x{item.multiplier}</td>}
-                  <td className="text-right py-2 px-2 font-medium">{item.currency === "USD" ? formatUSD(item.client_price) : formatCurrency(item.client_price)}</td>
-                  {hm && <td className="text-right py-2 px-2 text-green-600 hidden sm:table-cell">{item.currency === "USD" ? formatUSD(item.client_price - item.cost) : formatCurrency(item.client_price - item.cost)}</td>}
-                  <td className="py-2 text-right"><div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 sm:opacity-100">
-                    <button onClick={() => setEditingItem(item)} className="p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
-                    <button onClick={() => deleteRow("project_items", item.id, "projectItems")} className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
-                  </div></td>
-                </tr>))}</tbody></table></div>}
+              <tbody>{si.map(item => {
+                const isEd = inlineEditId === item.id
+                const startEdit = () => { setInlineEditId(item.id); setInlineEdit({ description: item.description, costStr: String(item.cost), multStr: String(item.multiplier), currency: item.currency || "ARS", provider_id: item.provider_id, paid: item.paid }) }
+                const saveEdit = async () => {
+                  const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = hm ? (parseFloat(inlineEdit.multStr || "1.4") || 1.4) : 1
+                  await updateRow("project_items", item.id, { description: inlineEdit.description, cost: c, client_price: hm ? c * m : c, multiplier: m, currency: inlineEdit.currency, provider_id: inlineEdit.provider_id || null, paid: inlineEdit.paid }, "projectItems")
+                  setInlineEditId(null)
+                }
+                const cancelEdit = () => setInlineEditId(null)
+                if (isEd) return (
+                  <tr key={item.id} className="border-b border-border/50 last:border-0 bg-amber-50/50">
+                    <td className="py-1.5 pr-2"><div className="flex items-center gap-1">
+                      <input type="checkbox" checked={inlineEdit.paid ?? false} onChange={e => setInlineEdit({ ...inlineEdit, paid: e.target.checked })} className="w-3.5 h-3.5" />
+                      <input value={inlineEdit.description ?? ""} onChange={e => setInlineEdit({ ...inlineEdit, description: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm bg-white min-w-[120px]" />
+                      <button type="button" onClick={() => setInlineEdit({ ...inlineEdit, currency: inlineEdit.currency === "USD" ? "ARS" : "USD" })} className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${inlineEdit.currency === "USD" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>{inlineEdit.currency === "USD" ? "USD" : "ARS"}</button>
+                    </div></td>
+                    <td className="py-1.5 px-1"><input type="number" value={inlineEdit.costStr ?? ""} onChange={e => setInlineEdit({ ...inlineEdit, costStr: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm text-right bg-white max-w-[100px] ml-auto block" /></td>
+                    {hm && <td className="py-1.5 px-1 hidden sm:table-cell"><input type="number" value={inlineEdit.multStr ?? ""} step="0.1" onChange={e => setInlineEdit({ ...inlineEdit, multStr: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm text-right bg-white max-w-[60px] ml-auto block" /></td>}
+                    <td className="py-1.5 px-2 text-right text-sm font-medium text-muted-foreground">{(() => { const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = hm ? (parseFloat(inlineEdit.multStr || "1.4") || 1.4) : 1; const fmt = inlineEdit.currency === "USD" ? formatUSD : formatCurrency; return fmt(c * m) })()}</td>
+                    {hm && <td className="py-1.5 px-2 text-right text-sm text-green-600 hidden sm:table-cell">{(() => { const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = parseFloat(inlineEdit.multStr || "1.4") || 1.4; const fmt = inlineEdit.currency === "USD" ? formatUSD : formatCurrency; return fmt(c * m - c) })()}</td>}
+                    <td className="py-1.5 text-right"><div className="flex gap-1 justify-end">
+                      <button onClick={saveEdit} className="p-1 hover:bg-green-100 rounded"><Save size={13} className="text-green-600" /></button>
+                      <button onClick={cancelEdit} className="p-1 hover:bg-red-50 rounded"><XCircle size={13} className="text-red-400" /></button>
+                    </div></td>
+                  </tr>)
+                return (
+                  <tr key={item.id} className="border-b border-border/50 last:border-0 group">
+                    <td className="py-2 pr-2"><div className="flex items-center gap-1.5">
+                      {item.paid && <Check size={12} className="text-green-600 shrink-0" />}
+                      <span className={`${item.paid ? "line-through text-muted-foreground" : ""} truncate max-w-[200px]`}>{item.description}</span>
+                      {item.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded shrink-0">USD</span>}
+                    </div></td>
+                    <td className="text-right py-2 px-2">{item.currency === "USD" ? formatUSD(item.cost) : formatCurrency(item.cost)}</td>
+                    {hm && <td className="text-right py-2 px-2 hidden sm:table-cell text-muted-foreground">x{item.multiplier}</td>}
+                    <td className="text-right py-2 px-2 font-medium">{item.currency === "USD" ? formatUSD(item.client_price) : formatCurrency(item.client_price)}</td>
+                    {hm && <td className="text-right py-2 px-2 text-green-600 hidden sm:table-cell">{item.currency === "USD" ? formatUSD(item.client_price - item.cost) : formatCurrency(item.client_price - item.cost)}</td>}
+                    <td className="py-2 text-right"><div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 sm:opacity-100">
+                      <button onClick={startEdit} className="p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
+                      <button onClick={() => deleteRow("project_items", item.id, "projectItems")} className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
+                    </div></td>
+                  </tr>)
+              })}</tbody></table></div>}
             {sq.length > 0 && <div className={si.length > 0 ? "mt-1" : ""}><table className="w-full text-sm">
               {si.length === 0 && <thead><tr className="text-xs text-muted-foreground border-b border-border">
                 <th className="text-left py-2 pr-2">Descripción</th><th className="text-right py-2 px-2">Costo</th>
@@ -556,12 +584,26 @@ function ComparadorTab({ project }: { project: Project }) {
   const { data, addRow, updateRow, deleteRow, getCategoriesFor } = useApp()
   const [showNew, setShowNew] = useState(false)
   const [searchQ, setSearchQ] = useState("")
+  const [activeTab, setActiveTab] = useState<string>("todos")
+  const [editQId, setEditQId] = useState<string | null>(null)
+  const [editQ, setEditQ] = useState<{ item: string; cost: string; provider_name: string; provider_id: string; currency: string }>({ item: "", cost: "", provider_name: "", provider_id: "", currency: "ARS" })
+
   const quotes = data.quoteComparisons.filter(q => q.project_id === project.id)
-  const filtered = quotes.filter(q => !searchQ || q.item.toLowerCase().includes(searchQ.toLowerCase()) || q.category.toLowerCase().includes(searchQ.toLowerCase()) || q.provider_name.toLowerCase().includes(searchQ.toLowerCase()))
+  const categories = useMemo(() => [...new Set(quotes.map(q => q.category))].sort(), [quotes])
+  const filtered = quotes.filter(q => {
+    if (activeTab !== "todos" && q.category !== activeTab) return false
+    if (searchQ) { const s = searchQ.toLowerCase(); return q.item.toLowerCase().includes(s) || q.category.toLowerCase().includes(s) || q.provider_name.toLowerCase().includes(s) }
+    return true
+  })
   const itemTypeCats = getCategoriesFor("item_type")
   const secHasMult = (t: string) => { const c = itemTypeCats.find(x => x.name === t); return c ? c.has_multiplier !== false : t !== "Material" && t !== "material" }
 
-  const groupedByProv = useMemo(() => { const a: Record<string, QuoteComparison[]> = {}; for (const q of filtered) { if (!a[q.provider_name]) a[q.provider_name] = []; a[q.provider_name].push(q) }; return a }, [filtered])
+  // Group by item (category + item name) for side-by-side comparison
+  const groupedByItem = useMemo(() => {
+    const a: Record<string, QuoteComparison[]> = {}
+    for (const q of filtered) { const k = `${q.category}||${q.item}`; if (!a[k]) a[k] = []; a[k].push(q) }
+    return Object.entries(a).sort(([a], [b]) => a.localeCompare(b))
+  }, [filtered])
 
   const toggleSelect = async (q: QuoteComparison, m: number) => {
     const gq = quotes.filter(x => x.category === q.category && x.item === q.item)
@@ -569,6 +611,16 @@ function ComparadorTab({ project }: { project: Project }) {
       if (g.id === q.id) { const ns = !g.selected; await updateRow("quote_comparisons", g.id, { selected: ns, selected_multiplier: ns ? m : null }, "quoteComparisons") }
       else if (g.selected) await updateRow("quote_comparisons", g.id, { selected: false, selected_multiplier: null }, "quoteComparisons")
     }
+  }
+
+  const startEditQ = (q: QuoteComparison) => { setEditQId(q.id); setEditQ({ item: q.item, cost: String(q.cost), provider_name: q.provider_name, provider_id: q.provider_id || "", currency: q.currency || "ARS" }) }
+  const saveEditQ = async (q: QuoteComparison) => {
+    const c = parseFloat(editQ.cost) || 0; const hm = secHasMult(q.type || "mobiliario")
+    await updateRow("quote_comparisons", q.id, {
+      item: editQ.item, cost: c, provider_name: editQ.provider_name || data.providers.find(p => p.id === editQ.provider_id)?.name || q.provider_name,
+      provider_id: editQ.provider_id || null, currency: editQ.currency,
+      price_x14: c * 1.4, price_x16: c * 1.6, ganancia_x14: hm ? c * 0.4 : 0, ganancia_x16: hm ? c * 0.6 : 0,
+    }, "quoteComparisons"); setEditQId(null)
   }
 
   const SelBtns = ({ q, hm }: { q: QuoteComparison; hm: boolean }) => hm ? (
@@ -589,50 +641,93 @@ function ComparadorTab({ project }: { project: Project }) {
         </div>
       </div>
 
-      {/* By Provider */}
-      {Object.entries(groupedByProv).map(([pn, pqs]) => {
-        const tc = pqs.reduce((s, q) => s + q.cost, 0)
-        const tg14 = pqs.reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? q.ganancia_x14 : 0), 0)
-        const tg16 = pqs.reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? q.ganancia_x16 : 0), 0)
-        return (<div key={pn} className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 bg-[#F0EDE4] border-b border-border flex items-center justify-between">
-            <span className="font-semibold text-sm">{pn}</span>
-            <div className="flex gap-3 text-xs text-muted-foreground">
-              <span>Costo: <strong className="text-foreground">{formatCurrency(tc)}</strong></span>
-              <span>G.x1.4: <strong className="text-green-600">{formatCurrency(tg14)}</strong></span>
-              <span className="hidden sm:inline">G.x1.6: <strong className="text-green-600">{formatCurrency(tg16)}</strong></span>
+      {/* Category Tabs */}
+      {categories.length > 1 && (
+        <div className="flex gap-1 flex-wrap border-b border-border pb-1">
+          <button onClick={() => setActiveTab("todos")} className={`px-3 py-1.5 rounded-t-lg text-xs font-medium transition-colors ${activeTab === "todos" ? "bg-[#5F5A46] text-white" : "bg-[#F0EDE4] text-[#76746A] hover:bg-[#E0DDD0]"}`}>Todos ({quotes.length})</button>
+          {categories.map(cat => {
+            const cnt = quotes.filter(q => q.category === cat).length
+            return <button key={cat} onClick={() => setActiveTab(cat)} className={`px-3 py-1.5 rounded-t-lg text-xs font-medium transition-colors ${activeTab === cat ? "bg-[#5F5A46] text-white" : "bg-[#F0EDE4] text-[#76746A] hover:bg-[#E0DDD0]"}`}>{cat} ({cnt})</button>
+          })}
+        </div>
+      )}
+
+      {/* Grouped by item for comparison */}
+      {groupedByItem.map(([key, iqs]) => {
+        const [catName, itemName] = key.split("||")
+        return (
+          <div key={key} className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 bg-[#F0EDE4] border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm">{itemName}</span>
+                <span className="text-[10px] px-1.5 py-0.5 bg-white/60 rounded text-[#76746A]">{catName}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">{iqs.length} cotización{iqs.length > 1 ? "es" : ""}</span>
             </div>
-          </div>
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#FAFAF9]"><tr className="text-xs text-muted-foreground">
-            <th className="px-3 py-2 text-left w-8"></th><th className="px-3 py-2 text-left">Ítem</th><th className="px-3 py-2 text-right">Costo</th>
-            <th className="px-3 py-2 text-right">P.x1.4</th><th className="px-3 py-2 text-right hidden md:table-cell">G.x1.4</th>
-            <th className="px-3 py-2 text-right hidden md:table-cell">G.x1.6</th><th className="px-3 py-2 text-center">Elegir</th>
-          </tr></thead><tbody>{pqs.map(q => { const hm = secHasMult(q.type || "mobiliario"); return (
-            <tr key={q.id} className={`border-b last:border-0 ${q.selected ? "bg-green-50" : "hover:bg-[#FAFAF9]"}`}>
-              <td className="px-3 py-2">{q.selected && <Check size={14} className="text-green-600" />}</td>
-              <td className="px-3 py-2"><span className="font-medium">{q.item}</span><span className="text-xs text-muted-foreground ml-1">({q.category})</span>{q.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded ml-1">USD</span>}</td>
-              <td className="px-3 py-2 text-right">{(q.currency === "USD" ? formatUSD : formatCurrency)(q.cost)}</td>
-              <td className="px-3 py-2 text-right">{(q.currency === "USD" ? formatUSD : formatCurrency)(hm ? q.price_x14 : q.cost)}</td>
-              <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{(q.currency === "USD" ? formatUSD : formatCurrency)(hm ? q.ganancia_x14 : 0)}</td>
-              <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{(q.currency === "USD" ? formatUSD : formatCurrency)(hm ? q.ganancia_x16 : 0)}</td>
-              <td className="px-3 py-2 text-center"><SelBtns q={q} hm={hm} /></td>
-            </tr>) })}</tbody></table></div></div>)
+            <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#FAFAF9]"><tr className="text-xs text-muted-foreground">
+              <th className="px-3 py-2 text-left w-8"></th><th className="px-3 py-2 text-left">Proveedor</th><th className="px-3 py-2 text-right">Costo</th>
+              <th className="px-3 py-2 text-right">P.x1.4</th><th className="px-3 py-2 text-right hidden md:table-cell">G.x1.4</th>
+              <th className="px-3 py-2 text-right hidden md:table-cell">G.x1.6</th><th className="px-3 py-2 text-center">Elegir</th><th className="px-3 py-2 w-16"></th>
+            </tr></thead><tbody>{iqs.map(q => {
+              const hm = secHasMult(q.type || "mobiliario")
+              const fmt = q.currency === "USD" ? formatUSD : formatCurrency
+              const isEd = editQId === q.id
+              if (isEd) return (
+                <tr key={q.id} className="border-b last:border-0 bg-amber-50/50">
+                  <td className="px-3 py-1.5"></td>
+                  <td className="px-3 py-1.5"><div className="flex flex-col gap-1">
+                    <select value={editQ.provider_id} onChange={e => { setEditQ({ ...editQ, provider_id: e.target.value, provider_name: data.providers.find(p => p.id === e.target.value)?.name || editQ.provider_name }) }} className="px-1.5 py-0.5 rounded border border-amber-300 text-sm bg-white">
+                      <option value="">Manual</option>{data.providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    {!editQ.provider_id && <input value={editQ.provider_name} onChange={e => setEditQ({ ...editQ, provider_name: e.target.value })} placeholder="Nombre proveedor" className="px-1.5 py-0.5 rounded border border-amber-300 text-sm bg-white" />}
+                  </div></td>
+                  <td className="px-3 py-1.5"><div className="flex items-center gap-1">
+                    <input type="number" value={editQ.cost} onChange={e => setEditQ({ ...editQ, cost: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm text-right bg-white max-w-[90px] ml-auto block" />
+                    <button type="button" onClick={() => setEditQ({ ...editQ, currency: editQ.currency === "USD" ? "ARS" : "USD" })} className={`text-[10px] px-1 py-0.5 rounded font-medium shrink-0 ${editQ.currency === "USD" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>{editQ.currency === "USD" ? "USD" : "ARS"}</button>
+                  </div></td>
+                  <td className="px-3 py-1.5 text-right text-muted-foreground">{(() => { const c = parseFloat(editQ.cost) || 0; return (editQ.currency === "USD" ? formatUSD : formatCurrency)(hm ? c * 1.4 : c) })()}</td>
+                  <td className="px-3 py-1.5 text-right text-green-600 hidden md:table-cell">{(() => { const c = parseFloat(editQ.cost) || 0; return (editQ.currency === "USD" ? formatUSD : formatCurrency)(hm ? c * 0.4 : 0) })()}</td>
+                  <td className="px-3 py-1.5 text-right text-green-600 hidden md:table-cell">{(() => { const c = parseFloat(editQ.cost) || 0; return (editQ.currency === "USD" ? formatUSD : formatCurrency)(hm ? c * 0.6 : 0) })()}</td>
+                  <td className="px-3 py-1.5"></td>
+                  <td className="px-3 py-1.5 text-right"><div className="flex gap-1 justify-end">
+                    <button onClick={() => saveEditQ(q)} className="p-1 hover:bg-green-100 rounded"><Save size={13} className="text-green-600" /></button>
+                    <button onClick={() => setEditQId(null)} className="p-1 hover:bg-red-50 rounded"><XCircle size={13} className="text-red-400" /></button>
+                  </div></td>
+                </tr>)
+              return (
+                <tr key={q.id} className={`border-b last:border-0 group ${q.selected ? "bg-green-50" : "hover:bg-[#FAFAF9]"}`}>
+                  <td className="px-3 py-2">{q.selected && <Check size={14} className="text-green-600" />}</td>
+                  <td className="px-3 py-2"><span className="font-medium">{q.provider_name}</span>{q.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded ml-1">USD</span>}</td>
+                  <td className="px-3 py-2 text-right">{fmt(q.cost)}</td>
+                  <td className="px-3 py-2 text-right">{fmt(hm ? q.price_x14 : q.cost)}</td>
+                  <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{fmt(hm ? q.ganancia_x14 : 0)}</td>
+                  <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{fmt(hm ? q.ganancia_x16 : 0)}</td>
+                  <td className="px-3 py-2 text-center"><SelBtns q={q} hm={hm} /></td>
+                  <td className="px-3 py-2 text-right"><div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 sm:opacity-100">
+                    <button onClick={() => startEditQ(q)} className="p-1 hover:bg-accent rounded"><Pencil size={12} /></button>
+                    <button onClick={() => deleteRow("quote_comparisons", q.id, "quoteComparisons")} className="p-1 hover:bg-red-50 rounded"><Trash2 size={12} className="text-red-600" /></button>
+                  </div></td>
+                </tr>)
+            })}</tbody></table></div>
+          </div>)
       })}
 
       {/* Running total of selections */}
       {(() => {
         const selected = quotes.filter(q => q.selected)
         if (selected.length === 0) return null
-        const totalCost = selected.reduce((s, q) => s + q.cost, 0)
-        const totalPrice = selected.reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? (q.selected_multiplier === 1.6 ? q.price_x16 : q.price_x14) : q.cost), 0)
-        const totalGanancia = totalPrice - totalCost
+        const costARS = selected.filter(q => q.currency !== "USD").reduce((s, q) => s + q.cost, 0)
+        const costUSD = selected.filter(q => q.currency === "USD").reduce((s, q) => s + q.cost, 0)
+        const priceARS = selected.filter(q => q.currency !== "USD").reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? (q.selected_multiplier === 1.6 ? q.price_x16 : q.price_x14) : q.cost), 0)
+        const priceUSD = selected.filter(q => q.currency === "USD").reduce((s, q) => s + (secHasMult(q.type || "mobiliario") ? (q.selected_multiplier === 1.6 ? q.price_x16 : q.price_x14) : q.cost), 0)
+        const ganARS = priceARS - costARS; const ganUSD = priceUSD - costUSD
         return (
           <div className="bg-[#295E29] text-white rounded-xl p-4 space-y-2 sticky bottom-4">
             <h4 className="font-semibold text-sm text-white/80">Total Seleccionado ({selected.length} items)</h4>
             <div className="grid grid-cols-3 gap-4">
-              <div><p className="text-xs text-white/60">Costo</p><p className="text-lg font-bold">{formatCurrency(totalCost)}</p></div>
-              <div><p className="text-xs text-white/60">Precio</p><p className="text-lg font-bold">{formatCurrency(totalPrice)}</p></div>
-              <div><p className="text-xs text-white/60">Ganancia</p><p className="text-lg font-bold">{formatCurrency(totalGanancia)}</p></div>
+              <div><p className="text-xs text-white/60">Costo</p><p className="text-lg font-bold">{formatCurrency(costARS)}</p>{costUSD > 0 && <p className="text-xs text-white/70">+ {formatUSD(costUSD)}</p>}</div>
+              <div><p className="text-xs text-white/60">Precio</p><p className="text-lg font-bold">{formatCurrency(priceARS)}</p>{priceUSD > 0 && <p className="text-xs text-white/70">+ {formatUSD(priceUSD)}</p>}</div>
+              <div><p className="text-xs text-white/60">Ganancia</p><p className="text-lg font-bold">{formatCurrency(ganARS)}</p>{ganUSD > 0 && <p className="text-xs text-white/70">+ {formatUSD(ganUSD)}</p>}</div>
             </div>
             <Btn variant="soft" size="sm" className="bg-white/20 text-white hover:bg-white/30" onClick={async () => {
               for (const q of selected) {
