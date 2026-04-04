@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useApp } from "@/lib/app-context"
-import { formatCurrency, formatUSD, generateId } from "@/lib/helpers"
+import { formatCurrency, formatUSD, generateId, today } from "@/lib/helpers"
 import { Stat, SecHead, Btn, Empty, Modal, FormInput, HR, EditableSelect, PeriodFilter, type PeriodValue } from "@/components/nitia-ui"
 import type { FixedExpense } from "@/lib/types"
 import { Plus, Pencil, Check, X, FileSpreadsheet, History } from "lucide-react"
@@ -53,7 +53,7 @@ export function NitiaCosts() {
     const movId = generateId()
     try {
       await addMovement({
-        id: movId, date: new Date().toISOString().split("T")[0],
+        id: movId, date: today(),
         description: `[Costo fijo Nitia] ${cost.description}`,
         amount: cost.amount, type: "egreso" as const,
         category: cost.category || "Costo fijo", account_id: accountId || null,
@@ -63,7 +63,7 @@ export function NitiaCosts() {
       await addRow("fixed_cost_payments", {
         id: generateId(), fixed_cost_id: costId, movement_id: movId,
         month: m, year: y, paid: true,
-        paid_date: new Date().toISOString().split("T")[0],
+        paid_date: today(),
         paid_amount: cost.amount,
       }, "fixedCostPayments")
     } catch (err) {
@@ -97,7 +97,7 @@ export function NitiaCosts() {
         return { Costo: cost?.description || "", Mes: p.month, Año: p.year, Pagado: p.paid ? "Sí" : "No", "Fecha Pago": p.paid_date || "", Monto: p.paid_amount || cost?.amount || "" }
       }).sort((a: any, b: any) => b.Año - a.Año || b.Mes - a.Mes)
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paymentsSheet), "Historial Pagos")
-      const today = new Date().toISOString().split("T")[0]
+      const today = today()
       XLSX.writeFile(wb, `costos_fijos_nitia_${today}.xlsx`)
     } catch {}
   }

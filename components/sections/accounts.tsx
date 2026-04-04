@@ -29,6 +29,7 @@ export function Accounts() {
   const [filterType, setFilterType] = useState("")
   const [filterProject, setFilterProject] = useState("")
   const [filterProvider, setFilterProvider] = useState("")
+  const [filterOrigin, setFilterOrigin] = useState("")
   const [sortField, setSortField] = useState<"date" | "amount">("date")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
@@ -45,13 +46,18 @@ export function Accounts() {
     if (filterType) items = items.filter(m => m.type === filterType)
     if (filterProject) items = items.filter(m => m.project_id === filterProject)
     if (filterProvider) items = items.filter(m => m.provider_id === filterProvider)
+    if (filterOrigin === "costo_fijo") items = items.filter(m => m.description.startsWith("[Costo fijo Nitia]"))
+    else if (filterOrigin === "gasto_fijo") items = items.filter(m => m.description.startsWith("[Gasto fijo]"))
+    else if (filterOrigin === "proyecto") items = items.filter(m => m.project_id)
+    else if (filterOrigin === "seña") items = items.filter(m => m.description.startsWith("[Seña") || m.description.startsWith("[Aporte propio seña]") || m.description.startsWith("[Diferencia seña]"))
+    else if (filterOrigin === "manual") items = items.filter(m => !m.description.startsWith("["))
     items.sort((a, b) => {
       const va = sortField === "date" ? new Date(a.date).getTime() : a.amount
       const vb = sortField === "date" ? new Date(b.date).getTime() : b.amount
       return sortDir === "desc" ? vb - va : va - vb
     })
     return items
-  }, [data.movements, period, customStart, customEnd, searchQuery, filterAccount, filterCategory, filterType, filterProject, filterProvider, sortField, sortDir])
+  }, [data.movements, period, customStart, customEnd, searchQuery, filterAccount, filterCategory, filterType, filterProject, filterProvider, filterOrigin, sortField, sortDir])
 
   const getAccountName = (id: string | null | undefined) => data.accounts.find(a => a.id === id)?.name ?? "—"
   const getProjectName = (id: string | null | undefined) => data.projects.find(p => p.id === id)?.name ?? ""
@@ -63,12 +69,12 @@ export function Accounts() {
   const totalPesos = pesoAccounts.reduce((s, a) => s + (a.balance || 0), 0)
   const totalUSD = usdAccounts.reduce((s, a) => s + (a.balance || 0), 0)
   const totalEstimado = totalPesos + (dolarRate ? totalUSD * dolarRate : 0)
-  const hasActiveFilters = filterAccount || filterCategory || filterType || filterProject || filterProvider
+  const hasActiveFilters = filterAccount || filterCategory || filterType || filterProject || filterProvider || filterOrigin
   const categories = [...new Set(data.movements.map(m => m.category).filter(Boolean))]
 
   const clearFilters = () => {
     setFilterAccount(""); setFilterCategory(""); setFilterType("")
-    setFilterProject(""); setFilterProvider(""); setSearchQuery("")
+    setFilterProject(""); setFilterProvider(""); setFilterOrigin(""); setSearchQuery("")
   }
 
   // XLSX export
@@ -170,8 +176,25 @@ export function Accounts() {
             )}
           </div>
           <Btn variant={hasActiveFilters ? "primary" : "ghost"} size="sm" onClick={() => setShowFilters(!showFilters)}>
-            <Filter size={14} className="mr-1 inline" />Filtros{hasActiveFilters ? " ●" : ""}
+            <Filter size={14} className="mr-1 inline" />{hasActiveFilters ? "Filtros ●" : "Más filtros"}
           </Btn>
+        </div>
+
+        {/* Quick origin filter tabs */}
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { value: "", label: "Todos" },
+            { value: "costo_fijo", label: "Costos fijos Nitia" },
+            { value: "gasto_fijo", label: "Gastos fijos personal" },
+            { value: "proyecto", label: "De proyectos" },
+            { value: "seña", label: "Señas" },
+            { value: "manual", label: "Manuales" },
+          ].map(o => (
+            <button key={o.value} onClick={() => setFilterOrigin(o.value)}
+              className={`px-3 py-1 text-xs rounded-full border transition-colors ${filterOrigin === o.value ? "bg-[#5F5A46] text-white border-[#5F5A46]" : "bg-white border-[#E0DDD0] text-[#76746A] hover:border-[#5F5A46]"}`}>
+              {o.label}
+            </button>
+          ))}
         </div>
 
         {showFilters && (
@@ -198,7 +221,7 @@ export function Accounts() {
       {/* Movements Table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between">
-          <SecHead title={`Movimientos (${filtered.length} de ${data.movements.length})`} />
+          <SecHead title={`Movimientos (${filtered.length})`} />
           <div className="flex items-center gap-2">
             <button onClick={() => { setSortField("date"); setSortDir(d => d === "desc" ? "asc" : "desc") }}
               className={`text-xs px-2 py-1 rounded ${sortField === "date" ? "bg-[#5F5A46] text-white" : "bg-[#F0EDE4]"}`}>
