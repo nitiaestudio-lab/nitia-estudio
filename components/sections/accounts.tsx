@@ -156,10 +156,6 @@ export function Accounts() {
         </div>
       </div>
 
-      {dolarRate && totalUSD > 0 && (
-        <p className="text-xs text-muted-foreground">* Cotización dólar blue: ${dolarRate} — estimativa, no oficial</p>
-      )}
-
       {/* Search + Filters */}
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-2">

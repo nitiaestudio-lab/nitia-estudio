@@ -4,8 +4,7 @@ import { useState, useRef, useMemo, useCallback, useEffect } from "react"
 import { useApp } from "@/lib/app-context"
 import {
   formatCurrency, formatDate, generateId, today,
-  projectTotalClientPrice, projectTotalCost, projectTotalGanancia,
-  projectIncome, projectExpenses, filterByDateRange,
+  projectIncome, filterByDateRange,
   calcIVACliente, calcIVAGanancia, calcSenaProveedor, calcSenaCliente,
   calcGananciaIndividual, quoteClientPrice, quoteGanancia, getSelectedQuotes,
   projectCostByCurrency, projectClientPriceByCurrency, projectGananciaByCurrency,
@@ -96,11 +95,15 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
   const [showProfile, setShowProfile] = useState(false)
   const [editingBudget, setEditingBudget] = useState(false)
   const [budgetValue, setBudgetValue] = useState(String(project.budget_final ?? ""))
-  const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
-  const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
+  const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
+  const ganBC = projectGananciaByCurrency(project, data.projectItems, data.quoteComparisons)
+  const totalClient = clientBC.ars
+  const totalClientUSD = clientBC.usd
+  const totalGanancia = ganBC.ars
+  const totalGananciaUSD = ganBC.usd
   const detailMovs = data.movements.filter(m => m.project_id === project.id)
-  const income = detailMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
-  const expenses = detailMovs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+  const income = detailMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+  const expenses = detailMovs.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
   const incomeUSD = detailMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
   const expensesUSD = detailMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
   const budgetFinal = project.budget_final ?? null
@@ -151,12 +154,13 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
               </p>
             )}
             <p className="text-[10px] text-muted-foreground mt-1">
+              {totalClientUSD > 0 && <span className="text-blue-600">+ {formatUSD(totalClientUSD)} </span>}
               {budgetFinal ? `Sugerido: ${formatCurrency(totalClient)}` : "Click para editar"}
             </p>
           </div>
-          <Stat label="Cobrado" value={formatCurrency(income - incomeUSD)} sub={`${formatCurrency((budgetFinal || totalClient) - (income - incomeUSD))} pendiente${incomeUSD > 0 ? ` · + U$D ${new Intl.NumberFormat("es-AR").format(incomeUSD)}` : ""}`} />
-          <Stat label="Pagado proveedores" value={formatCurrency(expenses - expensesUSD)} sub={expensesUSD > 0 ? `+ U$D ${new Intl.NumberFormat("es-AR").format(expensesUSD)}` : undefined} />
-          {canSeeGanancias && <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
+          <Stat label="Cobrado" value={formatCurrency(income)} sub={`${formatCurrency((budgetFinal || totalClient) - income)} pendiente${incomeUSD > 0 ? ` · + ${formatUSD(incomeUSD)}` : ""}`} />
+          <Stat label="Pagado proveedores" value={formatCurrency(expenses)} sub={expensesUSD > 0 ? `+ ${formatUSD(expensesUSD)}` : undefined} />
+          {canSeeGanancias && <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen${totalGananciaUSD > 0 ? ` · + ${formatUSD(totalGananciaUSD)}` : ""}`} highlight />}
         </div>
       </div>}
 
@@ -354,14 +358,14 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
        { id: "d3", type: "item_type", name: "Mobiliario", active: true, sort_order: 3, has_multiplier: true }]
 
   const handleExport = () => {
-    const tc = projectTotalCost(project, data.projectItems, data.quoteComparisons)
-    const tp = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
-    const tg = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
+    const costBC = projectCostByCurrency(project, data.projectItems, data.quoteComparisons)
+    const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
+    const ganBC = projectGananciaByCurrency(project, data.projectItems, data.quoteComparisons)
     const pc = project.partner_count ?? 2
     exportProjectDesgloseXLSX(project.name,
-      items.map(i => ({ type: i.type, description: i.description, cost: i.cost, clientPrice: i.client_price, ganancia: i.client_price - i.cost, provider: data.providers.find(p => p.id === i.provider_id)?.name })),
-      selectedQuotes.map(q => ({ category: q.category, item: q.item, provider: q.provider_name, cost: q.cost, clientPrice: quoteClientPrice(q), ganancia: quoteGanancia(q) })),
-      [{ label: "Total Costo", value: tc }, { label: "Precio Cliente", value: tp }, { label: "Ganancia", value: tg }, { label: `Indiv (÷${pc})`, value: tg / pc }])
+      items.map(i => ({ type: i.type, description: i.description, cost: i.cost, clientPrice: i.client_price, ganancia: i.client_price - i.cost, provider: data.providers.find(p => p.id === i.provider_id)?.name, currency: i.currency })),
+      selectedQuotes.map(q => ({ category: q.category, item: q.item, provider: q.provider_name, cost: q.cost, clientPrice: quoteClientPrice(q), ganancia: quoteGanancia(q), currency: q.currency })),
+      [{ label: "Total Costo ARS", value: costBC.ars }, { label: "Total Costo USD", value: costBC.usd }, { label: "Precio Cliente ARS", value: clientBC.ars }, { label: "Precio Cliente USD", value: clientBC.usd }, { label: "Ganancia ARS", value: ganBC.ars }, { label: "Ganancia USD", value: ganBC.usd }, { label: `Indiv ARS (÷${pc})`, value: ganBC.ars / pc }])
   }
 
   return (
@@ -1048,16 +1052,22 @@ function ArchivosTab({ project }: { project: Project }) {
 // =================== PROJECT PROFILE MODAL ===================
 function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit }: { project: Project; isFull: boolean; canSeeGanancias: boolean; onClose: () => void; onEdit: () => void }) {
   const { data } = useApp()
-  const totalCost = projectTotalCost(project, data.projectItems, data.quoteComparisons)
-  const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
-  const totalGanancia = projectTotalGanancia(project, data.projectItems, data.quoteComparisons)
-  const income = projectIncome(data.movements, project.id)
-  const expenses = projectExpenses(data.movements, project.id)
+  const costBC = projectCostByCurrency(project, data.projectItems, data.quoteComparisons)
+  const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
+  const ganBC = projectGananciaByCurrency(project, data.projectItems, data.quoteComparisons)
+  const totalCost = costBC.ars; const totalCostUSD = costBC.usd
+  const totalClient = clientBC.ars; const totalClientUSD = clientBC.usd
+  const totalGanancia = ganBC.ars; const totalGananciaUSD = ganBC.usd
   const projectMoves = data.movements.filter(m => m.project_id === project.id)
+  const income = projectMoves.filter(m => m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+  const incomeUSD = projectMoves.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+  const expenses = projectMoves.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+  const expensesUSD = projectMoves.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
   const projectItems = data.projectItems.filter(i => i.project_id === project.id)
   const projectTsk = data.tasks.filter(t => t.project_id === project.id)
   const projectFls = data.projectFiles.filter(f => f.project_id === project.id)
   const budgetFinal = project.budget_final ?? totalClient
+  const fmtWithUSD = (ars: number, usd: number) => usd > 0 ? `${formatCurrency(ars)} + ${formatUSD(usd)}` : formatCurrency(ars)
 
   const InfoRow = ({ label, value, color }: { label: string; value: string; color?: string }) => (
     <div className="flex justify-between py-2 border-b border-border/30 last:border-0">
@@ -1094,13 +1104,13 @@ function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit
         {/* Financial summary */}
         {isFull && <div className="bg-[#F7F5ED] rounded-xl p-4">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Resumen Financiero</h4>
-          <InfoRow label="Presupuesto" value={formatCurrency(budgetFinal)} />
-          <InfoRow label="Cobrado" value={formatCurrency(income)} color="text-green-600" />
+          <InfoRow label="Presupuesto" value={fmtWithUSD(budgetFinal, totalClientUSD)} />
+          <InfoRow label="Cobrado" value={fmtWithUSD(income, incomeUSD)} color="text-green-600" />
           <InfoRow label="Pendiente de cobro" value={formatCurrency(budgetFinal - income)} color={budgetFinal - income > 0 ? "text-amber-600" : "text-green-600"} />
-          <InfoRow label="Pagado a proveedores" value={formatCurrency(expenses)} color="text-red-600" />
+          <InfoRow label="Pagado a proveedores" value={fmtWithUSD(expenses, expensesUSD)} color="text-red-600" />
           {canSeeGanancias && <>
-            <InfoRow label="Costo total" value={formatCurrency(totalCost)} />
-            <InfoRow label="Ganancia bruta" value={formatCurrency(totalGanancia)} color="text-green-700" />
+            <InfoRow label="Costo total" value={fmtWithUSD(totalCost, totalCostUSD)} />
+            <InfoRow label="Ganancia bruta" value={fmtWithUSD(totalGanancia, totalGananciaUSD)} color="text-green-700" />
             <InfoRow label="Margen" value={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(1) : 0}%`} />
           </>}
         </div>}
