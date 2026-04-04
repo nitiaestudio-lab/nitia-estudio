@@ -58,14 +58,15 @@ export function Projects() {
       <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar proyectos..." className="max-w-md w-full px-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="Proyectos Activos" value={data.projects.filter(p => p.status === "activo").length} />
-        <Stat label="Total Presupuestado" value={formatCurrency(data.projects.reduce((s, p) => s + projectTotalClientPrice(p, data.projectItems, data.quoteComparisons), 0))} highlight />
+        <Stat label="Total Presupuestado" value={formatCurrency(data.projects.reduce((s, p) => s + projectClientPriceByCurrency(p, data.projectItems, data.quoteComparisons).ars, 0))} sub={(() => { const u = data.projects.reduce((s, p) => s + projectClientPriceByCurrency(p, data.projectItems, data.quoteComparisons).usd, 0); return u > 0 ? `+ ${formatUSD(u)}` : undefined })()} highlight />
         <Stat label="Total Cobrado" value={formatCurrency(data.movements.filter(m => m.project_id && m.type === "ingreso").reduce((s, m) => s + m.amount, 0))} />
         <Stat label="Pausados" value={data.projects.filter(p => p.status === "pausado").length} />
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map(project => {
-          const totalClient = projectTotalClientPrice(project, data.projectItems, data.quoteComparisons)
+          const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
           const income = projectIncome(data.movements, project.id)
+          const incomeUSD = data.movements.filter(m => m.project_id === project.id && m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
           return (<div key={project.id} onClick={() => setSelectedProjectId(project.id)}
             className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-3">
@@ -74,8 +75,8 @@ export function Projects() {
             </div>
             <p className="text-sm text-muted-foreground mb-3">{project.client}</p>
             {isFull && <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Presup: {formatCurrency(totalClient)}</span>
-              <span className="text-green-600">Cobrado: {formatCurrency(income)}</span>
+              <span className="text-muted-foreground">Presup: {formatCurrency(clientBC.ars)}{clientBC.usd > 0 && <span className="text-blue-600 ml-1">+ {formatUSD(clientBC.usd)}</span>}</span>
+              <span className="text-green-600">Cobrado: {formatCurrency(income)}{incomeUSD > 0 && <span className="text-blue-600 ml-1">+ {formatUSD(incomeUSD)}</span>}</span>
             </div>}
           </div>)
         })}
@@ -88,7 +89,7 @@ export function Projects() {
 
 // =================== PROJECT DETAIL ===================
 function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: Project; onBack: () => void; isFull: boolean; canSeeGanancias: boolean }) {
-  const { data, updateRow, deleteRow, addRow } = useApp()
+  const { data, updateRow, deleteRow, addRow, setSection } = useApp()
   const [tab, setTab] = useState<ProjectTab>("movimientos")
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteProject, setShowDeleteProject] = useState(false)
@@ -459,7 +460,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
               <Btn size="sm" variant="soft" onClick={() => setShowAddItem(sec.name)}><Plus size={12} className="mr-1 inline" />Agregar</Btn>
             </div>
             {si.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-xs text-muted-foreground border-b border-border">
-              <th className="text-left py-2 pr-2">Descripción</th><th className="text-right py-2 px-2">Costo</th>
+              <th className="text-left py-2 pr-2">Descripción</th><th className="text-left py-2 px-2 hidden md:table-cell">Proveedor</th><th className="text-right py-2 px-2">Costo</th>
               {hm && <th className="text-right py-2 px-2 hidden sm:table-cell">Mult</th>}
               <th className="text-right py-2 px-2">Precio</th>{hm && <th className="text-right py-2 px-2 hidden sm:table-cell">Ganancia</th>}
               <th className="w-16 py-2"></th></tr></thead>
@@ -467,7 +468,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                 const isEd = inlineEditId === item.id
                 const startEdit = () => { setInlineEditId(item.id); setInlineEdit({ description: item.description, costStr: String(item.cost), multStr: String(item.multiplier), currency: item.currency || "ARS", provider_id: item.provider_id, paid: item.paid }) }
                 const saveEdit = async () => {
-                  const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = hm ? (parseFloat(inlineEdit.multStr || "1.4") || 1.4) : 1
+                  const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = hm ? (parseFloat(inlineEdit.multStr || "1") || 1) : 1
                   await updateRow("project_items", item.id, { description: inlineEdit.description, cost: c, client_price: hm ? c * m : c, multiplier: m, currency: inlineEdit.currency, provider_id: inlineEdit.provider_id || null, paid: inlineEdit.paid }, "projectItems")
                   setInlineEditId(null)
                 }
@@ -479,15 +480,17 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                       <input value={inlineEdit.description ?? ""} onChange={e => setInlineEdit({ ...inlineEdit, description: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm bg-white min-w-[120px]" />
                       <button type="button" onClick={() => setInlineEdit({ ...inlineEdit, currency: inlineEdit.currency === "USD" ? "ARS" : "USD" })} className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${inlineEdit.currency === "USD" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>{inlineEdit.currency === "USD" ? "USD" : "ARS"}</button>
                     </div></td>
+                    <td className="py-1.5 px-1 hidden md:table-cell"><select value={inlineEdit.provider_id ?? ""} onChange={e => setInlineEdit({ ...inlineEdit, provider_id: e.target.value || null })} className="px-1.5 py-0.5 rounded border border-amber-300 text-xs bg-white max-w-[120px]"><option value="">—</option>{data.providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
                     <td className="py-1.5 px-1"><input type="number" value={inlineEdit.costStr ?? ""} onChange={e => setInlineEdit({ ...inlineEdit, costStr: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm text-right bg-white max-w-[100px] ml-auto block" /></td>
                     {hm && <td className="py-1.5 px-1 hidden sm:table-cell"><input type="number" value={inlineEdit.multStr ?? ""} step="0.1" onChange={e => setInlineEdit({ ...inlineEdit, multStr: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm text-right bg-white max-w-[60px] ml-auto block" /></td>}
-                    <td className="py-1.5 px-2 text-right text-sm font-medium text-muted-foreground">{(() => { const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = hm ? (parseFloat(inlineEdit.multStr || "1.4") || 1.4) : 1; const fmt = inlineEdit.currency === "USD" ? formatUSD : formatCurrency; return fmt(c * m) })()}</td>
-                    {hm && <td className="py-1.5 px-2 text-right text-sm text-green-600 hidden sm:table-cell">{(() => { const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = parseFloat(inlineEdit.multStr || "1.4") || 1.4; const fmt = inlineEdit.currency === "USD" ? formatUSD : formatCurrency; return fmt(c * m - c) })()}</td>}
+                    <td className="py-1.5 px-2 text-right text-sm font-medium text-muted-foreground">{(() => { const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = hm ? (parseFloat(inlineEdit.multStr || "1") || 1) : 1; const fmt = inlineEdit.currency === "USD" ? formatUSD : formatCurrency; return fmt(c * m) })()}</td>
+                    {hm && <td className="py-1.5 px-2 text-right text-sm text-green-600 hidden sm:table-cell">{(() => { const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = parseFloat(inlineEdit.multStr || "1") || 1; const fmt = inlineEdit.currency === "USD" ? formatUSD : formatCurrency; return fmt(c * m - c) })()}</td>}
                     <td className="py-1.5 text-right"><div className="flex gap-1 justify-end">
                       <button onClick={saveEdit} className="p-1 hover:bg-green-100 rounded"><Save size={13} className="text-green-600" /></button>
                       <button onClick={cancelEdit} className="p-1 hover:bg-red-50 rounded"><XCircle size={13} className="text-red-400" /></button>
                     </div></td>
                   </tr>)
+                const provName = item.provider_id ? data.providers.find(p => p.id === item.provider_id)?.name : null
                 return (
                   <tr key={item.id} className="border-b border-border/50 last:border-0 group">
                     <td className="py-2 pr-2"><div className="flex items-center gap-1.5">
@@ -495,6 +498,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                       <span className={`${item.paid ? "line-through text-muted-foreground" : ""} truncate max-w-[200px]`}>{item.description}</span>
                       {item.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded shrink-0">USD</span>}
                     </div></td>
+                    <td className="py-2 px-2 hidden md:table-cell">{provName ? <button onClick={() => setSection("proveedores")} className="text-xs text-[#5F5A46] hover:underline truncate max-w-[120px] block">{provName}</button> : <span className="text-xs text-muted-foreground">—</span>}</td>
                     <td className="text-right py-2 px-2">{item.currency === "USD" ? formatUSD(item.cost) : formatCurrency(item.cost)}</td>
                     {hm && <td className="text-right py-2 px-2 hidden sm:table-cell text-muted-foreground">x{item.multiplier}</td>}
                     <td className="text-right py-2 px-2 font-medium">{item.currency === "USD" ? formatUSD(item.client_price) : formatCurrency(item.client_price)}</td>
@@ -539,7 +543,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
         <summary className="text-sm font-semibold text-[#5F5A46] cursor-pointer">Configuración financiera</summary>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3">
           {[["IVA Cliente %", project.iva_cliente_pct ?? 21, "iva_cliente_pct"], ["IVA Ganancia %", project.iva_ganancia_pct ?? 10.5, "iva_ganancia_pct"],
-            ["Seña Prov %", project.sena_proveedor_pct ?? 60, "sena_proveedor_pct"], ["Seña Cli %", project.sena_cliente_pct ?? 50, "sena_cliente_pct"],
+            ["Seña Cli %", project.sena_cliente_pct ?? 50, "sena_cliente_pct"],
             ["Socias", project.partner_count ?? 2, "partner_count"]].map(([l, v, k]) => (
             <div key={k as string}><label className="text-xs text-[#76746A]">{l as string}</label>
               <input type="number" value={v as number} step="0.5" onChange={e => updateRow("projects", project.id, { [k as string]: parseFloat(e.target.value) || 0 }, "projects")}
@@ -1154,7 +1158,7 @@ function ProjectFormModal({ project, onClose, onSave }: { project?: Project; onC
   const [type, setType] = useState(project?.type ?? "interiorismo"); const [status, setStatus] = useState(project?.status ?? "activo")
   const [email, setEmail] = useState(project?.client_email ?? ""); const [phone, setPhone] = useState(project?.client_phone ?? ""); const [pc, setPc] = useState(String(project?.partner_count ?? "2"))
   return (<Modal isOpen={true} title={project ? "Editar Proyecto" : "Nuevo Proyecto"} onClose={onClose} size="lg">
-    <form onSubmit={e => { e.preventDefault(); onSave({ id: project?.id ?? generateId(), name, client, address, type, status, margin: project?.margin ?? 1.4,
+    <form onSubmit={e => { e.preventDefault(); onSave({ id: project?.id ?? generateId(), name, client, address, type, status, margin: project?.margin ?? 1,
       client_email: email || null, client_phone: phone || null, partner_count: parseInt(pc) || 2,
       iva_cliente_pct: project?.iva_cliente_pct ?? 21, iva_ganancia_pct: project?.iva_ganancia_pct ?? 10.5,
       sena_proveedor_pct: project?.sena_proveedor_pct ?? 60, sena_cliente_pct: project?.sena_cliente_pct ?? 50,
@@ -1200,7 +1204,7 @@ function EditItemModal({ item, hasMultiplier, providers, onClose, onSave }: {
   const [desc, setDesc] = useState(item.description); const [cost, setCost] = useState(String(item.cost)); const [mult, setMult] = useState(String(item.multiplier))
   const [prov, setProv] = useState(item.provider_id ?? ""); const [paid, setPaid] = useState(item.paid)
   const [currency, setCurrency] = useState<"ARS" | "USD">(item.currency || "ARS")
-  const c = parseFloat(cost) || 0; const m = hasMultiplier ? (parseFloat(mult) || 1.4) : 1; const cp = c * m
+  const c = parseFloat(cost) || 0; const m = hasMultiplier ? (parseFloat(mult) || 1) : 1; const cp = c * m
   return (<Modal isOpen={true} title={`Editar ${item.type}`} onClose={onClose}>
     <form onSubmit={e => { e.preventDefault(); onSave({ description: desc, cost: c, client_price: hasMultiplier ? cp : c, multiplier: m, currency, provider_id: prov || null, paid })}} className="space-y-4">
       <FormInput label="Descripción" value={desc} onChange={setDesc} />
