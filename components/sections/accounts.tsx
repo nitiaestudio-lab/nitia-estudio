@@ -198,7 +198,7 @@ export function Accounts() {
       {/* Movements Table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between">
-          <SecHead title={`Movimientos (${filtered.length})`} />
+          <SecHead title={`Movimientos (${filtered.length} de ${data.movements.length})`} />
           <div className="flex items-center gap-2">
             <button onClick={() => { setSortField("date"); setSortDir(d => d === "desc" ? "asc" : "desc") }}
               className={`text-xs px-2 py-1 rounded ${sortField === "date" ? "bg-[#5F5A46] text-white" : "bg-[#F0EDE4]"}`}>
