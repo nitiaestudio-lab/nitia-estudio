@@ -35,8 +35,10 @@ export function Providers() {
       const XLSX = await import("xlsx")
       const wb = XLSX.utils.book_new()
       const sheet = providers.map(p => {
-        const paid = data.movements.filter(m => m.provider_id === p.id && m.type === "egreso").reduce((s, m) => s + m.amount, 0)
-        return { Nombre: p.name, Categoría: p.category, Zona: p.zone || "", Teléfono: p.phone || "", Email: p.email || "", CBU: p.cbu || "", Alias: p.alias || "", "Seña %": p.advance_percent || "", "Total Pagado": paid }
+        const movs = data.movements.filter(m => m.provider_id === p.id && m.type === "egreso")
+        const paidARS = movs.filter(m => m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+        const paidUSD = movs.filter(m => m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+        return { Nombre: p.name, Categoría: p.category, Zona: p.zone || "", Teléfono: p.phone || "", Email: p.email || "", CBU: p.cbu || "", Alias: p.alias || "", "Seña %": p.advance_percent || "", "Pagado ARS": paidARS, "Pagado USD": paidUSD || "" }
       })
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheet), "Proveedores")
       XLSX.writeFile(wb, `proveedores_${today()}.xlsx`)
@@ -70,7 +72,9 @@ export function Providers() {
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {providers.map(prov => {
-          const paid = data.movements.filter(m => m.provider_id === prov.id && m.type === "egreso").reduce((s, m) => s + m.amount, 0)
+          const provMovs = data.movements.filter(m => m.provider_id === prov.id && m.type === "egreso")
+          const paidARS = provMovs.filter(m => m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+          const paidUSD = provMovs.filter(m => m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
           return (
             <div key={prov.id} onClick={() => setSelectedId(prov.id)}
               className="bg-card border border-border rounded-xl p-4 cursor-pointer hover:shadow-md transition-shadow">
@@ -83,7 +87,7 @@ export function Providers() {
                 {prov.phone && <p className="flex items-center gap-1"><Phone size={10} />{prov.phone}</p>}
                 {prov.advance_percent && <p>Seña: {prov.advance_percent}%</p>}
               </div>
-              {paid > 0 && <p className="text-sm text-red-600 mt-2 font-medium">Pagado: {formatCurrency(paid)}</p>}
+              {(paidARS > 0 || paidUSD > 0) && <p className="text-sm text-red-600 mt-2 font-medium">Pagado: {formatCurrency(paidARS)}{paidUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(paidUSD)}` : ""}</p>}
             </div>
           )
         })}
@@ -255,7 +259,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
           {provider.advance_percent && (
             <div className="flex justify-between items-center px-2 text-xs text-muted-foreground">
               <span>Seña requerida ({provider.advance_percent}%)</span>
-              <span>{formatCurrency(totalOwedAll * (provider.advance_percent / 100))}</span>
+              <span>{formatCurrency(totalOwedAll * (provider.advance_percent / 100))}{totalOwedAllUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(totalOwedAllUSD * (provider.advance_percent / 100))}` : ""}</span>
             </div>
           )}
           <div className="text-xs text-muted-foreground text-center">{movements.length} movimiento{movements.length !== 1 ? "s" : ""} registrado{movements.length !== 1 ? "s" : ""}</div>

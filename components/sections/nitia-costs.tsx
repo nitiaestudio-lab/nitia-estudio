@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useApp } from "@/lib/app-context"
-import { formatCurrency, generateId } from "@/lib/helpers"
+import { formatCurrency, formatUSD, generateId } from "@/lib/helpers"
 import { Stat, SecHead, Btn, Empty, Modal, FormInput, HR, EditableSelect, PeriodFilter, type PeriodValue } from "@/components/nitia-ui"
 import type { FixedExpense } from "@/lib/types"
 import { Plus, Pencil, Check, X, FileSpreadsheet, History } from "lucide-react"
@@ -22,7 +22,9 @@ export function NitiaCosts() {
   const costs = data.nitiaFixedCosts
   const activeCosts = costs.filter(c => c.active)
   const inactiveCosts = costs.filter(c => !c.active)
-  const totalActive = activeCosts.reduce((s, c) => s + c.amount, 0)
+  const totalActiveARS = activeCosts.filter(c => c.currency !== "USD").reduce((s, c) => s + c.amount, 0)
+  const totalActiveUSD = activeCosts.filter(c => c.currency === "USD").reduce((s, c) => s + c.amount, 0)
+  const totalActive = totalActiveARS
   const editingCost = editingId ? costs.find(c => c.id === editingId) : null
 
   // Payment tracking for selected month
@@ -55,6 +57,7 @@ export function NitiaCosts() {
         description: `[Costo fijo Nitia] ${cost.description}`,
         amount: cost.amount, type: "egreso" as const,
         category: cost.category || "Costo fijo", account_id: accountId || null,
+        medio_pago: cost.currency === "USD" ? "USD" : null,
         fixed_cost_id: costId,
       } as any)
       await addRow("fixed_cost_payments", {
@@ -85,7 +88,7 @@ export function NitiaCosts() {
       const XLSX = await import("xlsx")
       const wb = XLSX.utils.book_new()
       const costsSheet = activeCosts.map(c => ({
-        Descripción: c.description, Monto: c.amount, Categoría: c.category || "",
+        Descripción: c.description, Monto: c.amount, Moneda: c.currency || "ARS", Categoría: c.category || "",
         "Día Vencimiento": c.due_day || 1, Activo: c.active ? "Sí" : "No",
       }))
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(costsSheet), "Costos Fijos")
@@ -125,10 +128,10 @@ export function NitiaCosts() {
       </div>
 
       <div className="grid md:grid-cols-4 gap-4">
-        <Stat label="Total Mensual" value={formatCurrency(totalActive)} highlight />
+        <Stat label="Total Mensual" value={formatCurrency(totalActive)} sub={totalActiveUSD > 0 ? `+ ${formatUSD(totalActiveUSD)}` : undefined} highlight />
         <Stat label="Costos Activos" value={String(activeCosts.length)} />
         <Stat label="Pagados este mes" value={`${paidCount}/${activeCosts.length}`} sub={formatCurrency(paidTotal)} />
-        <Stat label="Por Socia (50%)" value={formatCurrency(totalActive / 2)} />
+        <Stat label="Por Socia (50%)" value={formatCurrency(totalActive / 2)} sub={totalActiveUSD > 0 ? `+ ${formatUSD(totalActiveUSD / 2)}` : undefined} />
       </div>
 
       {/* Costs by Category with payment checkboxes */}
@@ -150,7 +153,7 @@ export function NitiaCosts() {
                 <tr key={cost.id} className="border-b border-border last:border-0">
                   <td className="py-2 pr-4">
                     <span className="font-medium">{cost.description}</span>
-                    <span className="text-xs text-muted-foreground ml-2">{formatCurrency(cost.amount)}</span>
+                    <span className="text-xs text-muted-foreground ml-2">{cost.currency === "USD" ? formatUSD(cost.amount) : formatCurrency(cost.amount)}</span>
                   </td>
                   {historyMonths.map(hm => {
                     const payment = data.fixedCostPayments.find(
@@ -205,7 +208,10 @@ export function NitiaCosts() {
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium ${paid ? "line-through text-muted-foreground" : ""}`}>{cost.description}</p>
                     <p className="text-xs text-muted-foreground">{cost.category || "Sin categoria"}{cost.due_day ? ` · Vence dia ${cost.due_day}` : ""}</p>
-                    <p className={`text-base font-bold mt-1 ${paid ? "text-green-600" : "text-foreground"}`}>{formatCurrency(cost.amount)}</p>
+                    <p className={`text-base font-bold mt-1 ${paid ? "text-green-600" : "text-foreground"}`}>
+                      {cost.currency === "USD" ? formatUSD(cost.amount) : formatCurrency(cost.amount)}
+                      {cost.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded ml-1">USD</span>}
+                    </p>
                     {paid && payment?.paid_date && (
                       <p className="text-xs text-green-600 mt-0.5">Pagado: {new Date(payment.paid_date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}</p>
                     )}
@@ -229,7 +235,7 @@ export function NitiaCosts() {
         <HR />
         <div className="flex justify-between text-sm">
           <span className="font-semibold text-muted-foreground">Total mensual</span>
-          <span className="font-bold">{formatCurrency(totalActive)}</span>
+          <span className="font-bold">{formatCurrency(totalActive)}{totalActiveUSD > 0 && <span className="text-blue-600 ml-1 text-xs">+ {formatUSD(totalActiveUSD)}</span>}</span>
         </div>
       </div>
 
@@ -239,7 +245,7 @@ export function NitiaCosts() {
         return (
           <Modal isOpen={true} title={`Pagar: ${cost.description}`} onClose={() => setPayingCostId(null)}>
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Monto: <strong className="text-foreground">{formatCurrency(cost.amount)}</strong></p>
+              <p className="text-sm text-muted-foreground">Monto: <strong className="text-foreground">{cost.currency === "USD" ? formatUSD(cost.amount) : formatCurrency(cost.amount)}</strong></p>
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">¿Con qué cuenta se paga?</label>
                 <select value={payAccountId} onChange={e => setPayAccountId(e.target.value)}
@@ -264,7 +270,7 @@ export function NitiaCosts() {
             <div key={cost.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
               <span className="text-sm text-muted-foreground line-through">{cost.description}</span>
               <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">{formatCurrency(cost.amount)}</span>
+                <span className="text-sm text-muted-foreground">{cost.currency === "USD" ? formatUSD(cost.amount) : formatCurrency(cost.amount)}</span>
                 <button onClick={() => setEditingId(cost.id)} className="p-1 hover:bg-accent rounded">
                   <Pencil size={14} className="text-muted-foreground" />
                 </button>
@@ -307,6 +313,7 @@ function CostModal({ cost, categories, onAddCategory, onDeleteCategory, onClose,
   const [description, setDescription] = useState(cost?.description ?? "")
   const [amount, setAmount] = useState(String(cost?.amount ?? ""))
   const [category, setCategory] = useState(cost?.category ?? "")
+  const [currency, setCurrency] = useState<"ARS" | "USD">(cost?.currency ?? "ARS")
   const [active, setActive] = useState(cost?.active ?? true)
   const [dueDay, setDueDay] = useState(String(cost?.due_day ?? "1"))
 
@@ -314,7 +321,7 @@ function CostModal({ cost, categories, onAddCategory, onDeleteCategory, onClose,
     <Modal isOpen={true} title={cost ? "Editar Costo" : "Nuevo Costo"} onClose={onClose}>
       <form onSubmit={e => { e.preventDefault(); onSave({
         id: cost?.id ?? generateId(), description,
-        amount: parseFloat(amount), category, active, due_day: parseInt(dueDay) || 1,
+        amount: parseFloat(amount), category, currency, active, due_day: parseInt(dueDay) || 1,
       })}} className="space-y-4">
         <FormInput label="Descripción" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-4">
@@ -322,6 +329,10 @@ function CostModal({ cost, categories, onAddCategory, onDeleteCategory, onClose,
           <EditableSelect label="Categoría" value={category} onChange={setCategory}
             options={categories.map(c => ({ value: c.name, label: c.name }))}
             onAddNew={onAddCategory} onDelete={onDeleteCategory} />
+        </div>
+        <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+          <button type="button" onClick={() => setCurrency("ARS")} className={`flex-1 px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
+          <button type="button" onClick={() => setCurrency("USD")} className={`flex-1 px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
         </div>
         <FormInput label="Día de vencimiento (1-31)" type="number" value={dueDay} onChange={setDueDay} min="1" max="31" />
         <div className="flex items-center gap-3">

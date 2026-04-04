@@ -1222,7 +1222,7 @@ function QuoteModal({ projectId, providers, onClose, onSave }: { projectId: stri
   return (<Modal isOpen={true} title="Nueva Cotización" onClose={onClose}>
     <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), date: today(), project_id: projectId, category: cat, item, type: it as any,
       provider_id: pid || null, provider_name: pn || providers.find(p => p.id === pid)?.name || "", cost: cn,
-      price_x14: cn * 1.4, price_x16: cn * 1.6, ganancia_x14: cn * 0.4, ganancia_x16: cn * 0.6, selected: false, selected_multiplier: null, currency })}} className="space-y-4">
+      price_x14: cn * 1.4, price_x16: cn * 1.6, ganancia_x14: hm ? cn * 0.4 : 0, ganancia_x16: hm ? cn * 0.6 : 0, selected: false, selected_multiplier: null, currency })}} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <EditableSelect label="Categoría" value={cat} onChange={setCat} options={qcs.map(c => ({ value: c.name, label: c.name }))} onAddNew={n => addCategory("quote_category", n)} onDelete={n => deleteCategory(n)} placeholder="Ej: Carpintería" />
         <FormInput label="Ítem" value={item} onChange={setItem} placeholder="Ej: Mueble de TV" /></div>

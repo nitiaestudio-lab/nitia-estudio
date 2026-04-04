@@ -1,35 +1,16 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { useApp } from "@/lib/app-context"
-import { formatCurrency, formatDate, generateId, today, filterByDateRange } from "@/lib/helpers"
+import { formatCurrency, formatUSD, formatDate, generateId, today, filterByDateRange } from "@/lib/helpers"
 import { Stat, SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect, PeriodFilter, type PeriodValue, EditableSelect, ConfirmDeleteModal } from "@/components/nitia-ui"
 import type { Movement, Account } from "@/lib/types"
 import { Plus, ArrowUpRight, ArrowDownLeft, Trash2, Pencil, Download, ArrowUpDown, X, ExternalLink, Filter, ChevronDown, ChevronUp } from "lucide-react"
 
-// =================== DOLAR API ===================
-function useDolarRate() {
-  const [rate, setRate] = useState<number | null>(null)
-  const [loading, setLoading] = useState(false)
-  useEffect(() => {
-    setLoading(true)
-    fetch("https://dolarapi.com/v1/dolares/blue")
-      .then(r => r.json())
-      .then(d => { if (d?.venta) setRate(d.venta) })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-  return { rate, loading }
-}
-
-function formatUSD(amount: number): string {
-  return `U$D ${new Intl.NumberFormat("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)}`
-}
-
 // =================== MAIN COMPONENT ===================
 export function Accounts() {
   const { data, addMovement, deleteMovement, updateRow, addRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
-  const { rate: dolarRate } = useDolarRate()
+  const dolarRate = data.dollarRate?.sell || null
 
   // UI state
   const [showNewMovement, setShowNewMovement] = useState(false)

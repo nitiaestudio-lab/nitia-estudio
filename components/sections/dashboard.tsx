@@ -1,13 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import { useApp } from "@/lib/app-context"
 import { formatCurrency, formatUSD, projectTotalClientPrice, projectTotalCost, projectIncome, projectClientPriceByCurrency } from "@/lib/helpers"
 import { Stat, SecHead, Tag, HR } from "@/components/nitia-ui"
 import { canSee } from "@/lib/seed-data"
-import { TrendingUp, FolderOpen, Users, DollarSign, CheckCircle, Clock, AlertCircle, CalendarClock } from "lucide-react"
+import { TrendingUp, FolderOpen, Users, DollarSign, CheckCircle, Clock, AlertCircle, CalendarClock, RefreshCw, Pencil, X } from "lucide-react"
 
 export function Dashboard() {
-  const { role, data, setSection, setSelectedProjectId, userPermissions } = useApp()
+  const { role, data, setSection, setSelectedProjectId, userPermissions, fetchDollarRate, setManualDollarRate, clearDollarOverride } = useApp()
   const isFull = canSee(role, userPermissions)
 
   const activeProjects = data.projects.filter(p => p.status === "activo")
@@ -64,6 +65,8 @@ export function Dashboard() {
           <Stat label="Estimado por Cobrar" value={formatCurrency(Math.max(0, estimatedPending))} sub={`${formatCurrency(totalCollectedARS)} cobrado${totalCollectedUSD > 0 ? ` + ${formatUSD(totalCollectedUSD)}` : ""}`} />
         </>}
       </div>
+
+      {isFull && <DollarRateWidget />}
 
       {isFull && unpaidFixedCosts.length > 0 && (
         <div className="bg-card border border-amber-200 rounded-xl p-6">
@@ -188,6 +191,73 @@ export function Dashboard() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function DollarRateWidget() {
+  const { data, fetchDollarRate, setManualDollarRate, clearDollarOverride } = useApp()
+  const [editing, setEditing] = useState(false)
+  const [manualBuy, setManualBuy] = useState("")
+  const [manualSell, setManualSell] = useState("")
+  const [loading, setLoading] = useState(false)
+  const dr = data.dollarRate
+
+  const handleFetch = async () => { setLoading(true); await fetchDollarRate(); setLoading(false) }
+  const handleSaveManual = async () => {
+    const b = parseFloat(manualBuy) || 0; const s = parseFloat(manualSell) || 0
+    if (s <= 0) return
+    setLoading(true); await setManualDollarRate(b, s); setLoading(false); setEditing(false)
+  }
+  const handleClear = async () => { setLoading(true); await clearDollarOverride(); setLoading(false) }
+
+  const lastUpdate = dr?.last_api_fetch ? new Date(dr.last_api_fetch) : dr?.manual_override ? new Date(dr.manual_override) : null
+
+  return (
+    <div className="bg-gradient-to-r from-blue-50 to-blue-50/50 border border-blue-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+          <DollarSign size={20} className="text-blue-700" />
+        </div>
+        <div>
+          <p className="text-xs text-blue-600 font-medium uppercase tracking-wider">Dólar Blue</p>
+          {dr && dr.sell > 0 ? (
+            <div className="flex items-center gap-3">
+              <span className="text-lg font-bold text-blue-900">Venta: ${new Intl.NumberFormat("es-AR").format(dr.sell)}</span>
+              <span className="text-sm text-blue-700">Compra: ${new Intl.NumberFormat("es-AR").format(dr.buy)}</span>
+            </div>
+          ) : (
+            <span className="text-sm text-blue-600">Sin cotización cargada</span>
+          )}
+          <div className="flex items-center gap-2 text-[10px] text-blue-500">
+            {dr?.source === "manual" && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">Manual</span>}
+            {dr?.source === "api" && <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded">API</span>}
+            {lastUpdate && <span>Actualizado: {lastUpdate.toLocaleString("es-AR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {editing ? (
+          <div className="flex items-center gap-2">
+            <input type="number" placeholder="Compra" value={manualBuy} onChange={e => setManualBuy(e.target.value)} className="w-20 px-2 py-1 rounded border border-blue-300 text-sm" />
+            <input type="number" placeholder="Venta" value={manualSell} onChange={e => setManualSell(e.target.value)} className="w-20 px-2 py-1 rounded border border-blue-300 text-sm" />
+            <button onClick={handleSaveManual} disabled={loading} className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50">Guardar</button>
+            <button onClick={() => setEditing(false)} className="p-1 hover:bg-blue-100 rounded"><X size={14} className="text-blue-600" /></button>
+          </div>
+        ) : (
+          <>
+            <button onClick={handleFetch} disabled={loading} className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 disabled:opacity-50" title="Actualizar desde API">
+              <RefreshCw size={12} className={loading ? "animate-spin" : ""} />Actualizar
+            </button>
+            <button onClick={() => { setManualBuy(String(dr?.buy || "")); setManualSell(String(dr?.sell || "")); setEditing(true) }} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-50" title="Poner valor manual">
+              <Pencil size={12} />Manual
+            </button>
+            {dr?.source === "manual" && (
+              <button onClick={handleClear} disabled={loading} className="px-2 py-1.5 text-[10px] text-blue-500 hover:text-blue-700 hover:underline">Volver a API</button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

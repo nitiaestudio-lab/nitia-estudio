@@ -5,7 +5,7 @@ import type {
   AppData, RoleKey, Section, Project, ProjectItem, ProjectFile,
   Provider, ProviderDocument, Movement, Account, Task,
   FixedExpense, FixedCostPayment, PersonalFinanceMovement,
-  QuoteComparison, Category
+  QuoteComparison, Category, DollarRate
 } from "./types"
 import { createClient } from "./supabase/client"
 import { toast } from "sonner"
@@ -18,6 +18,7 @@ const EMPTY_DATA: AppData = {
   accounts: [], movements: [], tasks: [],
   personalFinanceMovements: [], nitiaFixedCosts: [],
   fixedCostPayments: [], quoteComparisons: [], categories: [],
+  dollarRate: null,
 }
 
 interface AppContextType {
@@ -49,6 +50,11 @@ interface AppContextType {
 
   // Refresh
   refreshData: () => Promise<void>
+
+  // Dollar rate
+  fetchDollarRate: () => Promise<void>
+  setManualDollarRate: (buy: number, sell: number) => Promise<void>
+  clearDollarOverride: () => Promise<void>
 
   // Categories
   getCategoriesFor: (type: string) => Category[]
@@ -115,7 +121,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const [
         projectsR, itemsR, filesR, providersR, provDocsR,
         accountsR, movementsR, tasksR, pfR, fixedR, fcpR,
-        quotesR, catsR,
+        quotesR, catsR, dollarR,
       ] = await Promise.all([
         sb.from("projects").select("*").is("deleted_at", null).order("created_at", { ascending: false }),
         sb.from("project_items").select("*").order("sort_order"),
@@ -130,6 +136,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sb.from("fixed_cost_payments").select("*"),
         sb.from("quote_comparisons").select("*").order("date", { ascending: false }),
         sb.from("categories").select("*").eq("active", true).order("sort_order"),
+        sb.from("app_settings").select("value").eq("key", "dollar_blue").single(),
       ])
 
       setData({
@@ -146,6 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         fixedCostPayments: (fcpR.data ?? []) as FixedCostPayment[],
         quoteComparisons: (quotesR.data ?? []) as QuoteComparison[],
         categories: (catsR.data ?? []) as Category[],
+        dollarRate: (dollarR.data?.value as DollarRate) ?? null,
       })
     } catch (err) {
       console.error("Error loading data:", err)
@@ -157,7 +165,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Auto-fetch dollar rate on load and every 4 hours
+  useEffect(() => {
+    const checkAndFetch = async () => {
+      try {
+        const res = await fetch("/api/dollar-rate")
+        const json = await res.json()
+        const dr = json.data
+        if (!dr || !dr.last_api_fetch || (Date.now() - new Date(dr.last_api_fetch).getTime() > 4 * 60 * 60 * 1000)) {
+          // Stale or never fetched — auto refresh from API (unless manual override)
+          if (!dr?.manual_override) {
+            const r2 = await fetch("/api/dollar-rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "fetch" }) })
+            const j2 = await r2.json()
+            if (j2.ok) setData(prev => ({ ...prev, dollarRate: j2.data }))
+          }
+        }
+      } catch {}
+    }
+    checkAndFetch()
+    const interval = setInterval(checkAndFetch, 4 * 60 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   const refreshData = useCallback(async () => { await loadData() }, [loadData])
+
+  // Dollar rate helpers
+  const fetchDollarRate = useCallback(async () => {
+    try {
+      const res = await fetch("/api/dollar-rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "fetch" }) })
+      const json = await res.json()
+      if (json.ok) setData(prev => ({ ...prev, dollarRate: json.data }))
+      else toast.error("No se pudo obtener cotización del dólar")
+    } catch { toast.error("Error al consultar dólar blue") }
+  }, [])
+
+  const setManualDollarRate = useCallback(async (buy: number, sell: number) => {
+    try {
+      const res = await fetch("/api/dollar-rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "manual", buy, sell }) })
+      const json = await res.json()
+      if (json.ok) { setData(prev => ({ ...prev, dollarRate: json.data })); toast.success("Cotización actualizada") }
+    } catch { toast.error("Error al guardar cotización") }
+  }, [])
+
+  const clearDollarOverride = useCallback(async () => {
+    try {
+      const res = await fetch("/api/dollar-rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "clear_override" }) })
+      const json = await res.json()
+      if (json.ok) { setData(prev => ({ ...prev, dollarRate: json.data })); toast.success("Cotización actualizada desde API") }
+    } catch { toast.error("Error al actualizar") }
+  }, [])
 
   // =================== GENERIC CRUD ===================
   const addRow = useCallback(async (
@@ -367,6 +423,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addRow, updateRow, deleteRow, deleteRows,
       addMovement, deleteMovement,
       uploadFile, refreshData,
+      fetchDollarRate, setManualDollarRate, clearDollarOverride,
       getCategoriesFor, addCategory, deleteCategory,
     }}>
       {children}

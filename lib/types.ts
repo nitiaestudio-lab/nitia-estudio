@@ -161,6 +161,7 @@ export interface FixedExpense {
   description: string
   amount: number
   category?: string | null
+  currency?: 'ARS' | 'USD'
   active: boolean
   due_day?: number
   notes?: string | null
@@ -214,6 +215,14 @@ export interface QuoteComparison {
   currency?: 'ARS' | 'USD'
 }
 
+export interface DollarRate {
+  buy: number
+  sell: number
+  source: 'api' | 'manual'
+  last_api_fetch: string | null
+  manual_override: string | null
+}
+
 export interface AppData {
   projects: Project[]
   projectItems: ProjectItem[]
@@ -228,6 +237,7 @@ export interface AppData {
   fixedCostPayments: FixedCostPayment[]
   quoteComparisons: QuoteComparison[]
   categories: Category[]
+  dollarRate: DollarRate | null
 }
 
 export type Section =
