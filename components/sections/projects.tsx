@@ -666,7 +666,7 @@ function ComparadorTab({ project }: { project: Project }) {
             </div>
             <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#FAFAF9]"><tr className="text-xs text-muted-foreground">
               <th className="px-3 py-2 text-left w-8"></th><th className="px-3 py-2 text-left">Proveedor</th><th className="px-3 py-2 text-right">Costo</th>
-              <th className="px-3 py-2 text-right">P.x1.4</th><th className="px-3 py-2 text-right hidden md:table-cell">G.x1.4</th>
+              <th className="px-3 py-2 text-right">P.x1.4</th><th className="px-3 py-2 text-right hidden sm:table-cell">P.x1.6</th><th className="px-3 py-2 text-right hidden md:table-cell">G.x1.4</th>
               <th className="px-3 py-2 text-right hidden md:table-cell">G.x1.6</th><th className="px-3 py-2 text-center">Elegir</th><th className="px-3 py-2 w-16"></th>
             </tr></thead><tbody>{iqs.map(q => {
               const hm = secHasMult(q.type || "mobiliario")
@@ -686,6 +686,7 @@ function ComparadorTab({ project }: { project: Project }) {
                     <button type="button" onClick={() => setEditQ({ ...editQ, currency: editQ.currency === "USD" ? "ARS" : "USD" })} className={`text-[10px] px-1 py-0.5 rounded font-medium shrink-0 ${editQ.currency === "USD" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>{editQ.currency === "USD" ? "USD" : "ARS"}</button>
                   </div></td>
                   <td className="px-3 py-1.5 text-right text-muted-foreground">{(() => { const c = parseFloat(editQ.cost) || 0; return (editQ.currency === "USD" ? formatUSD : formatCurrency)(hm ? c * 1.4 : c) })()}</td>
+                  <td className="px-3 py-1.5 text-right text-muted-foreground hidden sm:table-cell">{(() => { const c = parseFloat(editQ.cost) || 0; return (editQ.currency === "USD" ? formatUSD : formatCurrency)(hm ? c * 1.6 : c) })()}</td>
                   <td className="px-3 py-1.5 text-right text-green-600 hidden md:table-cell">{(() => { const c = parseFloat(editQ.cost) || 0; return (editQ.currency === "USD" ? formatUSD : formatCurrency)(hm ? c * 0.4 : 0) })()}</td>
                   <td className="px-3 py-1.5 text-right text-green-600 hidden md:table-cell">{(() => { const c = parseFloat(editQ.cost) || 0; return (editQ.currency === "USD" ? formatUSD : formatCurrency)(hm ? c * 0.6 : 0) })()}</td>
                   <td className="px-3 py-1.5"></td>
@@ -700,6 +701,7 @@ function ComparadorTab({ project }: { project: Project }) {
                   <td className="px-3 py-2"><span className="font-medium">{q.provider_name}</span>{q.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded ml-1">USD</span>}</td>
                   <td className="px-3 py-2 text-right">{fmt(q.cost)}</td>
                   <td className="px-3 py-2 text-right">{fmt(hm ? q.price_x14 : q.cost)}</td>
+                  <td className="px-3 py-2 text-right hidden sm:table-cell">{fmt(hm ? q.price_x16 : q.cost)}</td>
                   <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{fmt(hm ? q.ganancia_x14 : 0)}</td>
                   <td className="px-3 py-2 text-right text-green-600 hidden md:table-cell">{fmt(hm ? q.ganancia_x16 : 0)}</td>
                   <td className="px-3 py-2 text-center"><SelBtns q={q} hm={hm} /></td>

@@ -23,7 +23,9 @@ export function Dashboard() {
   const pendingTasks = data.tasks.filter(t => t.status === "pendiente").length
   const inProgressTasks = data.tasks.filter(t => t.status === "en-curso").length
   const completedTasks = data.tasks.filter(t => t.status === "completada").length
-  const fixedCostsTotal = data.nitiaFixedCosts.filter(c => c.active).reduce((s, c) => s + c.amount, 0)
+  const activeFixedCosts = data.nitiaFixedCosts.filter(c => c.active)
+  const fixedCostsTotal = activeFixedCosts.filter(c => c.currency !== "USD").reduce((s, c) => s + c.amount, 0)
+  const fixedCostsTotalUSD = activeFixedCosts.filter(c => c.currency === "USD").reduce((s, c) => s + c.amount, 0)
 
   const now = new Date()
   const currentMonth = now.getMonth() + 1
@@ -182,12 +184,15 @@ export function Dashboard() {
         </div>
       </div>
 
-      {isFull && fixedCostsTotal > 0 && (
+      {isFull && (fixedCostsTotal > 0 || fixedCostsTotalUSD > 0) && (
         <div className="bg-card border border-border rounded-xl p-6">
           <SecHead title="Costos Fijos Mensuales" right={<button onClick={() => setSection("nitia-costs")} className="text-sm text-[#5F5A46] hover:underline">Gestionar</button>} />
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">Total mensual</span>
-            <span className="text-xl font-bold">{formatCurrency(fixedCostsTotal)}</span>
+            <div className="text-right">
+              <span className="text-xl font-bold">{formatCurrency(fixedCostsTotal)}</span>
+              {fixedCostsTotalUSD > 0 && <span className="text-sm text-blue-600 ml-2">{formatUSD(fixedCostsTotalUSD)}</span>}
+            </div>
           </div>
         </div>
       )}
@@ -214,46 +219,38 @@ function DollarRateWidget() {
   const lastUpdate = dr?.last_api_fetch ? new Date(dr.last_api_fetch) : dr?.manual_override ? new Date(dr.manual_override) : null
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-blue-50/50 border border-blue-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-          <DollarSign size={20} className="text-blue-700" />
-        </div>
-        <div>
-          <p className="text-xs text-blue-600 font-medium uppercase tracking-wider">Dólar Blue</p>
-          {dr && dr.sell > 0 ? (
-            <div className="flex items-center gap-3">
-              <span className="text-lg font-bold text-blue-900">Venta: ${new Intl.NumberFormat("es-AR").format(dr.sell)}</span>
-              <span className="text-sm text-blue-700">Compra: ${new Intl.NumberFormat("es-AR").format(dr.buy)}</span>
-            </div>
-          ) : (
-            <span className="text-sm text-blue-600">Sin cotización cargada</span>
-          )}
-          <div className="flex items-center gap-2 text-[10px] text-blue-500">
-            {dr?.source === "manual" && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">Manual</span>}
-            {dr?.source === "api" && <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded">API</span>}
-            {lastUpdate && <span>Actualizado: {lastUpdate.toLocaleString("es-AR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
-          </div>
-        </div>
+    <div className="flex items-center justify-between gap-3 px-4 py-2 bg-[#F7F5ED] border border-[#E0DDD0] rounded-lg">
+      <div className="flex items-center gap-2">
+        <DollarSign size={14} className="text-blue-600 shrink-0" />
+        {dr && dr.sell > 0 ? (
+          <span className="text-xs text-[#5F5A46]">
+            <span className="font-semibold">Blue ${new Intl.NumberFormat("es-AR").format(dr.sell)}</span>
+            <span className="text-muted-foreground ml-1">/ compra ${new Intl.NumberFormat("es-AR").format(dr.buy)}</span>
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Dólar blue: sin cargar</span>
+        )}
+        {dr?.source === "manual" && <span className="text-[9px] px-1 py-0.5 bg-amber-100 text-amber-700 rounded">Manual</span>}
+        {lastUpdate && <span className="text-[9px] text-muted-foreground hidden sm:inline">· {lastUpdate.toLocaleString("es-AR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-1.5">
         {editing ? (
-          <div className="flex items-center gap-2">
-            <input type="number" placeholder="Compra" value={manualBuy} onChange={e => setManualBuy(e.target.value)} className="w-20 px-2 py-1 rounded border border-blue-300 text-sm" />
-            <input type="number" placeholder="Venta" value={manualSell} onChange={e => setManualSell(e.target.value)} className="w-20 px-2 py-1 rounded border border-blue-300 text-sm" />
-            <button onClick={handleSaveManual} disabled={loading} className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50">Guardar</button>
-            <button onClick={() => setEditing(false)} className="p-1 hover:bg-blue-100 rounded"><X size={14} className="text-blue-600" /></button>
+          <div className="flex items-center gap-1.5">
+            <input type="number" placeholder="Compra" value={manualBuy} onChange={e => setManualBuy(e.target.value)} className="w-16 px-1.5 py-0.5 rounded border border-[#E0DDD0] text-xs" />
+            <input type="number" placeholder="Venta" value={manualSell} onChange={e => setManualSell(e.target.value)} className="w-16 px-1.5 py-0.5 rounded border border-[#E0DDD0] text-xs" />
+            <button onClick={handleSaveManual} disabled={loading} className="px-2 py-0.5 bg-[#5F5A46] text-white rounded text-[10px] font-medium hover:bg-[#4A4536] disabled:opacity-50">OK</button>
+            <button onClick={() => setEditing(false)} className="p-0.5 hover:bg-[#E0DDD0] rounded"><X size={12} className="text-muted-foreground" /></button>
           </div>
         ) : (
           <>
-            <button onClick={handleFetch} disabled={loading} className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 disabled:opacity-50" title="Actualizar desde API">
-              <RefreshCw size={12} className={loading ? "animate-spin" : ""} />Actualizar
+            <button onClick={handleFetch} disabled={loading} className="p-1 hover:bg-[#E0DDD0] rounded" title="Actualizar desde API">
+              <RefreshCw size={12} className={`text-muted-foreground ${loading ? "animate-spin" : ""}`} />
             </button>
-            <button onClick={() => { setManualBuy(String(dr?.buy || "")); setManualSell(String(dr?.sell || "")); setEditing(true) }} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-50" title="Poner valor manual">
-              <Pencil size={12} />Manual
+            <button onClick={() => { setManualBuy(String(dr?.buy || "")); setManualSell(String(dr?.sell || "")); setEditing(true) }} className="p-1 hover:bg-[#E0DDD0] rounded" title="Poner valor manual">
+              <Pencil size={11} className="text-muted-foreground" />
             </button>
             {dr?.source === "manual" && (
-              <button onClick={handleClear} disabled={loading} className="px-2 py-1.5 text-[10px] text-blue-500 hover:text-blue-700 hover:underline">Volver a API</button>
+              <button onClick={handleClear} disabled={loading} className="text-[9px] text-muted-foreground hover:text-foreground hover:underline">API</button>
             )}
           </>
         )}

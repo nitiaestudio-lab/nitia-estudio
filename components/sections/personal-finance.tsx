@@ -87,6 +87,10 @@ export function PersonalFinance() {
   const balance = totalIncome + totalProjectIncome - totalFixed - totalVariable
   const balanceUSD = totalIncomeUSD + totalProjectIncomeUSD - totalFixedUSD - totalVariableUSD
   const fmtUSD = (n: number) => `U$D ${new Intl.NumberFormat("es-AR").format(n)}`
+  const dollarSell = data.dollarRate?.sell || 0
+  const totalFixedEstARS = totalFixed + (dollarSell > 0 ? totalFixedUSD * dollarSell : 0)
+  const totalEstARS = (totalIncome + totalProjectIncome + (dollarSell > 0 ? (totalIncomeUSD + totalProjectIncomeUSD) * dollarSell : 0))
+    - totalFixedEstARS - totalVariable - (dollarSell > 0 ? totalVariableUSD * dollarSell : 0)
 
   const saveItem = async (item: PersonalFinanceMovement) => {
     if (editingItem) {
@@ -263,7 +267,7 @@ export function PersonalFinance() {
         <Stat label="Ingresos" value={formatCurrency(totalIncome + totalProjectIncome)} sub={(totalIncomeUSD + totalProjectIncomeUSD) > 0 ? `+ ${fmtUSD(totalIncomeUSD + totalProjectIncomeUSD)}` : undefined} />
         <Stat label="Gastos Fijos" value={formatCurrency(totalFixed)} sub={totalFixedUSD > 0 ? `+ ${fmtUSD(totalFixedUSD)}` : undefined} />
         <Stat label="Gastos Variables" value={formatCurrency(totalVariable)} sub={totalVariableUSD > 0 ? `+ ${fmtUSD(totalVariableUSD)}` : undefined} />
-        <Stat label="Balance" value={formatCurrency(balance)} sub={balanceUSD !== 0 ? `${balanceUSD >= 0 ? "+" : ""}${fmtUSD(balanceUSD)}` : undefined} highlight={balance >= 0} />
+        <Stat label="Balance" value={formatCurrency(balance)} sub={balanceUSD !== 0 ? `${balanceUSD >= 0 ? "+" : ""}${fmtUSD(balanceUSD)}${dollarSell > 0 ? ` ≈ ${formatCurrency(totalEstARS)}` : ""}` : undefined} highlight={balance >= 0} />
       </div>
 
       {/* ============ COSTOS FIJOS - Cards checkables ============ */}
@@ -349,7 +353,11 @@ export function PersonalFinance() {
         <HR />
         <div className="flex justify-between text-sm">
           <span className="font-semibold text-muted-foreground">Total mensual</span>
-          <span className="font-bold">{formatCurrency(totalFixed)}</span>
+          <div className="text-right">
+            <span className="font-bold">{formatCurrency(totalFixed)}</span>
+            {totalFixedUSD > 0 && <span className="text-sm text-blue-600 ml-2">{fmtUSD(totalFixedUSD)}</span>}
+            {totalFixedUSD > 0 && dollarSell > 0 && <span className="text-xs text-muted-foreground ml-1">≈ {formatCurrency(totalFixedEstARS)} total</span>}
+          </div>
         </div>
       </div>
 
