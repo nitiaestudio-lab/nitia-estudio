@@ -288,15 +288,13 @@ function BalancePanel({ project }: { project: Project }) {
     return total
   })()
   const sProv = providerSeñaTotal
-  const sCli = calcSenaCliente(clientBC.ars, sCliPct)
-  const sCliIVA = sCli + calcIVACliente(sCli, ivaCli)
+  const sCli = calcSenaCliente(clientBC.ars, sCliPct) // sin IVA
 
   // Real seña amounts from movements (unified filter)
-  const isSeñaMov = (m: Movement) => m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor" || m.category === "Aporte propio seña" || m.category === "Diferencia seña"
+  const isSeñaMov = (m: Movement) => m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor"
   const señaMovs = projMovs.filter(m => isSeñaMov(m))
   const señaCobradaCli = señaMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
   const señaPagadaProv = señaMovs.filter(m => m.type === "egreso" && (m.category === "Seña proveedor")).reduce((s, m) => s + m.amount, 0)
-  const señaAportePropio = señaMovs.filter(m => m.category === "Aporte propio seña" || m.category === "Diferencia seña").reduce((s, m) => s + m.amount, 0)
 
   // TC Blue estimation
   const tcBlue = data.dollarRate?.sell
@@ -422,13 +420,12 @@ function BalancePanel({ project }: { project: Project }) {
           <summary className="text-xs font-semibold text-[#5F5A46] cursor-pointer">Detalle señas</summary>
           <div className="grid grid-cols-2 gap-3 mt-2 text-xs">
             <div className="space-y-1">
-              <div className="flex justify-between"><span className="text-muted-foreground">Seña cliente esperada:</span><span className="font-medium">{formatCurrency(sCliIVA)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Seña cliente ({sCliPct}%):</span><span className="font-medium">{formatCurrency(sCli)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Seña cobrada:</span><span className="font-medium text-green-600">{formatCurrency(señaCobradaCli)}</span></div>
             </div>
             <div className="space-y-1">
               <div className="flex justify-between"><span className="text-muted-foreground">Seña prov esperada:</span><span className="font-medium">{formatCurrency(sProv)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Seña pagada:</span><span className="font-medium text-red-600">{formatCurrency(señaPagadaProv)}</span></div>
-              {señaAportePropio > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Aporte propio:</span><span className="font-medium text-amber-600">{formatCurrency(señaAportePropio)}</span></div>}
             </div>
           </div>
         </details>
