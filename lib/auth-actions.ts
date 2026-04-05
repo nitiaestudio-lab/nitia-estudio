@@ -9,7 +9,7 @@ import { createSession, destroySession } from "./session"
 
 const BCRYPT_ROUNDS = 10
 const MAX_LOGIN_ATTEMPTS = 5
-const LOCKOUT_MINUTES = 15
+const LOCKOUT_MINUTES = 1
 
 // In-memory rate limiting (per serverless instance — good enough for low traffic)
 const loginAttempts = new Map<string, { count: number; lockedUntil: number }>()
@@ -153,12 +153,8 @@ export async function sendPasswordResetEmail(email: string) {
       updated_at: new Date().toISOString(),
     })
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email,
-      options: {
-        emailRedirectTo: `${siteUrl}/reset-pin?token=${resetToken}`,
-        shouldCreateUser: false,
-      },
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${siteUrl}/reset-pin?token=${resetToken}`,
     })
 
     if (error) {
@@ -655,7 +651,7 @@ function verifyTOTPCode(secret: string, code: string): boolean {
       secret: secret,
       encoding: "base32",
       token: code,
-      window: 1, // ±30 seconds (tighter window)
+      window: 2, // ±60 seconds
     })
     return isValid === true
   } catch (error) {
