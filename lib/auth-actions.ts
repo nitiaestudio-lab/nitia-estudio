@@ -5,6 +5,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import * as speakeasy from "speakeasy"
 import bcrypt from "bcryptjs"
+import { createSession, destroySession } from "./session"
 
 const BCRYPT_ROUNDS = 10
 const MAX_LOGIN_ATTEMPTS = 5
@@ -104,6 +105,13 @@ export async function validatePinLogin(pin: string) {
     }
 
     clearAttempts(rlKey)
+
+    // Create server-side session (httpOnly cookie)
+    // If TOTP is enabled, session will be created after TOTP verification
+    if (!matchedUser.totp_enabled) {
+      await createSession(matchedUser.role, matchedUser.permissions || {})
+    }
+
     return {
       success: true,
       role: matchedUser.role,
@@ -363,6 +371,7 @@ export async function getAvailableUsers() {
 
 export async function logout() {
   try {
+    await destroySession()
     return { success: true }
   } catch (error) {
     console.error("Logout error:", error)
@@ -609,13 +618,13 @@ export async function disableTOTP(role: string) {
   }
 }
 
-export async function verifyTOTPForLogin(role: string, code: string) {
+export async function verifyTOTPForLogin(role: string, code: string, permissions?: Record<string, boolean>) {
   try {
     const supabase = getSupabaseClient()
 
     const { data: user, error: queryError } = await supabase
       .from("users")
-      .select("totp_secret")
+      .select("totp_secret, permissions")
       .eq("role", role)
       .single()
 
@@ -628,6 +637,9 @@ export async function verifyTOTPForLogin(role: string, code: string) {
     if (!isValid) {
       return { success: false, error: "Código incorrecto" }
     }
+
+    // Create session after successful 2FA
+    await createSession(role, permissions || user.permissions || {})
 
     return { success: true }
   } catch (error) {

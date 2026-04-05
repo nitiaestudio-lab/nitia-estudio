@@ -7,7 +7,8 @@ import type {
   FixedExpense, FixedCostPayment, PersonalFinanceMovement,
   QuoteComparison, Category, DollarRate
 } from "./types"
-import { createClient } from "./supabase/client"
+import { loadAllData, serverAddRow, serverUpdateRow, serverDeleteRow, serverDeleteRows, serverAddMovement, serverDeleteMovement, serverUploadFile } from "./data-actions"
+import { logout as serverLogout } from "./auth-actions"
 import { toast } from "sonner"
 
 const SESSION_EXPIRY_MS = 8 * 60 * 60 * 1000
@@ -85,6 +86,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("nitia_role")
       localStorage.removeItem("nitia_permissions")
       setUserPermissions({})
+      // Destroy server-side session
+      serverLogout().catch(() => {})
     }
     setRoleInternal(newRole)
   }, [])
@@ -116,47 +119,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval)
   }, [role])
 
-  // Load ALL data from Supabase
+  // Load ALL data via server action (authenticated)
   const loadData = useCallback(async () => {
     setIsLoading(true)
     try {
-      const sb = createClient()
-      const [
-        projectsR, itemsR, filesR, providersR, provDocsR,
-        accountsR, movementsR, tasksR, pfR, fixedR, fcpR,
-        quotesR, catsR, dollarR,
-      ] = await Promise.all([
-        sb.from("projects").select("*").is("deleted_at", null).order("created_at", { ascending: false }),
-        sb.from("project_items").select("*").order("sort_order"),
-        sb.from("project_files").select("*").order("created_at", { ascending: false }),
-        sb.from("providers").select("*").is("deleted_at", null).order("name"),
-        sb.from("provider_documents").select("*").order("created_at", { ascending: false }),
-        sb.from("accounts").select("*").order("name"),
-        sb.from("movements").select("*").order("date", { ascending: false }),
-        sb.from("task_items").select("*").order("created_at", { ascending: false }),
-        sb.from("personal_finance_movements").select("*").order("date", { ascending: false }),
-        sb.from("nitia_fixed_costs").select("*").order("description"),
-        sb.from("fixed_cost_payments").select("*"),
-        sb.from("quote_comparisons").select("*").order("date", { ascending: false }),
-        sb.from("categories").select("*").eq("active", true).order("sort_order"),
-        sb.from("app_settings").select("value").eq("key", "dollar_blue").single(),
-      ])
-
+      const result = await loadAllData()
       setData({
-        projects: (projectsR.data ?? []) as Project[],
-        projectItems: (itemsR.data ?? []) as ProjectItem[],
-        projectFiles: (filesR.data ?? []) as ProjectFile[],
-        providers: (providersR.data ?? []) as Provider[],
-        providerDocuments: (provDocsR.data ?? []) as ProviderDocument[],
-        accounts: (accountsR.data ?? []) as Account[],
-        movements: (movementsR.data ?? []) as Movement[],
-        tasks: (tasksR.data ?? []) as Task[],
-        personalFinanceMovements: (pfR.data ?? []) as PersonalFinanceMovement[],
-        nitiaFixedCosts: (fixedR.data ?? []) as FixedExpense[],
-        fixedCostPayments: (fcpR.data ?? []) as FixedCostPayment[],
-        quoteComparisons: (quotesR.data ?? []) as QuoteComparison[],
-        categories: (catsR.data ?? []) as Category[],
-        dollarRate: (dollarR.data?.value as DollarRate) ?? null,
+        projects: result.projects as Project[],
+        projectItems: result.projectItems as ProjectItem[],
+        projectFiles: result.projectFiles as ProjectFile[],
+        providers: result.providers as Provider[],
+        providerDocuments: result.providerDocuments as ProviderDocument[],
+        accounts: result.accounts as Account[],
+        movements: result.movements as Movement[],
+        tasks: result.tasks as Task[],
+        personalFinanceMovements: result.personalFinanceMovements as PersonalFinanceMovement[],
+        nitiaFixedCosts: result.nitiaFixedCosts as FixedExpense[],
+        fixedCostPayments: result.fixedCostPayments as FixedCostPayment[],
+        quoteComparisons: result.quoteComparisons as QuoteComparison[],
+        categories: result.categories as Category[],
+        dollarRate: (result.dollarRate as DollarRate) ?? null,
       })
     } catch (err) {
       console.error("Error loading data:", err)
@@ -223,18 +205,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { toast.error("Error al actualizar") }
   }, [authHeaders])
 
-  // =================== GENERIC CRUD ===================
+  // =================== GENERIC CRUD (via server actions) ===================
   const addRow = useCallback(async (
     table: string, row: any, dataKey: keyof AppData
   ) => {
-    // Optimistic
     setData(prev => ({ ...prev, [dataKey]: [row, ...(prev[dataKey] as any[])] }))
     setIsSyncing(true)
     try {
-      const sb = createClient()
-      const { error } = await sb.from(table).insert(row)
-      if (error) {
-        console.error(`Error adding to ${table}:`, error)
+      const result = await serverAddRow(table, row)
+      if (!result.success) {
         setData(prev => ({
           ...prev,
           [dataKey]: (prev[dataKey] as any[]).filter((r: any) => r.id !== row.id)
@@ -257,10 +236,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
     setIsSyncing(true)
     try {
-      const sb = createClient()
-      const { error } = await sb.from(table).update(updates).eq("id", id)
-      if (error) {
-        console.error(`Error updating ${table}:`, error)
+      const result = await serverUpdateRow(table, id, updates)
+      if (!result.success) {
         if (prev) setData(p => ({
           ...p, [dataKey]: (p[dataKey] as any[]).map((r: any) => r.id === id ? prev : r)
         }))
@@ -277,9 +254,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
     setIsSyncing(true)
     try {
-      const sb = createClient()
-      const { error } = await sb.from(table).delete().eq("id", id)
-      if (error) {
+      const result = await serverDeleteRow(table, id)
+      if (!result.success) {
         if (prev) setData(p => ({ ...p, [dataKey]: [...(p[dataKey] as any[]), prev] }))
         toast.error("Error al eliminar")
       } else { toast.success("Eliminado") }
@@ -294,9 +270,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
     setIsSyncing(true)
     try {
-      const sb = createClient()
-      const { error } = await sb.from(table).delete().in("id", ids)
-      if (error) {
+      const result = await serverDeleteRows(table, ids)
+      if (!result.success) {
         setData(p => ({ ...p, [dataKey]: [...(p[dataKey] as any[]), ...prevItems] }))
         toast.error("Error al eliminar")
       } else { toast.success(`${ids.length} eliminado(s)`) }
@@ -304,11 +279,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     finally { setIsSyncing(false) }
   }, [data])
 
-  // =================== MOVEMENTS (auto-update account balance) ===================
+  // =================== MOVEMENTS (via server actions) ===================
   const addMovement = useCallback(async (movement: Movement) => {
     setData(prev => {
       const newData = { ...prev, movements: [movement, ...prev.movements] }
-      // Update account balance in-memory
       if (movement.account_id) {
         const delta = movement.type === "ingreso" ? movement.amount : -movement.amount
         newData.accounts = prev.accounts.map(a =>
@@ -319,34 +293,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
     setIsSyncing(true)
     try {
-      const sb = createClient()
-      const { error } = await sb.from("movements").insert(movement)
-      if (error) {
+      const result = await serverAddMovement(movement)
+      if (!result.success) {
         setData(prev => ({
           ...prev,
           movements: prev.movements.filter(m => m.id !== movement.id)
         }))
         toast.error("Error al registrar movimiento")
       } else {
-        // Update account balance in DB
-        if (movement.account_id) {
-          const delta = movement.type === "ingreso" ? movement.amount : -movement.amount
-          // Update account balance directly
-          const account = data.accounts.find(a => a.id === movement.account_id)
-          if (account) {
-            await sb.from("accounts").update({ balance: account.balance + delta }).eq("id", movement.account_id)
-          }
-        }
         toast.success("Movimiento registrado")
       }
     } catch { toast.error("Error de conexion") }
     finally { setIsSyncing(false) }
-  }, [data.accounts])
+  }, [])
 
   const deleteMovement = useCallback(async (id: string) => {
     const mov = data.movements.find(m => m.id === id)
     if (!mov) return
-    
+
     setData(prev => {
       const newData = { ...prev, movements: prev.movements.filter(m => m.id !== id) }
       if (mov.account_id) {
@@ -359,40 +323,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
     setIsSyncing(true)
     try {
-      const sb = createClient()
-      const { error } = await sb.from("movements").delete().eq("id", id)
-      if (error) {
+      const result = await serverDeleteMovement(id)
+      if (!result.success) {
         toast.error("Error al eliminar movimiento")
-        await loadData() // Reload to sync
+        await loadData()
       } else {
-        if (mov.account_id) {
-          const delta = mov.type === "ingreso" ? -mov.amount : mov.amount
-          const account = data.accounts.find(a => a.id === mov.account_id)
-          if (account) {
-            await sb.from("accounts").update({ balance: account.balance + delta }).eq("id", mov.account_id)
-          }
-        }
         toast.success("Movimiento eliminado")
       }
     } catch { toast.error("Error de conexion") }
     finally { setIsSyncing(false) }
   }, [data.movements, data.accounts, loadData])
 
-  // =================== FILE UPLOAD ===================
+  // =================== FILE UPLOAD (via server action) ===================
   const uploadFile = useCallback(async (bucket: string, path: string, file: File) => {
     try {
-      const sb = createClient()
-      const { data: uploadData, error } = await sb.storage.from(bucket).upload(path, file, {
-        cacheControl: "3600", upsert: false,
-      })
-      if (error) {
-        console.error("Upload error:", error)
+      const buffer = await file.arrayBuffer()
+      const result = await serverUploadFile(bucket, path, buffer, file.type)
+      if (!result.success) {
         toast.error("Error al subir archivo")
         return null
       }
-      // Use signed URL (1 hour expiry) instead of public URL
-      const { data: urlData } = await sb.storage.from(bucket).createSignedUrl(uploadData.path, 3600)
-      return { url: urlData?.signedUrl || "", path: uploadData.path }
+      return { url: result.url!, path: result.path! }
     } catch {
       toast.error("Error al subir archivo")
       return null
