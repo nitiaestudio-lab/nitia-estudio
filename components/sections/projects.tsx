@@ -1273,14 +1273,25 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   const señaProvPctNum = parseFloat(señaProvPct) || 0
   const amount = parseFloat(amt) || 0
   // Si hay items seleccionados, calcular sobre esos; sino sobre todo lo del proveedor
-  const señaOwedForCalc = señaItemIds.length > 0
+  // Base de costo (para el proveedor)
+  const señaCostBase = señaItemIds.length > 0
     ? data.projectItems.filter(i => señaItemIds.includes(i.id)).reduce((s, i) => s + i.cost, 0)
       + data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).reduce((s, q) => s + q.cost, 0)
     : (señaActiveProvId
       ? data.projectItems.filter(i => i.project_id === project.id && i.provider_id === señaActiveProvId).reduce((s, i) => s + i.cost, 0)
         + data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === señaActiveProvId && q.selected).reduce((s, q) => s + q.cost, 0)
       : provOwed)
-  const señaDiff = esSeña && señaProvPctNum > señaCliPctNum ? ((señaProvPctNum - señaCliPctNum) / 100) * señaOwedForCalc : 0
+  // Base de precio cliente (para la seña del cliente)
+  const señaClientBase = señaItemIds.length > 0
+    ? data.projectItems.filter(i => señaItemIds.includes(i.id)).reduce((s, i) => s + i.client_price, 0)
+      + data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).reduce((s, q) => s + quoteClientPrice(q), 0)
+    : (señaActiveProvId
+      ? data.projectItems.filter(i => i.project_id === project.id && i.provider_id === señaActiveProvId).reduce((s, i) => s + i.client_price, 0)
+        + data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === señaActiveProvId && q.selected).reduce((s, q) => s + quoteClientPrice(q), 0)
+      : 0)
+  const señaProvAmount = (señaProvPctNum / 100) * señaCostBase  // lo que cobra el proveedor
+  const señaCliAmount = (señaCliPctNum / 100) * señaClientBase  // lo que paga el cliente
+  const señaDiff = esSeña && señaProvAmount > señaCliAmount ? señaProvAmount - señaCliAmount : 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1309,7 +1320,6 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
 
     // Seña: create provider payment egreso
     if (esSeña && señaPagadaProv && señaActiveProvId) {
-      const señaProvAmount = (señaProvPctNum / 100) * señaOwedForCalc
       const itemNames = señaItemIds.length > 0
         ? data.projectItems.filter(i => señaItemIds.includes(i.id)).map(i => i.description)
             .concat(data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).map(q => q.item))
@@ -1519,25 +1529,25 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
             </div>
           </div>
           {/* Resumen de montos */}
-          {señaOwedForCalc > 0 && (
+          {señaCostBase > 0 && (
             <div className="bg-purple-50/50 border border-purple-200 rounded-lg p-3 space-y-2">
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="text-purple-600">Cliente paga ({señaCliPctNum}%):</span> <strong className="text-green-700">{formatCurrency((señaCliPctNum / 100) * señaOwedForCalc)}</strong></div>
-                <div><span className="text-purple-600">Proveedor cobra ({señaProvPctNum}%):</span> <strong className="text-red-700">{formatCurrency((señaProvPctNum / 100) * señaOwedForCalc)}</strong></div>
+                <div><span className="text-purple-600">Cliente paga ({señaCliPctNum}% del precio cliente):</span> <strong className="text-green-700">{formatCurrency(señaCliAmount)}</strong></div>
+                <div><span className="text-purple-600">Proveedor cobra ({señaProvPctNum}% del precio costo):</span> <strong className="text-red-700">{formatCurrency(señaProvAmount)}</strong></div>
               </div>
-              {señaProvPctNum > señaCliPctNum && (
+              {señaDiff > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded p-2">
                   <p className="text-xs font-medium text-amber-800">
-                    Aporte propio: {señaProvPctNum - señaCliPctNum}% = {formatCurrency(señaDiff)}
+                    Aporte propio: {formatCurrency(señaDiff)}
                   </p>
                 </div>
               )}
-              {señaProvPctNum <= señaCliPctNum && (
+              {señaDiff <= 0 && (
                 <p className="text-xs text-green-600">La seña del cliente cubre la del proveedor.</p>
               )}
               <div className="flex items-center gap-2 pt-1 border-t border-purple-200">
                 <input type="checkbox" checked={señaPagadaProv} onChange={e => setSeñaPagadaProv(e.target.checked)} className="w-4 h-4" />
-                <span className="text-xs text-purple-700 font-medium">Ya le pagué la seña al proveedor (registrar egreso de {formatCurrency((señaProvPctNum / 100) * señaOwedForCalc)})</span>
+                <span className="text-xs text-purple-700 font-medium">Ya le pagué la seña al proveedor (registrar egreso de {formatCurrency(señaProvAmount)})</span>
               </div>
             </div>
           )}
@@ -1558,7 +1568,7 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave }: { move
         <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)} options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} /></div>
       <FormInput label="Descripción" value={desc} onChange={setDesc} />
       <div className="grid grid-cols-2 gap-4"><FormInput label="Monto" type="number" value={amt} onChange={setAmt} />
-        <FormSelect label="Cuenta" value={aid} onChange={setAid} options={[{ value: "", label: "Sin cuenta" }, ...accounts.map(a => ({ value: a.id, label: a.name }))]} /></div>
+        <FormSelect label="Cuenta" value={aid} onChange={setAid} options={[{ value: "", label: "Sin cuenta" }, ...accounts.map(a => ({ value: a.id, label: `${a.name} (${a.type === "dolares" ? "Dólares" : "Pesos"})` }))]} /></div>
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !amt}>Guardar</Btn></div>
     </form>
   </Modal>)

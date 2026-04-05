@@ -59,6 +59,11 @@ export function Accounts() {
   }, [data.movements, period, customStart, customEnd, searchQuery, filterAccount, filterCategory, filterType, filterProject, filterProvider, filterOrigin, sortField, sortDir])
 
   const getAccountName = (id: string | null | undefined) => data.accounts.find(a => a.id === id)?.name ?? "—"
+  const getAccountDisplay = (id: string | null | undefined) => {
+    const a = data.accounts.find(a => a.id === id)
+    if (!a) return { name: "—", isUSD: false }
+    return { name: a.name, isUSD: a.type === "dolares" }
+  }
   const getProjectName = (id: string | null | undefined) => data.projects.find(p => p.id === id)?.name ?? ""
   const getProviderName = (id: string | null | undefined) => data.providers.find(p => p.id === id)?.name ?? ""
 
@@ -135,6 +140,7 @@ export function Accounts() {
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: account.color || "#5F5A46" }} />
                 <span className="text-sm font-medium truncate">{account.name}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ml-1 flex-shrink-0 ${isUSD ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-600"}`}>{isUSD ? "USD" : "ARS"}</span>
               </div>
               <p className="text-xl sm:text-2xl font-medium tracking-tight">
                 {isUSD ? formatUSD(account.balance) : formatCurrency(account.balance)}
@@ -239,6 +245,7 @@ export function Accounts() {
                 <th className="px-4 py-3 text-left font-medium">Descripción</th>
                 <th className="px-4 py-3 text-left font-medium">Cuenta</th>
                 <th className="px-4 py-3 text-left font-medium">Categoría</th>
+                <th className="px-4 py-3 text-left font-medium">Moneda</th>
                 <th className="px-4 py-3 text-left font-medium">Proyecto</th>
                 <th className="px-4 py-3 text-right font-medium">Importe</th>
                 <th className="px-4 py-3 w-20"></th>
@@ -249,6 +256,8 @@ export function Accounts() {
                 const acct = data.accounts.find(a => a.id === mov.account_id)
                 const isUSD = mov.medio_pago === "USD" || acct?.type === "dolares"
                 const projName = getProjectName(mov.project_id)
+                const providerName = getProviderName(mov.provider_id)
+                const acctDisplay = getAccountDisplay(mov.account_id)
                 return (
                   <tr key={mov.id} className="border-b border-border last:border-0 hover:bg-[#FAFAF9] flex flex-col sm:table-row p-3 sm:p-0">
                     {/* Mobile: stacked layout */}
@@ -262,13 +271,24 @@ export function Accounts() {
                           mov.type === "ingreso" ? "bg-green-50" : "bg-red-50"}`}>
                           {mov.type === "ingreso" ? <ArrowDownLeft size={12} className="text-green-600" /> : <ArrowUpRight size={12} className="text-red-600" />}
                         </div>
-                        <span className="truncate">{mov.description}</span>
+                        <div className="min-w-0">
+                          <span className="truncate block">{mov.description}</span>
+                          {providerName && <span className="text-[11px] text-[#76746A] block truncate">{providerName}</span>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-1 sm:py-3 text-[#76746A] text-xs sm:text-sm">
-                      {getAccountName(mov.account_id)}
+                      <span className="block">{acctDisplay.name}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded inline-block mt-0.5 ${acctDisplay.isUSD ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-600"}`}>
+                        {acctDisplay.isUSD ? "USD" : "ARS"}
+                      </span>
                     </td>
                     <td className="px-4 py-1 sm:py-3">{mov.category && <Tag label={mov.category} color="gray" />}</td>
+                    <td className="px-4 py-1 sm:py-3">
+                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${isUSD ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                        {isUSD ? "USD" : "ARS"}
+                      </span>
+                    </td>
                     <td className="px-4 py-1 sm:py-3">
                       {projName && (
                         <button onClick={() => { /* navigate to project */ }}
@@ -281,6 +301,9 @@ export function Accounts() {
                       <span className={`font-medium ${mov.type === "ingreso" ? "text-green-600" : "text-red-600"}`}>
                         {mov.type === "ingreso" ? "+" : "-"}{isUSD ? formatUSD(mov.amount) : formatCurrency(mov.amount)}
                       </span>
+                      {mov.medio_pago && (
+                        <span className="text-[11px] text-[#76746A] block mt-0.5 capitalize">{mov.medio_pago}</span>
+                      )}
                     </td>
                     <td className="px-4 py-1 sm:py-3">
                       <div className="flex gap-1 justify-end">
