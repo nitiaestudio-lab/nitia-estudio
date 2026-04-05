@@ -253,9 +253,9 @@ function BalancePanel({ project }: { project: Project }) {
   const expensesARS = projMovs.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
   const expensesUSD = projMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
 
-  // Dual-currency balances
-  const clienteDebeARS = totalConIVA_ARS - incomeARS
-  const clienteDebeUSD = totalConIVA_USD - incomeUSD
+  // Dual-currency balances — deuda cliente sin IVA
+  const clienteDebeARS = clientBC.ars - incomeARS
+  const clienteDebeUSD = clientBC.usd - incomeUSD
   const provDebeARS = costBC.ars - expensesARS
   const provDebeUSD = costBC.usd - expensesUSD
 
@@ -319,21 +319,21 @@ function BalancePanel({ project }: { project: Project }) {
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">Cliente</h4>
             {clienteDebeARS > 0 || clienteDebeUSD > 0 ? <AlertCircle size={14} className="text-amber-500" /> : <CheckCircle2 size={14} className="text-green-600" />}
           </div>
-          <Bar value={incomeARS} max={totalConIVA_ARS} color={incomeARS >= totalConIVA_ARS ? "green" : "amber"} />
+          <Bar value={incomeARS} max={clientBC.ars} color={incomeARS >= clientBC.ars ? "green" : "amber"} />
           {/* ARS row */}
-          {(totalConIVA_ARS > 0 || incomeARS > 0) && <div className="flex justify-between text-sm mt-2">
-            <span className="text-muted-foreground">c/IVA: <span className="font-medium text-foreground">{formatCurrency(totalConIVA_ARS)}</span></span>
+          {(clientBC.ars > 0 || incomeARS > 0) && <div className="flex justify-between text-sm mt-2">
+            <span className="text-muted-foreground">Presup: <span className="font-medium text-foreground">{formatCurrency(clientBC.ars)}</span></span>
             <span className="text-green-600 font-medium">{formatCurrency(incomeARS)}</span>
           </div>}
-          {(totalConIVA_ARS > 0 || incomeARS > 0) && <p className={`text-xs font-bold ${clienteDebeARS > 0 ? "text-amber-600" : clienteDebeARS < 0 ? "text-green-600" : "text-green-600"}`}>
+          {(clientBC.ars > 0 || incomeARS > 0) && <p className={`text-xs font-bold ${clienteDebeARS > 0 ? "text-amber-600" : clienteDebeARS < 0 ? "text-green-600" : "text-green-600"}`}>
             {clienteDebeARS > 0 ? `Debe: ${formatCurrency(clienteDebeARS)}` : clienteDebeARS < 0 ? `De más: ${formatCurrency(Math.abs(clienteDebeARS))}` : "Al día ✓"}
           </p>}
-          {/* USD row — sin IVA */}
-          {(totalConIVA_USD > 0 || incomeUSD > 0) && <div className="flex justify-between text-sm mt-2 pt-2 border-t border-border/50">
-            <span className="text-blue-700">Total: <span className="font-medium">{formatUSD(totalConIVA_USD)}</span></span>
+          {/* USD row */}
+          {(clientBC.usd > 0 || incomeUSD > 0) && <div className="flex justify-between text-sm mt-2 pt-2 border-t border-border/50">
+            <span className="text-blue-700">Presup: <span className="font-medium">{formatUSD(clientBC.usd)}</span></span>
             <span className="text-green-600 font-medium">{formatUSD(incomeUSD)}</span>
           </div>}
-          {(totalConIVA_USD > 0 || incomeUSD > 0) && <p className={`text-xs font-bold ${clienteDebeUSD > 0 ? "text-amber-600" : clienteDebeUSD < 0 ? "text-green-600" : "text-green-600"}`}>
+          {(clientBC.usd > 0 || incomeUSD > 0) && <p className={`text-xs font-bold ${clienteDebeUSD > 0 ? "text-amber-600" : clienteDebeUSD < 0 ? "text-green-600" : "text-green-600"}`}>
             {clienteDebeUSD > 0 ? `Debe: ${formatUSD(clienteDebeUSD)}` : clienteDebeUSD < 0 ? `De más: ${formatUSD(Math.abs(clienteDebeUSD))}` : "Al día ✓"}
           </p>}
         </div>
@@ -399,7 +399,7 @@ function BalancePanel({ project }: { project: Project }) {
           </div>
           {viewCurrency === "ARS" && (
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-blue-900">
-              <span>Presupuesto: <span className="font-bold">{formatCurrency(totalConIVA_ARS + totalConIVA_USD * tcBlue)}</span></span>
+              <span>Presupuesto: <span className="font-bold">{formatCurrency(clientBC.ars + clientBC.usd * tcBlue)}</span></span>
               <span>Costo: <span className="font-bold">{formatCurrency(costBC.ars + costBC.usd * tcBlue)}</span></span>
               <span className="text-green-700">Ganancia neta: <span className="font-bold">{formatCurrency(gananciaNetaARS + gananciaNetaUSD * tcBlue)}</span></span>
               <span className="text-green-700">÷{pc}: <span className="font-bold">{formatCurrency(gananciaIndivARS + gananciaIndivUSD * tcBlue)}</span></span>
@@ -407,7 +407,7 @@ function BalancePanel({ project }: { project: Project }) {
           )}
           {viewCurrency === "USD" && (
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-blue-900">
-              <span>Presupuesto: <span className="font-bold">{formatUSD((totalConIVA_ARS / tcBlue) + totalConIVA_USD)}</span></span>
+              <span>Presupuesto: <span className="font-bold">{formatUSD((clientBC.ars / tcBlue) + clientBC.usd)}</span></span>
               <span>Costo: <span className="font-bold">{formatUSD((costBC.ars / tcBlue) + costBC.usd)}</span></span>
               <span className="text-green-700">Ganancia neta: <span className="font-bold">{formatUSD((gananciaNetaARS / tcBlue) + gananciaNetaUSD)}</span></span>
               <span className="text-green-700">÷{pc}: <span className="font-bold">{formatUSD((gananciaIndivARS / tcBlue) + gananciaIndivUSD)}</span></span>
