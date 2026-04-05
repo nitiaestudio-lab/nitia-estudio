@@ -111,29 +111,9 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteProject, setShowDeleteProject] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
-  const [editingBudget, setEditingBudget] = useState(false)
-  const [budgetValue, setBudgetValue] = useState(String(project.budget_final ?? ""))
-  const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
-  const ganBC = projectGananciaByCurrency(project, data.projectItems, data.quoteComparisons)
-  const totalClient = clientBC.ars
-  const totalClientUSD = clientBC.usd
-  const totalGanancia = ganBC.ars
-  const totalGananciaUSD = ganBC.usd
-  const detailMovs = data.movements.filter(m => m.project_id === project.id)
-  const income = detailMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
-  const expenses = detailMovs.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
-  const incomeUSD = detailMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
-  const expensesUSD = detailMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
-  const budgetFinal = project.budget_final ?? null
   const projectTasks = data.tasks.filter(t => t.project_id === project.id)
   const pendingProjectTasks = projectTasks.filter(t => t.status !== "completada")
     .sort((a, b) => { const p: Record<string, number> = { alta: 0, media: 1, baja: 2 }; return (p[a.priority] ?? 1) - (p[b.priority] ?? 1) })
-
-  const saveBudgetFinal = async () => {
-    const val = parseFloat(budgetValue) || null
-    await updateRow("projects", project.id, { budget_final: val }, "projects")
-    setEditingBudget(false)
-  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
@@ -153,39 +133,8 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
         </div>
       </div>
 
-      {/* Stats */}
-      {isFull && <div className="space-y-3">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-card border border-border rounded-xl p-4">
-            <p className="text-xs text-muted-foreground mb-1">Presupuesto</p>
-            {editingBudget ? (
-              <div className="flex items-center gap-2">
-                <input type="number" value={budgetValue} onChange={e => setBudgetValue(e.target.value)}
-                  className="w-full px-2 py-1 text-lg font-bold border border-border rounded bg-white" autoFocus
-                  onKeyDown={e => { if (e.key === "Enter") saveBudgetFinal(); if (e.key === "Escape") setEditingBudget(false) }} />
-                <button onClick={saveBudgetFinal} className="text-green-600 hover:bg-green-50 p-1 rounded"><Check size={16} /></button>
-                <button onClick={() => setEditingBudget(false)} className="text-red-500 hover:bg-red-50 p-1 rounded"><X size={16} /></button>
-              </div>
-            ) : (
-              <div className="cursor-pointer hover:text-[#5F5A46]" onClick={() => { setBudgetValue(String(budgetFinal ?? totalClient)); setEditingBudget(true) }}>
-                <Dual ars={budgetFinal || totalClient} usd={totalClientUSD} size="lg" />
-              </div>
-            )}
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {budgetFinal ? "Click para editar" : "Click para fijar"}
-            </p>
-          </div>
-          <Stat label="Cobrado" ars={income} usd={incomeUSD} sub={(() => {
-            const pARS = (budgetFinal || totalClient) - income; const pUSD = totalClientUSD - incomeUSD
-            const parts: string[] = []
-            if (pARS !== 0) parts.push(formatCurrency(pARS))
-            if (pUSD !== 0) parts.push(formatUSD(pUSD))
-            return parts.length > 0 ? `${parts.join(" · ")} pend.` : "Al día"
-          })()} />
-          <Stat label="Pagado proveedores" ars={expenses} usd={expensesUSD} />
-          {canSeeGanancias && <Stat label="Ganancia" ars={totalGanancia} usd={totalGananciaUSD} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
-        </div>
-      </div>}
+      {/* Estado Financiero — consolidated */}
+      {isFull && canSeeGanancias && <BalancePanel project={project} />}
 
       {/* Tareas pendientes */}
       {pendingProjectTasks.length > 0 && (
@@ -226,10 +175,14 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
   )
 }
 
-// =================== BALANCE PANEL ===================
+// =================== ESTADO FINANCIERO (P&L) ===================
 function BalancePanel({ project }: { project: Project }) {
-  const { data, setSection, setSelectedProviderId } = useApp()
+  const { data, updateRow, setSection, setSelectedProviderId } = useApp()
   const [viewCurrency, setViewCurrency] = useState<"normal" | "ARS" | "USD">("normal")
+  const [editingBudgetARS, setEditingBudgetARS] = useState(false)
+  const [editingBudgetUSD, setEditingBudgetUSD] = useState(false)
+  const [budgetARSValue, setBudgetARSValue] = useState(String(project.budget_final ?? ""))
+  const [budgetUSDValue, setBudgetUSDValue] = useState(String(project.budget_final_usd ?? ""))
   const goToProvider = (id: string) => { setSelectedProviderId(id); setSection("providers") }
 
   const costBC = projectCostByCurrency(project, data.projectItems, data.quoteComparisons)
@@ -244,8 +197,13 @@ function BalancePanel({ project }: { project: Project }) {
   const incomeUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
   const expensesARS = projMovs.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
   const expensesUSD = projMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
-  const clienteDebeARS = clientBC.ars - incomeARS
-  const clienteDebeUSD = clientBC.usd - incomeUSD
+
+  // Presupuesto: use budget_final override if set, otherwise calculated
+  const presupARS = project.budget_final ?? clientBC.ars
+  const presupUSD = project.budget_final_usd ?? clientBC.usd
+
+  const clienteDebeARS = presupARS - incomeARS
+  const clienteDebeUSD = presupUSD - incomeUSD
   const provDebeARS = costBC.ars - expensesARS
   const provDebeUSD = costBC.usd - expensesUSD
 
@@ -256,9 +214,20 @@ function BalancePanel({ project }: { project: Project }) {
   const gananciaIndivUSD = calcGananciaIndividual(gananciaNetaUSD, pc)
 
   const tcBlue = data.dollarRate?.sell
-  const hasUSD = clientBC.usd > 0 || costBC.usd > 0 || ganBC.usd > 0
+  const hasUSD = presupUSD > 0 || costBC.usd > 0 || ganBC.usd > 0
 
-  // Seña per provider — desglosada con ítems reales de cada proveedor
+  const saveBudgetARS = async () => {
+    const val = parseFloat(budgetARSValue) || null
+    await updateRow("projects", project.id, { budget_final: val }, "projects")
+    setEditingBudgetARS(false)
+  }
+  const saveBudgetUSD = async () => {
+    const val = parseFloat(budgetUSDValue) || null
+    await updateRow("projects", project.id, { budget_final_usd: val }, "projects")
+    setEditingBudgetUSD(false)
+  }
+
+  // Seña per provider
   const señaByProvider = useMemo(() => {
     const items = data.projectItems.filter(i => i.project_id === project.id)
     const quotes = data.quoteComparisons.filter(q => q.project_id === project.id && q.selected)
@@ -283,13 +252,15 @@ function BalancePanel({ project }: { project: Project }) {
     }).filter(p => p.arsTotal > 0 || p.usdTotal > 0)
   }, [data.projectItems, data.quoteComparisons, data.movements, data.providers, project])
 
-  const sCli = calcSenaCliente(clientBC.ars, sCliPct)
-  const señaCobradaCli = projMovs.filter(m => m.type === "ingreso" && (m.concepto === "seña" || m.concepto?.startsWith("seña"))).reduce((s, m) => s + m.amount, 0)
+  const sCli = calcSenaCliente(presupARS, sCliPct)
+  const sCliUSD = presupUSD * (sCliPct / 100)
+  const señaCobradaCliARS = projMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD" && (m.concepto === "seña" || m.concepto?.startsWith("seña"))).reduce((s, m) => s + m.amount, 0)
+  const señaCobradaCliUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD" && (m.concepto === "seña" || m.concepto?.startsWith("seña"))).reduce((s, m) => s + m.amount, 0)
 
-  // Row helper for the table
-  const Row = ({ label, ars, usd, color, bold }: { label: string; ars?: number; usd?: number; color?: string; bold?: boolean }) => (
+  // Row helper
+  const Row = ({ label, ars, usd, color, bold, editable }: { label: string; ars?: number; usd?: number; color?: string; bold?: boolean; editable?: boolean }) => (
     <div className={`flex items-baseline justify-between py-1 ${bold ? "font-semibold" : ""}`}>
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={`text-xs ${bold ? "text-foreground font-semibold" : "text-muted-foreground"}`}>{label}</span>
       <div className="flex gap-4 text-right">
         {(ars !== undefined && ars !== 0) && <span className={`text-sm ${color || "text-foreground"} ${bold ? "font-bold" : "font-medium"}`}>{formatCurrency(ars)}</span>}
         {(usd !== undefined && usd !== 0) && <span className={`text-sm text-blue-700 ${bold ? "font-bold" : "font-medium"}`}>{formatUSD(usd)}</span>}
@@ -298,11 +269,32 @@ function BalancePanel({ project }: { project: Project }) {
     </div>
   )
 
+  // Inline budget editor
+  const BudgetEditor = ({ value, onChange, onSave, onCancel, prefix }: { value: string; onChange: (v: string) => void; onSave: () => void; onCancel: () => void; prefix: string }) => (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">{prefix}</span>
+      <input type="number" value={value} onChange={e => onChange(e.target.value)}
+        className="w-32 px-2 py-0.5 text-sm font-bold border border-border rounded bg-white" autoFocus
+        onKeyDown={e => { if (e.key === "Enter") onSave(); if (e.key === "Escape") onCancel() }} />
+      <button onClick={onSave} className="text-green-600 hover:bg-green-50 p-0.5 rounded"><Check size={14} /></button>
+      <button onClick={onCancel} className="text-red-500 hover:bg-red-50 p-0.5 rounded"><X size={14} /></button>
+    </div>
+  )
+
+  // Calculate margin safely
+  const totalPresup = presupARS + presupUSD * (tcBlue || 0)
+  const totalGan = ganBC.ars + ganBC.usd * (tcBlue || 0)
+  const marginPct = totalPresup > 0 ? ((totalGan / totalPresup) * 100).toFixed(0) : "0"
+
   return (
     <div className="space-y-3">
-      {/* Resumen consolidado */}
+      <div className="flex items-center gap-2 mb-1">
+        <TrendingUp size={16} className="text-[#5F5A46]" />
+        <h3 className="text-sm font-semibold text-[#5F5A46] uppercase tracking-wider">Estado Financiero</h3>
+      </div>
+
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        {/* Header con TC Blue toggle */}
+        {/* Header: TC Blue + toggle */}
         {hasUSD && tcBlue && (
           <div className="bg-[#F7F5ED] px-4 py-2 flex items-center justify-between border-b border-border">
             <span className="text-[10px] font-semibold text-muted-foreground">TC Blue: {formatCurrency(tcBlue)}</span>
@@ -318,38 +310,80 @@ function BalancePanel({ project }: { project: Project }) {
         )}
 
         <div className="p-4 space-y-0.5">
-          {/* CLIENTE */}
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Cliente</p>
+          {/* PRESUPUESTO — editable */}
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Presupuesto</p>
+          {viewCurrency === "normal" ? (
+            <div className="space-y-0.5">
+              {/* ARS budget */}
+              <div className="flex items-baseline justify-between py-1">
+                <span className="text-xs text-muted-foreground">Precio cliente ARS</span>
+                {editingBudgetARS ? (
+                  <BudgetEditor value={budgetARSValue} onChange={setBudgetARSValue} onSave={saveBudgetARS} onCancel={() => setEditingBudgetARS(false)} prefix="$" />
+                ) : (
+                  <button onClick={() => { setBudgetARSValue(String(presupARS)); setEditingBudgetARS(true) }}
+                    className="text-sm font-bold text-foreground hover:text-[#5F5A46] transition-colors flex items-center gap-1">
+                    {formatCurrency(presupARS)}
+                    <Pencil size={10} className="text-muted-foreground opacity-0 group-hover:opacity-100" />
+                  </button>
+                )}
+              </div>
+              {/* USD budget */}
+              {(presupUSD > 0 || clientBC.usd > 0) && (
+                <div className="flex items-baseline justify-between py-1">
+                  <span className="text-xs text-muted-foreground">Precio cliente USD</span>
+                  {editingBudgetUSD ? (
+                    <BudgetEditor value={budgetUSDValue} onChange={setBudgetUSDValue} onSave={saveBudgetUSD} onCancel={() => setEditingBudgetUSD(false)} prefix="U$D" />
+                  ) : (
+                    <button onClick={() => { setBudgetUSDValue(String(presupUSD)); setEditingBudgetUSD(true) }}
+                      className="text-sm font-bold text-blue-700 hover:text-blue-500 transition-colors">
+                      {formatUSD(presupUSD)}
+                    </button>
+                  )}
+                </div>
+              )}
+              {project.budget_final || project.budget_final_usd ? (
+                <p className="text-[10px] text-muted-foreground italic">Presupuesto fijado manualmente · click para editar</p>
+              ) : (
+                <p className="text-[10px] text-muted-foreground italic">Calculado del desglose · click para fijar</p>
+              )}
+            </div>
+          ) : viewCurrency === "ARS" ? (
+            <Row label="Total presupuesto" ars={presupARS + presupUSD * (tcBlue || 0)} bold />
+          ) : (
+            <Row label="Total presupuesto" usd={(presupARS / (tcBlue || 1)) + presupUSD} bold />
+          )}
+
+          <div className="border-t border-border my-2" />
+
+          {/* INGRESOS / CLIENTE */}
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Ingresos</p>
           {viewCurrency === "normal" ? (<>
-            <Row label="Presupuesto" ars={clientBC.ars || undefined} usd={clientBC.usd || undefined} />
             <Row label="Cobrado" ars={incomeARS || undefined} usd={incomeUSD || undefined} color="text-green-600" />
-            <Row label={clienteDebeARS > 0 || clienteDebeUSD > 0 ? "Debe" : "Al día ✓"} ars={clienteDebeARS !== 0 ? clienteDebeARS : undefined} usd={clienteDebeUSD !== 0 ? clienteDebeUSD : undefined} color={clienteDebeARS > 0 || clienteDebeUSD > 0 ? "text-amber-600" : "text-green-600"} bold />
+            <Row label={clienteDebeARS > 0 || clienteDebeUSD > 0 ? "Pendiente de cobro" : "Al día ✓"} ars={clienteDebeARS !== 0 ? clienteDebeARS : undefined} usd={clienteDebeUSD !== 0 ? clienteDebeUSD : undefined} color={clienteDebeARS > 0 || clienteDebeUSD > 0 ? "text-amber-600" : "text-green-600"} bold />
           </>) : viewCurrency === "ARS" ? (<>
-            <Row label="Presupuesto" ars={clientBC.ars + clientBC.usd * (tcBlue || 0)} />
             <Row label="Cobrado" ars={incomeARS + incomeUSD * (tcBlue || 0)} color="text-green-600" />
-            <Row label="Debe" ars={(clientBC.ars + clientBC.usd * (tcBlue || 0)) - (incomeARS + incomeUSD * (tcBlue || 0))} color="text-amber-600" bold />
+            <Row label="Pendiente" ars={(presupARS + presupUSD * (tcBlue || 0)) - (incomeARS + incomeUSD * (tcBlue || 0))} color="text-amber-600" bold />
           </>) : (<>
-            <Row label="Presupuesto" usd={(clientBC.ars / (tcBlue || 1)) + clientBC.usd} />
             <Row label="Cobrado" usd={(incomeARS / (tcBlue || 1)) + incomeUSD} color="text-green-600" />
-            <Row label="Debe" usd={((clientBC.ars / (tcBlue || 1)) + clientBC.usd) - ((incomeARS / (tcBlue || 1)) + incomeUSD)} color="text-amber-600" bold />
+            <Row label="Pendiente" usd={((presupARS / (tcBlue || 1)) + presupUSD) - ((incomeARS / (tcBlue || 1)) + incomeUSD)} color="text-amber-600" bold />
           </>)}
 
           <div className="border-t border-border my-2" />
 
-          {/* PROVEEDORES */}
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Proveedores</p>
+          {/* EGRESOS / PROVEEDORES */}
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Egresos</p>
           {viewCurrency === "normal" ? (<>
             <Row label="Costo total" ars={costBC.ars || undefined} usd={costBC.usd || undefined} />
             <Row label="Pagado" ars={expensesARS || undefined} usd={expensesUSD || undefined} color="text-red-600" />
-            <Row label={provDebeARS > 0 || provDebeUSD > 0 ? "Falta pagar" : "Al día ✓"} ars={provDebeARS !== 0 ? provDebeARS : undefined} usd={provDebeUSD !== 0 ? provDebeUSD : undefined} color={provDebeARS > 0 || provDebeUSD > 0 ? "text-red-600" : "text-green-600"} bold />
+            <Row label={provDebeARS > 0 || provDebeUSD > 0 ? "Pendiente de pago" : "Al día ✓"} ars={provDebeARS !== 0 ? provDebeARS : undefined} usd={provDebeUSD !== 0 ? provDebeUSD : undefined} color={provDebeARS > 0 || provDebeUSD > 0 ? "text-red-600" : "text-green-600"} bold />
           </>) : viewCurrency === "ARS" ? (<>
             <Row label="Costo total" ars={costBC.ars + costBC.usd * (tcBlue || 0)} />
             <Row label="Pagado" ars={expensesARS + expensesUSD * (tcBlue || 0)} color="text-red-600" />
-            <Row label="Falta pagar" ars={(costBC.ars + costBC.usd * (tcBlue || 0)) - (expensesARS + expensesUSD * (tcBlue || 0))} color="text-red-600" bold />
+            <Row label="Pendiente" ars={(costBC.ars + costBC.usd * (tcBlue || 0)) - (expensesARS + expensesUSD * (tcBlue || 0))} color="text-red-600" bold />
           </>) : (<>
             <Row label="Costo total" usd={(costBC.ars / (tcBlue || 1)) + costBC.usd} />
             <Row label="Pagado" usd={(expensesARS / (tcBlue || 1)) + expensesUSD} color="text-red-600" />
-            <Row label="Falta pagar" usd={((costBC.ars / (tcBlue || 1)) + costBC.usd) - ((expensesARS / (tcBlue || 1)) + expensesUSD)} color="text-red-600" bold />
+            <Row label="Pendiente" usd={((costBC.ars / (tcBlue || 1)) + costBC.usd) - ((expensesARS / (tcBlue || 1)) + expensesUSD)} color="text-red-600" bold />
           </>)}
         </div>
 
@@ -357,7 +391,7 @@ function BalancePanel({ project }: { project: Project }) {
         <div className="bg-[#295E29] text-white px-4 py-3">
           <div className="flex items-baseline justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-white/60">Ganancia</span>
-            <span className="text-xs text-white/50">{clientBC.ars > 0 ? ((ganBC.ars / clientBC.ars) * 100).toFixed(0) : 0}% margen</span>
+            <span className="text-xs text-white/50">{marginPct}% margen</span>
           </div>
           {viewCurrency === "normal" ? (
             <div className="mt-1 space-y-0.5">
@@ -396,25 +430,37 @@ function BalancePanel({ project }: { project: Project }) {
         </div>
       </div>
 
-      {/* Señas — desglosada por proveedor */}
-      {(señaByProvider.length > 0 || señaCobradaCli > 0) && (
+      {/* Señas */}
+      {(señaByProvider.length > 0 || sCli > 0 || sCliUSD > 0) && (
         <details className="bg-[#F0EDE4] rounded-xl p-3">
           <summary className="text-xs font-semibold text-[#5F5A46] cursor-pointer">Señas</summary>
           <div className="mt-2 space-y-3">
             {/* Seña cliente */}
-            <div className="text-xs">
-              <div className="flex justify-between font-medium">
-                <span>Seña cliente ({sCliPct}% de {formatCurrency(clientBC.ars)})</span>
-                <span>{formatCurrency(sCli)}</span>
-              </div>
-              <div className="flex justify-between text-green-600">
-                <span>Cobrado</span>
-                <span>{formatCurrency(señaCobradaCli)}</span>
-              </div>
-              {sCli - señaCobradaCli > 0 && <div className="flex justify-between text-amber-600 font-medium">
-                <span>Falta cobrar</span>
-                <span>{formatCurrency(sCli - señaCobradaCli)}</span>
-              </div>}
+            <div className="text-xs space-y-0.5">
+              {presupARS > 0 && <>
+                <div className="flex justify-between font-medium">
+                  <span>Seña cliente ({sCliPct}% de {formatCurrency(presupARS)})</span>
+                  <span>{formatCurrency(sCli)}</span>
+                </div>
+                <div className="flex justify-between text-green-600">
+                  <span>Cobrado</span><span>{formatCurrency(señaCobradaCliARS)}</span>
+                </div>
+                {sCli - señaCobradaCliARS > 0 && <div className="flex justify-between text-amber-600 font-medium">
+                  <span>Falta cobrar</span><span>{formatCurrency(sCli - señaCobradaCliARS)}</span>
+                </div>}
+              </>}
+              {presupUSD > 0 && <>
+                <div className="flex justify-between font-medium text-blue-700 mt-1">
+                  <span>Seña cliente ({sCliPct}% de {formatUSD(presupUSD)})</span>
+                  <span>{formatUSD(sCliUSD)}</span>
+                </div>
+                <div className="flex justify-between text-green-600">
+                  <span>Cobrado</span><span>{formatUSD(señaCobradaCliUSD)}</span>
+                </div>
+                {sCliUSD - señaCobradaCliUSD > 0 && <div className="flex justify-between text-amber-600 font-medium">
+                  <span>Falta cobrar</span><span>{formatUSD(sCliUSD - señaCobradaCliUSD)}</span>
+                </div>}
+              </>}
             </div>
 
             <div className="border-t border-[#D4D0C4]" />
@@ -432,7 +478,6 @@ function BalancePanel({ project }: { project: Project }) {
                     ) : <span className="font-semibold text-muted-foreground">{sp.name}</span>}
                     <span className="text-[10px] text-muted-foreground">{sp.pct}%</span>
                   </div>
-                  {/* ARS */}
                   {sp.arsTotal > 0 && <div className="flex justify-between pl-3">
                     <span className="text-muted-foreground">Costo {formatCurrency(sp.arsTotal)} → Seña {formatCurrency(sp.señaARS)}</span>
                     <span className={faltaARS > 0 ? "text-red-600 font-medium" : "text-green-600"}>
@@ -440,7 +485,6 @@ function BalancePanel({ project }: { project: Project }) {
                       {faltaARS > 0 ? ` · Falta ${formatCurrency(faltaARS)}` : sp.pagadoARS > 0 ? " ✓" : ""}
                     </span>
                   </div>}
-                  {/* USD */}
                   {sp.usdTotal > 0 && <div className="flex justify-between pl-3">
                     <span className="text-blue-700">Costo {formatUSD(sp.usdTotal)} → Seña {formatUSD(sp.señaUSD)}</span>
                     <span className={faltaUSD > 0 ? "text-red-600 font-medium" : "text-green-600"}>
@@ -493,7 +537,6 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
 
   return (
     <div className="space-y-6">
-      {canSeeGanancias && <BalancePanel project={project} />}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1167,6 +1210,7 @@ function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit
   const projectTsk = data.tasks.filter(t => t.project_id === project.id)
   const projectFls = data.projectFiles.filter(f => f.project_id === project.id)
   const budgetFinal = project.budget_final ?? totalClient
+  const budgetFinalUSD = project.budget_final_usd ?? totalClientUSD
   const InfoRow = ({ label, value, color }: { label: string; value: string; color?: string }) => (
     <div className="flex justify-between py-2 border-b border-border/30 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
@@ -1209,9 +1253,9 @@ function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit
         {/* Financial summary */}
         {isFull && <div className="bg-[#F7F5ED] rounded-xl p-4">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Resumen Financiero</h4>
-          <DualInfoRow label="Presupuesto" ars={budgetFinal} usd={totalClientUSD} />
+          <DualInfoRow label="Presupuesto" ars={budgetFinal} usd={budgetFinalUSD} />
           <DualInfoRow label="Cobrado" ars={income} usd={incomeUSD} color="text-green-600" />
-          <DualInfoRow label="Pend. de cobro" ars={budgetFinal - income} usd={totalClientUSD - incomeUSD} color="text-amber-600" />
+          <DualInfoRow label="Pend. de cobro" ars={budgetFinal - income} usd={budgetFinalUSD - incomeUSD} color="text-amber-600" />
           <DualInfoRow label="Pagado proveedores" ars={expenses} usd={expensesUSD} color="text-red-600" />
           {canSeeGanancias && <>
             <DualInfoRow label="Costo total" ars={totalCost} usd={totalCostUSD} />

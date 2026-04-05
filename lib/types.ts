@@ -48,6 +48,7 @@ export interface Project {
   sena_cliente_pct?: number
   partner_count?: number
   budget_final?: number | null
+  budget_final_usd?: number | null
   notes?: string | null
   created_at?: string
   updated_at?: string
