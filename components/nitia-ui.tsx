@@ -148,14 +148,15 @@ export function FormTextarea({ label, value, onChange, placeholder, error, rows 
 }
 
 // =================== STAT ===================
-export function Stat({ label, value, change, changeType, highlight, sub }: {
+export function Stat({ label, value, change, changeType, highlight, sub, value2 }: {
   label: string; value: string | number; change?: string; changeType?: "up" | "down"
-  highlight?: boolean; sub?: string
+  highlight?: boolean; sub?: string; value2?: string
 }) {
   return (
     <div className={cn("p-4 rounded-lg border", highlight ? "bg-[#295E29] text-white border-[#295E29]" : "bg-card border-border")}>
       <p className={cn("text-sm mb-2", highlight ? "text-white/70" : "text-muted-foreground")}>{label}</p>
       <p className={cn("text-2xl font-bold", highlight ? "text-white" : "text-foreground")}>{value}</p>
+      {value2 && <p className={cn("text-lg font-bold mt-0.5", highlight ? "text-white/90" : "text-blue-700")}>{value2}</p>}
       {sub && <p className={cn("text-xs mt-1", highlight ? "text-white/60" : "text-muted-foreground")}>{sub}</p>}
       {change && <p className={cn("text-xs mt-2", changeType === "up" ? "text-green-600" : "text-red-600")}>{change}</p>}
     </div>

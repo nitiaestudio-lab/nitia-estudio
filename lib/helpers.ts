@@ -84,6 +84,20 @@ export const formatCurrencyAmount = (ca: CurrencyAmount): string => {
   return parts.join(" + ")
 }
 
+// Smart dual currency display — treats both currencies equally
+export const dualAmount = (ars: number, usd: number): string => {
+  if (ars !== 0 && usd !== 0) return `${formatCurrency(ars)} + ${formatUSD(usd)}`
+  if (usd !== 0) return formatUSD(usd)
+  return formatCurrency(ars)
+}
+
+// Returns which currency is the "main" one for display purposes
+export const mainCurrency = (ars: number, usd: number): "ARS" | "USD" | "dual" => {
+  if (ars !== 0 && usd !== 0) return "dual"
+  if (usd !== 0) return "USD"
+  return "ARS"
+}
+
 // Legacy functions (return combined ARS total for backward compat)
 export const projectTotalCost = (project: Project, items: ProjectItem[], quotes: QuoteComparison[] = []): number => {
   const honorarios = project.honorarios_cost ?? 0

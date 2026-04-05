@@ -8,7 +8,7 @@ import {
   calcIVACliente, calcIVAGanancia, calcSenaProveedor, calcSenaCliente,
   calcGananciaIndividual, quoteClientPrice, quoteGanancia, getSelectedQuotes,
   projectCostByCurrency, projectClientPriceByCurrency, projectGananciaByCurrency,
-  formatUSD, type CurrencyAmount,
+  formatUSD, type CurrencyAmount, dualAmount,
 } from "@/lib/helpers"
 import {
   exportProjectDesgloseXLSX, exportProjectMovementsXLSX, exportComparadorXLSX,
@@ -57,7 +57,11 @@ export function Projects() {
       <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar proyectos..." className="max-w-md w-full px-4 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white" />
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="Proyectos Activos" value={data.projects.filter(p => p.status === "activo").length} />
-        <Stat label="Total Presupuestado" value={formatCurrency(data.projects.reduce((s, p) => s + projectClientPriceByCurrency(p, data.projectItems, data.quoteComparisons).ars, 0))} sub={(() => { const u = data.projects.reduce((s, p) => s + projectClientPriceByCurrency(p, data.projectItems, data.quoteComparisons).usd, 0); return u > 0 ? `+ ${formatUSD(u)}` : undefined })()} highlight />
+        {(() => {
+          const totalARS = data.projects.reduce((s, p) => s + projectClientPriceByCurrency(p, data.projectItems, data.quoteComparisons).ars, 0)
+          const totalUSD = data.projects.reduce((s, p) => s + projectClientPriceByCurrency(p, data.projectItems, data.quoteComparisons).usd, 0)
+          return <Stat label="Total Presupuestado" value={dualAmount(totalARS, totalUSD)} highlight />
+        })()}
         <Stat label="Total Cobrado" value={formatCurrency(data.movements.filter(m => m.project_id && m.type === "ingreso").reduce((s, m) => s + m.amount, 0))} />
         <Stat label="Pausados" value={data.projects.filter(p => p.status === "pausado").length} />
       </div>
@@ -74,8 +78,8 @@ export function Projects() {
             </div>
             <p className="text-sm text-muted-foreground mb-3">{project.client}</p>
             {isFull && <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Presup: {formatCurrency(clientBC.ars)}{clientBC.usd > 0 && <span className="text-blue-600 ml-1">+ {formatUSD(clientBC.usd)}</span>}</span>
-              <span className="text-green-600">Cobrado: {formatCurrency(income)}{incomeUSD > 0 && <span className="text-blue-600 ml-1">+ {formatUSD(incomeUSD)}</span>}</span>
+              <span className="text-muted-foreground">Presup: <span className="font-medium">{dualAmount(clientBC.ars, clientBC.usd)}</span></span>
+              <span className="text-green-600">Cobrado: <span className="font-medium">{dualAmount(income, incomeUSD)}</span></span>
             </div>}
           </div>)
         })}
@@ -150,17 +154,16 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
               </div>
             ) : (
               <p className="text-lg font-bold cursor-pointer hover:text-[#5F5A46]" onClick={() => { setBudgetValue(String(budgetFinal ?? totalClient)); setEditingBudget(true) }}>
-                {formatCurrency(budgetFinal || totalClient)}
+                {dualAmount(budgetFinal || totalClient, totalClientUSD)}
               </p>
             )}
             <p className="text-[10px] text-muted-foreground mt-1">
-              {totalClientUSD > 0 && <span className="text-blue-600">+ {formatUSD(totalClientUSD)} </span>}
-              {budgetFinal ? `Sugerido: ${formatCurrency(totalClient)}` : "Click para editar"}
+              {budgetFinal ? `Sugerido: ${dualAmount(totalClient, totalClientUSD)}` : "Click para editar"}
             </p>
           </div>
-          <Stat label="Cobrado" value={formatCurrency(income)} sub={`${formatCurrency((budgetFinal || totalClient) - income)} pendiente${incomeUSD > 0 ? ` · + ${formatUSD(incomeUSD)}` : ""}`} />
-          <Stat label="Pagado proveedores" value={formatCurrency(expenses)} sub={expensesUSD > 0 ? `+ ${formatUSD(expensesUSD)}` : undefined} />
-          {canSeeGanancias && <Stat label="Ganancia" value={formatCurrency(totalGanancia)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen${totalGananciaUSD > 0 ? ` · + ${formatUSD(totalGananciaUSD)}` : ""}`} highlight />}
+          <Stat label="Cobrado" value={dualAmount(income, incomeUSD)} sub={`${dualAmount((budgetFinal || totalClient) - income, totalClientUSD - incomeUSD)} pendiente`} />
+          <Stat label="Pagado proveedores" value={dualAmount(expenses, expensesUSD)} />
+          {canSeeGanancias && <Stat label="Ganancia" value={dualAmount(totalGanancia, totalGananciaUSD)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
         </div>
       </div>}
 
@@ -278,12 +281,7 @@ function BalancePanel({ project }: { project: Project }) {
   const tcBlue = data.dollarRate?.sell
   const hasUSD = clientBC.usd > 0 || costBC.usd > 0 || ganBC.usd > 0
 
-  // Display dual currency — omit USD side if zero
-  const dualDisplay = (ars: number, usd: number, fmtArs = formatCurrency, fmtUsd = formatUSD) => {
-    const parts = [fmtArs(ars)]
-    if (usd !== 0) parts.push(fmtUsd(usd))
-    return parts.join(" + ")
-  }
+  // Use imported dualAmount for equal currency display
 
   const Bar = ({ value, max, color }: { value: number; max: number; color: string }) => {
     const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
@@ -302,14 +300,14 @@ function BalancePanel({ project }: { project: Project }) {
           </div>
           <Bar value={incomeARS} max={totalConIVA_ARS} color={incomeARS >= totalConIVA_ARS ? "green" : "amber"} />
           <div className="flex justify-between text-sm mt-2">
-            <span className="text-muted-foreground">Total c/IVA: <span className="font-medium text-foreground">{dualDisplay(totalConIVA_ARS, totalConIVA_USD)}</span></span>
-            <span className="text-green-600 font-medium">{dualDisplay(incomeARS, incomeUSD)}</span>
+            <span className="text-muted-foreground">Total c/IVA: <span className="font-medium text-foreground">{dualAmount(totalConIVA_ARS, totalConIVA_USD)}</span></span>
+            <span className="text-green-600 font-medium">{dualAmount(incomeARS, incomeUSD)}</span>
           </div>
           <p className={`text-sm font-bold mt-1 ${clienteDebeARS > 0 || clienteDebeUSD > 0 ? "text-amber-600" : "text-green-600"}`}>
             {clienteDebeARS > 0 || clienteDebeUSD > 0
-              ? `Debe: ${dualDisplay(clienteDebeARS, clienteDebeUSD)}`
+              ? `Debe: ${dualAmount(clienteDebeARS, clienteDebeUSD)}`
               : clienteDebeARS < 0 || clienteDebeUSD < 0
-                ? `De más: ${dualDisplay(Math.abs(clienteDebeARS), Math.abs(clienteDebeUSD))}`
+                ? `De más: ${dualAmount(Math.abs(clienteDebeARS), Math.abs(clienteDebeUSD))}`
                 : "Al día ✓"}
           </p>
         </div>
@@ -321,14 +319,14 @@ function BalancePanel({ project }: { project: Project }) {
           </div>
           <Bar value={expensesARS} max={costBC.ars} color={expensesARS >= costBC.ars ? "green" : "red"} />
           <div className="flex justify-between text-sm mt-2">
-            <span className="text-muted-foreground">Costo: <span className="font-medium text-foreground">{dualDisplay(costBC.ars, costBC.usd)}</span></span>
-            <span className="text-red-600 font-medium">{dualDisplay(expensesARS, expensesUSD)}</span>
+            <span className="text-muted-foreground">Costo: <span className="font-medium text-foreground">{dualAmount(costBC.ars, costBC.usd)}</span></span>
+            <span className="text-red-600 font-medium">{dualAmount(expensesARS, expensesUSD)}</span>
           </div>
           <p className={`text-sm font-bold mt-1 ${provDebeARS > 0 || provDebeUSD > 0 ? "text-red-600" : "text-green-600"}`}>
             {provDebeARS > 0 || provDebeUSD > 0
-              ? `Debemos: ${dualDisplay(provDebeARS, provDebeUSD)}`
+              ? `Debemos: ${dualAmount(provDebeARS, provDebeUSD)}`
               : provDebeARS < 0 || provDebeUSD < 0
-                ? `De más: ${dualDisplay(Math.abs(provDebeARS), Math.abs(provDebeUSD))}`
+                ? `De más: ${dualAmount(Math.abs(provDebeARS), Math.abs(provDebeUSD))}`
                 : "Al día ✓"}
           </p>
         </div>
@@ -337,12 +335,12 @@ function BalancePanel({ project }: { project: Project }) {
       {/* Ganancia — compacta */}
       <div className="bg-[#295E29] text-white rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1">
         <span className="text-xs text-white/60">Ganancia</span>
-        <span className="font-bold">{dualDisplay(ganBC.ars, ganBC.usd)}</span>
-        <span className="text-xs text-white/50">IVA -{dualDisplay(ivaGananciaARS, ivaGananciaUSD)}</span>
+        <span className="font-bold">{dualAmount(ganBC.ars, ganBC.usd)}</span>
+        <span className="text-xs text-white/50">IVA -{dualAmount(ivaGananciaARS, ivaGananciaUSD)}</span>
         <span className="text-xs text-white/60">Neta</span>
-        <span className="font-bold">{dualDisplay(gananciaNetaARS, gananciaNetaUSD)}</span>
+        <span className="font-bold">{dualAmount(gananciaNetaARS, gananciaNetaUSD)}</span>
         <span className="text-xs text-white/60">÷{pc}</span>
-        <span className="font-bold">{dualDisplay(gananciaIndivARS, gananciaIndivUSD)}</span>
+        <span className="font-bold">{dualAmount(gananciaIndivARS, gananciaIndivUSD)}</span>
         <span className="text-xs text-white/50 ml-auto">{clientBC.ars > 0 ? ((ganBC.ars / clientBC.ars) * 100).toFixed(0) : 0}% margen</span>
       </div>
 
@@ -531,7 +529,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
               const subUSD = si.filter(i => i.currency === "USD").reduce((s, i) => s + i.client_price, 0) + sq.filter(q => q.currency === "USD").reduce((s, q) => s + quoteClientPrice(q), 0)
               return <div className="flex justify-between pt-3 mt-2 border-t border-border text-sm">
                 <span className="font-semibold text-muted-foreground">Subtotal</span>
-                <span className="font-semibold">{formatCurrency(subARS)}{subUSD > 0 && <span className="text-blue-600 ml-1">+ {formatUSD(subUSD)}</span>}</span>
+                <span className="font-semibold">{dualAmount(subARS, subUSD)}</span>
               </div>
             })()}
           </div>
@@ -732,9 +730,9 @@ function ComparadorTab({ project }: { project: Project }) {
           <div className="bg-[#295E29] text-white rounded-xl p-4 space-y-2 sticky bottom-4">
             <h4 className="font-semibold text-sm text-white/80">Total Seleccionado ({selected.length} items)</h4>
             <div className="grid grid-cols-3 gap-4">
-              <div><p className="text-xs text-white/60">Costo</p><p className="text-lg font-bold">{formatCurrency(costARS)}</p>{costUSD > 0 && <p className="text-xs text-white/70">+ {formatUSD(costUSD)}</p>}</div>
-              <div><p className="text-xs text-white/60">Precio</p><p className="text-lg font-bold">{formatCurrency(priceARS)}</p>{priceUSD > 0 && <p className="text-xs text-white/70">+ {formatUSD(priceUSD)}</p>}</div>
-              <div><p className="text-xs text-white/60">Ganancia</p><p className="text-lg font-bold">{formatCurrency(ganARS)}</p>{ganUSD > 0 && <p className="text-xs text-white/70">+ {formatUSD(ganUSD)}</p>}</div>
+              <div><p className="text-xs text-white/60">Costo</p><p className="text-lg font-bold">{dualAmount(costARS, costUSD)}</p></div>
+              <div><p className="text-xs text-white/60">Precio</p><p className="text-lg font-bold">{dualAmount(priceARS, priceUSD)}</p></div>
+              <div><p className="text-xs text-white/60">Ganancia</p><p className="text-lg font-bold">{dualAmount(ganARS, ganUSD)}</p></div>
             </div>
             <Btn variant="soft" size="sm" className="bg-white/20 text-white hover:bg-white/30" onClick={async () => {
               for (const q of selected) {
@@ -849,16 +847,13 @@ function MovimientosTab({ project }: { project: Project }) {
       <div className="bg-card border border-border rounded-xl p-4">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Ingresos</p>
-            <p className="text-base font-semibold text-green-700">{formatCurrency(totalIngresos)}</p>
-            {usdIngresos > 0 && <p className="text-[10px] text-green-600">+ U$D {new Intl.NumberFormat("es-AR").format(usdIngresos)}</p>}
+            <p className="text-base font-semibold text-green-700">{dualAmount(totalIngresos, usdIngresos)}</p>
           </div>
           <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Egresos</p>
-            <p className="text-base font-semibold text-red-700">{formatCurrency(totalEgresos)}</p>
-            {usdEgresos > 0 && <p className="text-[10px] text-red-600">+ U$D {new Intl.NumberFormat("es-AR").format(usdEgresos)}</p>}
+            <p className="text-base font-semibold text-red-700">{dualAmount(totalEgresos, usdEgresos)}</p>
           </div>
           <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Balance</p>
-            <p className={`text-base font-semibold ${balance >= 0 ? "text-foreground" : "text-amber-700"}`}>{formatCurrency(balance)}</p>
-            {usdMovs.length > 0 && <p className={`text-[10px] ${usdBalance >= 0 ? "text-blue-600" : "text-amber-600"}`}>U$D {new Intl.NumberFormat("es-AR").format(usdBalance)}</p>}
+            <p className={`text-base font-semibold ${balance >= 0 ? "text-foreground" : "text-amber-700"}`}>{dualAmount(balance, usdBalance)}</p>
           </div>
         </div>
         {usdMovs.length > 0 && dolarBlue && (
@@ -1067,7 +1062,7 @@ function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit
   const projectTsk = data.tasks.filter(t => t.project_id === project.id)
   const projectFls = data.projectFiles.filter(f => f.project_id === project.id)
   const budgetFinal = project.budget_final ?? totalClient
-  const fmtWithUSD = (ars: number, usd: number) => usd > 0 ? `${formatCurrency(ars)} + ${formatUSD(usd)}` : formatCurrency(ars)
+  const fmtWithUSD = dualAmount
 
   const InfoRow = ({ label, value, color }: { label: string; value: string; color?: string }) => (
     <div className="flex justify-between py-2 border-b border-border/30 last:border-0">
@@ -1363,12 +1358,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
     const paidUSD = provMovs.filter(m => m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
     const debtARS = owedARS - paidARS
     const debtUSD = owedUSD - paidUSD
-    const fmtDual = (ars: number, usd: number) => {
-      const parts: string[] = []
-      if (ars !== 0) parts.push(formatCurrency(ars))
-      if (usd !== 0) parts.push(formatUSD(usd))
-      return parts.join(" + ") || "$0"
-    }
+    const fmtDual = dualAmount
     if (!prov) return null
     return (
       <div className="bg-[#F7F5ED] rounded-lg p-3 space-y-2">
