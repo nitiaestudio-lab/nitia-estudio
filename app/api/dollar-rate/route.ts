@@ -49,6 +49,12 @@ export async function GET() {
 // POST: fetch from API or set manual override
 export async function POST(req: Request) {
   try {
+    // Auth check for mutations
+    const authRole = req.headers.get("x-nitia-role")
+    if (!authRole) {
+      return NextResponse.json({ ok: false, error: "No autorizado" }, { status: 401 })
+    }
+
     const body = await req.json()
     const sb = await createClient()
 

@@ -14,6 +14,12 @@ function getSupabaseClient(): SupabaseClient {
 
 export async function POST(request: NextRequest) {
   try {
+    // Basic auth check: require a role header set by the app
+    const authRole = request.headers.get("x-nitia-role")
+    if (!authRole) {
+      return NextResponse.json({ message: "No autorizado" }, { status: 401 })
+    }
+
     const supabase = getSupabaseClient()
     const formData = await request.formData()
     const file = formData.get("file") as File
@@ -87,10 +93,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
+    // Get signed URL (expires in 1 hour)
+    const { data: urlData } = await supabase.storage
       .from("project-documents")
-      .getPublicUrl(data.path)
+      .createSignedUrl(data.path, 3600)
 
     // Save metadata to project_documents table (only for valid UUIDs)
     // Provider documents use "provider-{id}" format which isn't a valid UUID
@@ -113,7 +119,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      url: urlData.publicUrl,
+      url: urlData?.signedUrl || "",
       path: data.path,
     })
   } catch (error) {

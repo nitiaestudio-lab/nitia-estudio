@@ -193,30 +193,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshData = useCallback(async () => { await loadData() }, [loadData])
 
   // Dollar rate helpers
+  const authHeaders = useCallback(() => ({
+    "Content-Type": "application/json",
+    "x-nitia-role": role || "",
+  }), [role])
+
   const fetchDollarRate = useCallback(async () => {
     try {
-      const res = await fetch("/api/dollar-rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "fetch" }) })
+      const res = await fetch("/api/dollar-rate", { method: "POST", headers: authHeaders(), body: JSON.stringify({ action: "fetch" }) })
       const json = await res.json()
       if (json.ok) setData(prev => ({ ...prev, dollarRate: json.data }))
       else toast.error("No se pudo obtener cotización del dólar")
     } catch { toast.error("Error al consultar dólar blue") }
-  }, [])
+  }, [authHeaders])
 
   const setManualDollarRate = useCallback(async (buy: number, sell: number) => {
     try {
-      const res = await fetch("/api/dollar-rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "manual", buy, sell }) })
+      const res = await fetch("/api/dollar-rate", { method: "POST", headers: authHeaders(), body: JSON.stringify({ action: "manual", buy, sell }) })
       const json = await res.json()
       if (json.ok) { setData(prev => ({ ...prev, dollarRate: json.data })); toast.success("Cotización actualizada") }
     } catch { toast.error("Error al guardar cotización") }
-  }, [])
+  }, [authHeaders])
 
   const clearDollarOverride = useCallback(async () => {
     try {
-      const res = await fetch("/api/dollar-rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "clear_override" }) })
+      const res = await fetch("/api/dollar-rate", { method: "POST", headers: authHeaders(), body: JSON.stringify({ action: "clear_override" }) })
       const json = await res.json()
       if (json.ok) { setData(prev => ({ ...prev, dollarRate: json.data })); toast.success("Cotización actualizada desde API") }
     } catch { toast.error("Error al actualizar") }
-  }, [])
+  }, [authHeaders])
 
   // =================== GENERIC CRUD ===================
   const addRow = useCallback(async (
@@ -385,8 +390,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast.error("Error al subir archivo")
         return null
       }
-      const { data: urlData } = sb.storage.from(bucket).getPublicUrl(uploadData.path)
-      return { url: urlData.publicUrl, path: uploadData.path }
+      // Use signed URL (1 hour expiry) instead of public URL
+      const { data: urlData } = await sb.storage.from(bucket).createSignedUrl(uploadData.path, 3600)
+      return { url: urlData?.signedUrl || "", path: uploadData.path }
     } catch {
       toast.error("Error al subir archivo")
       return null

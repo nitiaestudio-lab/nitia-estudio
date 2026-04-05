@@ -2,41 +2,52 @@
 
 import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, Suspense } from "react"
-import { resetPin } from "@/lib/auth-actions"
+import { resetPin, validateResetToken } from "@/lib/auth-actions"
 import Image from "next/image"
 
 function ResetPinContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const tokenFromParams = searchParams.get("token") || ""
+  // Legacy support: email param from old links
   const emailFromParams = searchParams.get("email") || ""
-  
+
+  const [token, setToken] = useState(tokenFromParams)
   const [email, setEmail] = useState(emailFromParams)
   const [pin, setPin] = useState("")
   const [confirmPin, setConfirmPin] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [ready, setReady] = useState(!!emailFromParams)
+  const [ready, setReady] = useState(false)
+  const [validating, setValidating] = useState(true)
 
-  // Extract email from JWT in hash if not in query params
+  // Validate token server-side on mount
   useEffect(() => {
-    if (!emailFromParams && typeof window !== "undefined") {
-      const hash = window.location.hash.substring(1)
-      const params = new URLSearchParams(hash)
-      const token = params.get("access_token")
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split(".")[1]))
-          if (payload.email) setEmail(payload.email)
-        } catch {}
+    async function validate() {
+      if (tokenFromParams) {
+        const result = await validateResetToken(tokenFromParams)
+        if (result.valid && result.email) {
+          setEmail(result.email)
+          setToken(tokenFromParams)
+          setReady(true)
+        } else {
+          setError("Link expirado o inválido. Solicitá uno nuevo.")
+        }
+      } else if (emailFromParams) {
+        // Legacy support for old-style email links
+        setReady(true)
+      } else {
+        setError("Link inválido")
       }
+      setValidating(false)
     }
-    setReady(true)
-  }, [emailFromParams])
+    validate()
+  }, [tokenFromParams, emailFromParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!pin || pin.length !== 4) {
       setError("PIN debe tener 4 dígitos numéricos")
       return
@@ -54,7 +65,9 @@ function ResetPinContent() {
 
     setIsLoading(true)
     try {
-      const result = await resetPin(email, pin)
+      // Use token-based reset (secure) or legacy email-based
+      const identifier = token || email
+      const result = await resetPin(identifier, pin)
       if (result.success) {
         setSuccess(true)
         setTimeout(() => router.push("/"), 3000)
@@ -89,16 +102,16 @@ function ResetPinContent() {
     setError("")
   }
 
-  if (!ready) {
-    return <div className="min-h-screen flex items-center justify-center bg-[#F7F5ED]"><p className="text-sm text-[#76746A]">Cargando...</p></div>
+  if (validating) {
+    return <div className="min-h-screen flex items-center justify-center bg-[#F7F5ED]"><p className="text-sm text-[#76746A]">Validando link...</p></div>
   }
 
-  if (!email) {
+  if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F7F5ED] p-6">
         <div className="text-center max-w-[340px]">
           <h1 className="text-2xl font-light text-[#1C1A12] mb-4">Link inválido</h1>
-          <p className="text-sm text-[#76746A] mb-6">Por favor, solicita un nuevo link de recuperación</p>
+          <p className="text-sm text-[#76746A] mb-6">{error || "Por favor, solicita un nuevo link de recuperación"}</p>
           <button
             onClick={() => router.push("/")}
             className="px-6 py-2.5 rounded-lg bg-[#5F5A46] text-white text-xs font-semibold uppercase tracking-wide hover:bg-[#4A4639]"
@@ -117,7 +130,7 @@ function ResetPinContent() {
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#E6F2E0] flex items-center justify-center">
             <span className="text-2xl">✓</span>
           </div>
-          <h1 className="text-2xl font-light text-[#1C1A12] mb-2">¡PIN actualizado!</h1>
+          <h1 className="text-2xl font-light text-[#1C1A12] mb-2">PIN actualizado!</h1>
           <p className="text-sm text-[#76746A] mb-6">Tu nuevo PIN ha sido guardado correctamente. Redirigiendo al login...</p>
         </div>
       </div>

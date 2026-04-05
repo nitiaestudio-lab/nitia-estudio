@@ -36,10 +36,12 @@ export async function uploadProjectDocument(
       return { success: false, error: "Error al subir archivo" }
     }
 
+    // Use signed URL (1 hour expiry) instead of public URL
+    const { data: signedData } = await supabase.storage.from("project-documents").createSignedUrl(data.path, 3600)
     return {
       success: true,
       path: data.path,
-      url: supabase.storage.from("project-documents").getPublicUrl(data.path).data.publicUrl,
+      url: signedData?.signedUrl || "",
     }
   } catch (error) {
     console.error("Upload error:", error)
