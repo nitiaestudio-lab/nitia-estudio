@@ -107,7 +107,7 @@ export function Projects() {
 function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: Project; onBack: () => void; isFull: boolean; canSeeGanancias: boolean }) {
   const { data, updateRow, deleteRow, addRow, setSection, setSelectedProviderId } = useApp()
   const goToProvider = (id: string) => { setSelectedProviderId(id); setSection("providers") }
-  const [tab, setTab] = useState<ProjectTab>("pyl")
+  const [tab, setTab] = useState<ProjectTab>("movimientos")
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteProject, setShowDeleteProject] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
