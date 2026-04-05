@@ -751,9 +751,9 @@ type SortDir = "asc" | "desc"
 function useDolarBlue() {
   const [rate, setRate] = useState<number | null>(null)
   useEffect(() => {
-    fetch("https://dolarapi.com/v1/dolares/blue")
+    fetch("/api/dollar-rate")
       .then(r => r.json())
-      .then(d => { if (d?.venta) setRate(d.venta) })
+      .then(d => { if (d?.data?.sell) setRate(d.data.sell) })
       .catch(() => {})
   }, [])
   return rate
@@ -1416,7 +1416,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)} options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} /></div>
       <FormInput label="Descripción" value={desc} onChange={setDesc} />
       <div className="grid grid-cols-2 gap-4"><FormInput label="Monto" type="number" value={amt} onChange={setAmt} inputMode="decimal" />
-        <FormSelect label="Cuenta" value={aid} onChange={setAid} options={accounts.map(a => ({ value: a.id, label: a.name }))} /></div>
+        <FormSelect label="Cuenta" value={aid} onChange={setAid} options={accounts.map(a => ({ value: a.id, label: `${a.name} (${a.type === "dolares" ? "Dólares" : "Pesos"})` }))} /></div>
       <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
         <button type="button" onClick={() => setCurrency("ARS")} className={`px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
         <button type="button" onClick={() => setCurrency("USD")} className={`px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>

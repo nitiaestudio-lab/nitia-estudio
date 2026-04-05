@@ -5,6 +5,7 @@ import { useApp } from "@/lib/app-context"
 import { SecHead, Btn, Modal, FormInput, FormSelect, HR } from "@/components/nitia-ui"
 import { changeUserPin, getCurrentUserData, setupTOTP, verifyAndEnableTOTP, disableTOTP, getAvailableUsers, createEmployeeUser, updateEmployeeUser, deleteEmployeeUser, updateUserProfile } from "@/lib/auth-actions"
 import { Shield, Key, Users, Plus, Trash2, Pencil, Download, Database } from "lucide-react"
+import { today } from "@/lib/helpers"
 
 export function Settings() {
   const { role, setRole, data } = useApp()
@@ -73,8 +74,7 @@ export function Settings() {
         ws["!cols"] = colWidths
         XLSX.utils.book_append_sheet(wb, ws, table.name.substring(0, 31))
       }
-      const today = new Date().toISOString().split("T")[0]
-      XLSX.writeFile(wb, `backup_nitia_${today}.xlsx`)
+      XLSX.writeFile(wb, `backup_nitia_${today()}.xlsx`)
       const now = new Date().toISOString()
       localStorage.setItem("nitia_last_backup", now)
       setLastBackup(now)

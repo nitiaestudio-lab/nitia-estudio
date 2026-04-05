@@ -239,29 +239,13 @@ export function NitiaCosts() {
         </div>
       </div>
 
-      {payingCostId && (() => {
-        const cost = activeCosts.find(c => c.id === payingCostId)
-        if (!cost) return null
-        return (
-          <Modal isOpen={true} title={`Pagar: ${cost.description}`} onClose={() => setPayingCostId(null)}>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Monto: <strong className="text-foreground">{cost.currency === "USD" ? formatUSD(cost.amount) : formatCurrency(cost.amount)}</strong></p>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">¿Con qué cuenta se paga? <span className="text-muted-foreground font-normal">(opcional)</span></label>
-                <select value={payAccountId} onChange={e => setPayAccountId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white">
-                  <option value="">Sin cuenta específica</option>
-                  {data.accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.type === "dolares" ? formatUSD(a.balance) : formatCurrency(a.balance)})</option>)}
-                </select>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Btn variant="ghost" onClick={() => setPayingCostId(null)}>Cancelar</Btn>
-                <Btn onClick={() => confirmPayCost(payingCostId, payAccountId)}>Confirmar Pago</Btn>
-              </div>
-            </div>
-          </Modal>
-        )
-      })()}
+      {payingCostId && <PayCostModal
+        cost={activeCosts.find(c => c.id === payingCostId)!}
+        accounts={data.accounts}
+        dollarRate={data.dollarRate}
+        onClose={() => setPayingCostId(null)}
+        onConfirm={(accountId) => confirmPayCost(payingCostId, accountId)}
+      />}
 
       {inactiveCosts.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-6 opacity-60">
@@ -348,6 +332,73 @@ function CostModal({ cost, categories, onAddCategory, onDeleteCategory, onClose,
           </div>
         </div>
       </form>
+    </Modal>
+  )
+}
+
+// =================== PAY COST MODAL (with currency mismatch handling) ===================
+function PayCostModal({ cost, accounts, dollarRate, onClose, onConfirm }: {
+  cost: FixedExpense; accounts: any[]; dollarRate: any
+  onClose: () => void; onConfirm: (accountId: string) => void
+}) {
+  const [accountId, setAccountId] = useState(accounts[0]?.id || "")
+  const [tcBlue, setTcBlue] = useState(String(dollarRate?.sell || ""))
+
+  if (!cost) return null
+  const selectedAccount = accounts.find((a: any) => a.id === accountId)
+  const isCostUSD = cost.currency === "USD"
+  const isAccountUSD = selectedAccount?.type === "dolares"
+  const hasMismatch = accountId && ((isCostUSD && !isAccountUSD) || (!isCostUSD && isAccountUSD))
+  const tcNum = parseFloat(tcBlue) || 0
+  const convertedAmount = hasMismatch && tcNum > 0 ? (isCostUSD ? cost.amount * tcNum : cost.amount / tcNum) : 0
+
+  return (
+    <Modal isOpen={true} title={`Pagar: ${cost.description}`} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">Monto: <strong className="text-foreground">{cost.currency === "USD" ? formatUSD(cost.amount) : formatCurrency(cost.amount)}</strong></p>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1">¿Con qué cuenta se paga? <span className="text-muted-foreground font-normal">(opcional)</span></label>
+          <select value={accountId} onChange={e => setAccountId(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white">
+            <option value="">Sin cuenta específica</option>
+            {accounts.map((a: any) => (
+              <option key={a.id} value={a.id}>
+                {a.name} ({a.type === "dolares" ? "Dólares" : "Pesos"}) — {a.type === "dolares" ? formatUSD(a.balance) : formatCurrency(a.balance)}
+              </option>
+            ))}
+          </select>
+        </div>
+        {hasMismatch && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+            <p className="text-sm font-medium text-blue-800">
+              ⚠️ Moneda distinta a la cuenta ({isAccountUSD ? "Dólares" : "Pesos"})
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-blue-700 block mb-1">TC Blue (Infobae)</label>
+                <input type="number" value={tcBlue} onChange={e => setTcBlue(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-blue-200 text-sm bg-white" inputMode="decimal" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-blue-700 block mb-1">Se debitará</label>
+                <p className="text-base font-bold text-blue-900">
+                  {isAccountUSD ? formatUSD(convertedAmount) : formatCurrency(convertedAmount)}
+                </p>
+              </div>
+            </div>
+            <p className="text-[10px] text-blue-600">
+              {isCostUSD
+                ? `U$D ${cost.amount.toLocaleString("es-AR")} × $${tcNum.toLocaleString("es-AR")} = ${formatCurrency(convertedAmount)}`
+                : `$${cost.amount.toLocaleString("es-AR")} ÷ $${tcNum.toLocaleString("es-AR")} = U$D ${convertedAmount.toFixed(2)}`
+              }
+            </p>
+          </div>
+        )}
+        <div className="flex justify-end gap-3 pt-2">
+          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn onClick={() => onConfirm(accountId)}>Confirmar Pago</Btn>
+        </div>
+      </div>
     </Modal>
   )
 }

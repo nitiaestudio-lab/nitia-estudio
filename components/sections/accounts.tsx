@@ -47,7 +47,6 @@ export function Accounts() {
     if (filterProject) items = items.filter(m => m.project_id === filterProject)
     if (filterProvider) items = items.filter(m => m.provider_id === filterProvider)
     if (filterOrigin === "costo_fijo") items = items.filter(m => m.description.startsWith("[Costo fijo Nitia]"))
-    else if (filterOrigin === "gasto_fijo") items = items.filter(m => m.description.startsWith("[Gasto fijo]"))
     else if (filterOrigin === "proyecto") items = items.filter(m => m.project_id)
     else if (filterOrigin === "seña") items = items.filter(m => m.description.startsWith("[Seña") || m.description.startsWith("[Aporte propio seña]") || m.description.startsWith("[Diferencia seña]"))
     else if (filterOrigin === "manual") items = items.filter(m => !m.description.startsWith("["))
@@ -185,7 +184,6 @@ export function Accounts() {
           {[
             { value: "", label: "Todos" },
             { value: "costo_fijo", label: "Costos fijos Nitia" },
-            { value: "gasto_fijo", label: "Gastos fijos personal" },
             { value: "proyecto", label: "De proyectos" },
             { value: "seña", label: "Señas" },
             { value: "manual", label: "Manuales" },
@@ -359,6 +357,8 @@ function MovementModal({ movement, accounts, projects, providers, categories, on
   onAddCategory: (n: string) => void; onDeleteCategory: (n: string) => void
   onClose: () => void; onSave: (m: Movement) => void
 }) {
+  const { data } = useApp()
+  const dolarRate = data.dollarRate
   const [accountId, setAccountId] = useState(movement?.account_id ?? accounts[0]?.id ?? "")
   const [date, setDate] = useState(movement?.date ?? today())
   const [description, setDescription] = useState(movement?.description ?? "")
@@ -369,23 +369,36 @@ function MovementModal({ movement, accounts, projects, providers, categories, on
   const [providerId, setProviderId] = useState(movement?.provider_id ?? "")
   const [medioPago, setMedioPago] = useState(movement?.medio_pago ?? "")
   const [autoSplit, setAutoSplit] = useState(movement?.auto_split ?? false)
+  const [tcBlue, setTcBlue] = useState(String(dolarRate?.sell || ""))
+
+  // Currency mismatch detection
+  const selectedAccount = accounts.find(a => a.id === accountId)
+  const isPaymentUSD = medioPago === "USD"
+  const isAccountUSD = selectedAccount?.type === "dolares"
+  const hasMismatch = accountId && medioPago && ((isPaymentUSD && !isAccountUSD) || (!isPaymentUSD && isAccountUSD))
+  const tcNum = parseFloat(tcBlue) || 0
+  const amtNum = parseFloat(amount) || 0
+  const convertedAmount = hasMismatch && tcNum > 0 ? (isPaymentUSD ? amtNum * tcNum : amtNum / tcNum) : 0
 
   return (
     <Modal isOpen={true} title={movement ? "Editar Movimiento" : "Nuevo Movimiento"} onClose={onClose}>
       <form onSubmit={e => {
         e.preventDefault()
+        // If currency mismatch, debit the converted amount in account's currency
+        const finalAmount = hasMismatch && tcNum > 0 ? convertedAmount : parseFloat(amount)
+        const finalMedioPago = hasMismatch ? (isAccountUSD ? "USD" : null) : (medioPago || null)
         onSave({
           id: movement?.id ?? generateId(), date, description,
-          amount: parseFloat(amount), type, category: category || null,
+          amount: finalAmount, type, category: category || null,
           account_id: accountId || null, project_id: projectId || null,
-          provider_id: providerId || null, medio_pago: medioPago || null,
+          provider_id: providerId || null, medio_pago: finalMedioPago,
           auto_split: type === "ingreso" ? autoSplit : false,
           split_percentage: 50,
           created_at: movement?.created_at ?? new Date().toISOString(),
         })
       }} className="space-y-4">
         <FormSelect label="Cuenta" value={accountId} onChange={setAccountId}
-          options={accounts.map(a => ({ value: a.id, label: `${a.name}${a.type === "dolares" ? " (U$D)" : ""}` }))} />
+          options={accounts.map(a => ({ value: a.id, label: `${a.name} (${a.type === "dolares" ? "Dólares" : "Pesos"})` }))} />
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="Fecha" type="date" value={date} onChange={setDate} />
           <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)}
@@ -393,7 +406,7 @@ function MovementModal({ movement, accounts, projects, providers, categories, on
         </div>
         <FormInput label="Descripción" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="Monto" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
+          <FormInput label={`Monto${isPaymentUSD ? " (U$D)" : medioPago ? " ($)" : ""}`} type="number" value={amount} onChange={setAmount} inputMode="decimal" />
           <EditableSelect label="Categoría" value={category} onChange={setCategory}
             options={categories.map(c => ({ value: c.name, label: c.name }))}
             onAddNew={onAddCategory} onDelete={onDeleteCategory} />
@@ -405,6 +418,29 @@ function MovementModal({ movement, accounts, projects, providers, categories, on
         <FormSelect label="Medio de pago" value={medioPago || ""} onChange={setMedioPago}
           options={[{ value: "", label: "—" }, { value: "efectivo", label: "Efectivo" }, { value: "transferencia", label: "Transferencia" },
             { value: "cheque", label: "Cheque" }, { value: "tarjeta", label: "Tarjeta" }, { value: "mercadopago", label: "Mercado Pago" }, { value: "USD", label: "Dólares (U$D)" }]} />
+        {/* Currency mismatch: show TC blue conversion */}
+        {hasMismatch && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+            <p className="text-sm font-medium text-blue-800">
+              ⚠️ Moneda distinta a la cuenta ({isAccountUSD ? "Dólares" : "Pesos"})
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <FormInput label="TC Blue (Infobae)" type="number" value={tcBlue} onChange={setTcBlue} inputMode="decimal" />
+              <div>
+                <label className="text-xs font-medium text-blue-700 block mb-1">Se debitará</label>
+                <p className="text-base font-bold text-blue-900">
+                  {isAccountUSD ? formatUSD(convertedAmount) : formatCurrency(convertedAmount)}
+                </p>
+              </div>
+            </div>
+            <p className="text-[10px] text-blue-600">
+              {isPaymentUSD
+                ? `U$D ${amtNum.toLocaleString("es-AR")} × $${tcNum.toLocaleString("es-AR")} = ${formatCurrency(convertedAmount)}`
+                : `$${amtNum.toLocaleString("es-AR")} ÷ $${tcNum.toLocaleString("es-AR")} = U$D ${convertedAmount.toFixed(2)}`
+              }
+            </p>
+          </div>
+        )}
         {type === "ingreso" && (
           <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg">
             <input type="checkbox" checked={autoSplit} onChange={e => setAutoSplit(e.target.checked)} className="w-4 h-4" />

@@ -1,6 +1,11 @@
 // Export utilities — CSV + XLSX
 // Requires: npm install xlsx
 
+const localToday = (): string => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
 function downloadCSV(data: Record<string, any>[], filename: string) {
   if (data.length === 0) return
   const headers = Object.keys(data[0])
@@ -14,7 +19,7 @@ function downloadCSV(data: Record<string, any>[], filename: string) {
     }).join(","))
   ]
   const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: "text/csv;charset=utf-8;" })
-  triggerDownload(blob, `${filename}_${new Date().toISOString().split("T")[0]}.csv`)
+  triggerDownload(blob, `${filename}_${localToday()}.csv`)
 }
 
 function triggerDownload(blob: Blob, filename: string) {
@@ -41,7 +46,7 @@ async function downloadXLSX(sheets: { name: string; data: Record<string, any>[] 
       ws["!cols"] = colWidths
       XLSX.utils.book_append_sheet(wb, ws, sheet.name.substring(0, 31))
     }
-    XLSX.writeFile(wb, `${filename}_${new Date().toISOString().split("T")[0]}.xlsx`)
+    XLSX.writeFile(wb, `${filename}_${localToday()}.xlsx`)
   } catch {
     // Fallback to CSV if xlsx not available
     for (const sheet of sheets) {

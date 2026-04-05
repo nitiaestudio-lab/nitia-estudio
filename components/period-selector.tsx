@@ -3,6 +3,9 @@
 import { useState, useMemo } from "react"
 import { Calendar, ChevronDown } from "lucide-react"
 
+const formatDateLocal = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+
 export type PeriodType = "this_month" | "last_month" | "this_year" | "last_year" | "all" | "custom"
 
 interface PeriodOption {
@@ -93,7 +96,7 @@ export function PeriodSelector({
         <div className="mt-2 flex items-center gap-2">
           <input
             type="date"
-            value={customRange?.start?.toISOString().split("T")[0] || ""}
+            value={customRange?.start ? formatDateLocal(customRange.start) : ""}
             onChange={(e) => onCustomRangeChange({ 
               ...customRange, 
               start: e.target.value ? new Date(e.target.value) : null 
@@ -103,7 +106,7 @@ export function PeriodSelector({
           <span className="text-sm text-[#76746A]">a</span>
           <input
             type="date"
-            value={customRange?.end?.toISOString().split("T")[0] || ""}
+            value={customRange?.end ? formatDateLocal(customRange.end) : ""}
             onChange={(e) => onCustomRangeChange({ 
               ...customRange, 
               end: e.target.value ? new Date(e.target.value) : null 

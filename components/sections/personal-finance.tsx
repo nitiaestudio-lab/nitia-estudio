@@ -8,7 +8,7 @@ import { Plus, Pencil, Trash2, FileSpreadsheet, Search, Check, ArrowUpDown, Chev
 import type { PersonalFinanceMovement } from "@/lib/types"
 
 export function PersonalFinance() {
-  const { role, data, addRow, updateRow, deleteRow, addMovement, deleteMovement, getCategoriesFor, addCategory, deleteCategory } = useApp()
+  const { role, data, addRow, updateRow, deleteRow, deleteMovement, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const isAdmin = role === "paula" || role === "cami"
   const ownTab = role === "cami" ? "cami" : "paula"
 
@@ -136,24 +136,16 @@ export function PersonalFinance() {
     return payment?.paid_date || null
   }
 
-  // Account picker for fixed cost payment
-  const [payingFixedItem, setPayingFixedItem] = useState<PersonalFinanceMovement | null>(null)
-  const [payFixedAccountId, setPayFixedAccountId] = useState("")
-
   const unpayFixed = async (item: PersonalFinanceMovement) => {
     const payment = data.fixedCostPayments?.find(p =>
       p.fixed_cost_id === item.id && p.month === currentMonth && p.year === currentYear
     )
     if (payment) {
-      // Remove linked global movement (reverses account balance)
-      if (payment.movement_id) {
-        try { await deleteMovement(payment.movement_id) } catch {}
-      }
       // Remove linked personal_finance_movements record
       const pfId = payment.pf_movement_id
       if (pfId) {
         try { await deleteRow("personal_finance_movements", pfId, "personalFinanceMovements") } catch {}
-      } else if (payment.movement_id) {
+      } else {
         // Fallback: search by description match for old records without pf_movement_id
         const pfMov = data.personalFinanceMovements.find(m =>
           m.description === `[Gasto fijo] ${item.description}` && m.type === "egreso"
@@ -162,25 +154,19 @@ export function PersonalFinance() {
           try { await deleteRow("personal_finance_movements", pfMov.id, "personalFinanceMovements") } catch {}
         }
       }
+      // Remove legacy global movement if exists (from old payments)
+      if (payment.movement_id) {
+        try { await deleteMovement(payment.movement_id) } catch {}
+      }
       await deleteRow("fixed_cost_payments", payment.id, "fixedCostPayments")
     }
   }
 
-  const confirmPayFixed = async (item: PersonalFinanceMovement, accountId: string) => {
+  const confirmPayFixed = async (item: PersonalFinanceMovement) => {
     // Check if already paid this month (prevent duplicates)
     if (isFixedPaid(item.id)) return
-    const movId = generateId()
     const pfMovId = generateId()
-    // Create global movement (impacts account balance)
-    await addMovement({
-      id: movId, date: today(), description: `[Gasto fijo] ${item.description}`,
-      amount: item.amount, type: "egreso" as const,
-      category: item.category || "Gasto fijo", fixed_cost_id: item.id,
-      account_id: accountId || null,
-      medio_pago: item.medio_pago || null,
-      created_by: effectiveTab,
-    } as any)
-    // Also create personal_finance_movements record so it shows in personal finance
+    // Only create personal_finance_movements record (NO global movement)
     await addRow("personal_finance_movements", {
       id: pfMovId, date: today(), description: `[Gasto fijo] ${item.description}`,
       amount: item.amount, type: "egreso" as const,
@@ -188,11 +174,11 @@ export function PersonalFinance() {
       medio_pago: item.medio_pago || null,
       owner: effectiveTab, is_fixed: false, active: true,
     } as any, "personalFinanceMovements")
-    // Create payment record linked to both movement IDs
+    // Create payment record (no movement_id since no global movement)
     await addRow("fixed_cost_payments", {
       id: generateId(),
       fixed_cost_id: item.id,
-      movement_id: movId,
+      movement_id: null,
       pf_movement_id: pfMovId,
       month: currentMonth,
       year: currentYear,
@@ -200,8 +186,6 @@ export function PersonalFinance() {
       paid_date: today(),
       paid_amount: item.amount,
     }, "fixedCostPayments")
-    setPayingFixedItem(null)
-    setPayFixedAccountId("")
   }
 
   const [editingPayDate, setEditingPayDate] = useState<string | null>(null)
@@ -226,7 +210,7 @@ export function PersonalFinance() {
         Categoría: m.category || "", Monto: m.amount, Fijo: m.is_fixed ? "Sí" : "No",
       }))
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(allItems), "Finanzas Personales")
-      const td = new Date().toISOString().split("T")[0]
+      const td = today()
       XLSX.writeFile(wb, `finanzas_${effectiveTab}_${td}.xlsx`)
     } catch {}
   }
@@ -301,7 +285,7 @@ export function PersonalFinance() {
                 <div className="flex items-start gap-3">
                   <button onClick={() => {
                     if (paid) { unpayFixed(item) }
-                    else { setPayingFixedItem(item); setPayFixedAccountId(data.accounts[0]?.id || "") }
+                    else { confirmPayFixed(item) }
                   }}
                     className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${paid ? "bg-green-600 border-green-600 text-white" : "border-[#E0DDD0] hover:border-[#5F5A46]"}`}>
                     {paid && <Check size={12} />}
@@ -310,13 +294,6 @@ export function PersonalFinance() {
                     <p className={`text-sm font-medium ${paid ? "line-through text-muted-foreground" : ""}`}>{item.description}</p>
                     <p className="text-xs text-muted-foreground">{item.category}</p>
                     <p className={`text-base font-bold mt-1 ${paid ? "text-green-600" : "text-foreground"}`}>{formatCurrency(item.amount)}</p>
-                    {/* Cuenta usada */}
-                    {paid && (() => {
-                      const payment = data.fixedCostPayments?.find(p => p.fixed_cost_id === item.id && p.month === currentMonth && p.year === currentYear && p.paid)
-                      const mov = payment?.movement_id ? data.movements.find(m => m.id === payment.movement_id) : null
-                      const acc = mov?.account_id ? data.accounts.find(a => a.id === mov.account_id) : null
-                      return acc ? <p className="text-[10px] text-green-600 mt-0.5">Cuenta: {acc.name}</p> : null
-                    })()}
                     {/* Fecha de pago */}
                     {paid && (
                       <div className="mt-1">
@@ -360,27 +337,6 @@ export function PersonalFinance() {
           </div>
         </div>
       </div>
-
-      {/* Account picker popup for fixed cost payment */}
-      {payingFixedItem && (
-        <Modal isOpen={true} title={`Pagar: ${payingFixedItem.description}`} onClose={() => setPayingFixedItem(null)}>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Monto: <strong className="text-foreground">{formatCurrency(payingFixedItem.amount)}</strong></p>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">¿Con qué cuenta se paga?</label>
-              <select value={payFixedAccountId} onChange={e => setPayFixedAccountId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-[#E0DDD0] text-sm bg-white">
-                <option value="">Sin cuenta específica</option>
-                {data.accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>)}
-              </select>
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <Btn variant="ghost" onClick={() => setPayingFixedItem(null)}>Cancelar</Btn>
-              <Btn onClick={() => confirmPayFixed(payingFixedItem, payFixedAccountId)}>Confirmar Pago</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {/* ============ MOVIMIENTOS - Tabla tipo Excel ============ */}
       <div className="space-y-3">
