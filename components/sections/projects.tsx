@@ -210,27 +210,39 @@ function BalancePanel({ project }: { project: Project }) {
   const costBC = projectCostByCurrency(project, data.projectItems, data.quoteComparisons)
   const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
   const ganBC = projectGananciaByCurrency(project, data.projectItems, data.quoteComparisons)
-  // Legacy totals (ARS-only for core calculations)
-  const totalCost = costBC.ars
-  const totalClient = clientBC.ars
-  const totalGanancia = ganBC.ars
-  const projMovs = data.movements.filter(m => m.project_id === project.id)
-  const incomeUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
-  const incomeARS = projMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
-  const expensesUSD = projMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
-  const expensesARS = projMovs.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+
   const pc = project.partner_count ?? 2
   const ivaCli = project.iva_cliente_pct ?? 21
   const ivaGan = project.iva_ganancia_pct ?? 10.5
   const sCliPct = project.sena_cliente_pct ?? 50
 
-  const ivaCliente = calcIVACliente(totalClient, ivaCli)
-  const totalConIVA = totalClient + ivaCliente
-  const clienteDebe = totalConIVA - incomeARS
-  const provDebe = totalCost - expensesARS
-  const ivaGanancia = calcIVAGanancia(totalGanancia, ivaGan)
-  const gananciaNeta = totalGanancia - ivaGanancia
-  const gananciaIndiv = calcGananciaIndividual(gananciaNeta, pc)
+  // Dual-currency IVA and totals
+  const ivaClienteARS = calcIVACliente(clientBC.ars, ivaCli)
+  const ivaClienteUSD = calcIVACliente(clientBC.usd, ivaCli)
+  const totalConIVA_ARS = clientBC.ars + ivaClienteARS
+  const totalConIVA_USD = clientBC.usd + ivaClienteUSD
+
+  // Split movements by currency
+  const projMovs = data.movements.filter(m => m.project_id === project.id)
+  const incomeARS = projMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+  const incomeUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+  const expensesARS = projMovs.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+  const expensesUSD = projMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+
+  // Dual-currency balances
+  const clienteDebeARS = totalConIVA_ARS - incomeARS
+  const clienteDebeUSD = totalConIVA_USD - incomeUSD
+  const provDebeARS = costBC.ars - expensesARS
+  const provDebeUSD = costBC.usd - expensesUSD
+
+  // Dual-currency ganancia
+  const ivaGananciaARS = calcIVAGanancia(ganBC.ars, ivaGan)
+  const ivaGananciaUSD = calcIVAGanancia(ganBC.usd, ivaGan)
+  const gananciaNetaARS = ganBC.ars - ivaGananciaARS
+  const gananciaNetaUSD = ganBC.usd - ivaGananciaUSD
+  const gananciaIndivARS = calcGananciaIndividual(gananciaNetaARS, pc)
+  const gananciaIndivUSD = calcGananciaIndividual(gananciaNetaUSD, pc)
+
   // Calculate seña per provider based on their individual advance_percent
   const providerSeñaTotal = (() => {
     const items = data.projectItems.filter(i => i.project_id === project.id)
@@ -247,12 +259,12 @@ function BalancePanel({ project }: { project: Project }) {
     }
     // Add costs without provider using project default
     const costsWithProv = Object.values(byProv).reduce((s, c) => s + c, 0)
-    const costsWithoutProv = totalCost - costsWithProv
+    const costsWithoutProv = costBC.ars - costsWithProv
     if (costsWithoutProv > 0) total += costsWithoutProv * ((project.sena_proveedor_pct ?? 60) / 100)
     return total
   })()
   const sProv = providerSeñaTotal
-  const sCli = calcSenaCliente(totalClient, sCliPct)
+  const sCli = calcSenaCliente(clientBC.ars, sCliPct)
   const sCliIVA = sCli + calcIVACliente(sCli, ivaCli)
 
   // Real seña amounts from movements (unified filter)
@@ -261,6 +273,17 @@ function BalancePanel({ project }: { project: Project }) {
   const señaCobradaCli = señaMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
   const señaPagadaProv = señaMovs.filter(m => m.type === "egreso" && (m.category === "Seña proveedor")).reduce((s, m) => s + m.amount, 0)
   const señaAportePropio = señaMovs.filter(m => m.category === "Aporte propio seña" || m.category === "Diferencia seña").reduce((s, m) => s + m.amount, 0)
+
+  // TC Blue estimation
+  const tcBlue = data.dollarRate?.sell
+  const hasUSD = clientBC.usd > 0 || costBC.usd > 0 || ganBC.usd > 0
+
+  // Display dual currency — omit USD side if zero
+  const dualDisplay = (ars: number, usd: number, fmtArs = formatCurrency, fmtUsd = formatUSD) => {
+    const parts = [fmtArs(ars)]
+    if (usd !== 0) parts.push(fmtUsd(usd))
+    return parts.join(" + ")
+  }
 
   const Bar = ({ value, max, color }: { value: number; max: number; color: string }) => {
     const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
@@ -275,30 +298,38 @@ function BalancePanel({ project }: { project: Project }) {
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">Cliente</h4>
-            {clienteDebe > 0 ? <AlertCircle size={14} className="text-amber-500" /> : <CheckCircle2 size={14} className="text-green-600" />}
+            {clienteDebeARS > 0 || clienteDebeUSD > 0 ? <AlertCircle size={14} className="text-amber-500" /> : <CheckCircle2 size={14} className="text-green-600" />}
           </div>
-          <Bar value={incomeARS} max={totalConIVA} color={incomeARS >= totalConIVA ? "green" : "amber"} />
+          <Bar value={incomeARS} max={totalConIVA_ARS} color={incomeARS >= totalConIVA_ARS ? "green" : "amber"} />
           <div className="flex justify-between text-sm mt-2">
-            <span className="text-muted-foreground">Total c/IVA: <span className="font-medium text-foreground">{formatCurrency(totalConIVA)}</span>{clientBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(clientBC.usd)}</span>}</span>
-            <span className="text-green-600 font-medium">{formatCurrency(incomeARS)}{incomeUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(incomeUSD)}</span>}</span>
+            <span className="text-muted-foreground">Total c/IVA: <span className="font-medium text-foreground">{dualDisplay(totalConIVA_ARS, totalConIVA_USD)}</span></span>
+            <span className="text-green-600 font-medium">{dualDisplay(incomeARS, incomeUSD)}</span>
           </div>
-          <p className={`text-sm font-bold mt-1 ${clienteDebe > 0 ? "text-amber-600" : "text-green-600"}`}>
-            {clienteDebe > 0 ? `Debe: ${formatCurrency(clienteDebe)}` : clienteDebe < 0 ? `De más: ${formatCurrency(Math.abs(clienteDebe))}` : "Al día ✓"}
+          <p className={`text-sm font-bold mt-1 ${clienteDebeARS > 0 || clienteDebeUSD > 0 ? "text-amber-600" : "text-green-600"}`}>
+            {clienteDebeARS > 0 || clienteDebeUSD > 0
+              ? `Debe: ${dualDisplay(clienteDebeARS, clienteDebeUSD)}`
+              : clienteDebeARS < 0 || clienteDebeUSD < 0
+                ? `De más: ${dualDisplay(Math.abs(clienteDebeARS), Math.abs(clienteDebeUSD))}`
+                : "Al día ✓"}
           </p>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">Proveedores</h4>
-            {provDebe > 0 ? <AlertCircle size={14} className="text-red-500" /> : <CheckCircle2 size={14} className="text-green-600" />}
+            {provDebeARS > 0 || provDebeUSD > 0 ? <AlertCircle size={14} className="text-red-500" /> : <CheckCircle2 size={14} className="text-green-600" />}
           </div>
-          <Bar value={expensesARS} max={totalCost} color={expensesARS >= totalCost ? "green" : "red"} />
+          <Bar value={expensesARS} max={costBC.ars} color={expensesARS >= costBC.ars ? "green" : "red"} />
           <div className="flex justify-between text-sm mt-2">
-            <span className="text-muted-foreground">Costo: <span className="font-medium text-foreground">{formatCurrency(totalCost)}</span>{costBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(costBC.usd)}</span>}</span>
-            <span className="text-red-600 font-medium">{formatCurrency(expensesARS)}{expensesUSD > 0 && <span className="text-[10px] text-blue-600 ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(expensesUSD)}</span>}</span>
+            <span className="text-muted-foreground">Costo: <span className="font-medium text-foreground">{dualDisplay(costBC.ars, costBC.usd)}</span></span>
+            <span className="text-red-600 font-medium">{dualDisplay(expensesARS, expensesUSD)}</span>
           </div>
-          <p className={`text-sm font-bold mt-1 ${provDebe > 0 ? "text-red-600" : "text-green-600"}`}>
-            {provDebe > 0 ? `Debemos: ${formatCurrency(provDebe)}` : provDebe < 0 ? `De más: ${formatCurrency(Math.abs(provDebe))}` : "Al día ✓"}
+          <p className={`text-sm font-bold mt-1 ${provDebeARS > 0 || provDebeUSD > 0 ? "text-red-600" : "text-green-600"}`}>
+            {provDebeARS > 0 || provDebeUSD > 0
+              ? `Debemos: ${dualDisplay(provDebeARS, provDebeUSD)}`
+              : provDebeARS < 0 || provDebeUSD < 0
+                ? `De más: ${dualDisplay(Math.abs(provDebeARS), Math.abs(provDebeUSD))}`
+                : "Al día ✓"}
           </p>
         </div>
       </div>
@@ -306,14 +337,23 @@ function BalancePanel({ project }: { project: Project }) {
       {/* Ganancia — compacta */}
       <div className="bg-[#295E29] text-white rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1">
         <span className="text-xs text-white/60">Ganancia</span>
-        <span className="font-bold">{formatCurrency(totalGanancia)}{ganBC.usd > 0 && <span className="text-xs font-normal text-white/70 ml-1">+ {formatUSD(ganBC.usd)}</span>}</span>
-        <span className="text-xs text-white/50">IVA -{formatCurrency(ivaGanancia)}</span>
+        <span className="font-bold">{dualDisplay(ganBC.ars, ganBC.usd)}</span>
+        <span className="text-xs text-white/50">IVA -{dualDisplay(ivaGananciaARS, ivaGananciaUSD)}</span>
         <span className="text-xs text-white/60">Neta</span>
-        <span className="font-bold">{formatCurrency(gananciaNeta)}</span>
+        <span className="font-bold">{dualDisplay(gananciaNetaARS, gananciaNetaUSD)}</span>
         <span className="text-xs text-white/60">÷{pc}</span>
-        <span className="font-bold">{formatCurrency(gananciaIndiv)}</span>
-        <span className="text-xs text-white/50 ml-auto">{totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen</span>
+        <span className="font-bold">{dualDisplay(gananciaIndivARS, gananciaIndivUSD)}</span>
+        <span className="text-xs text-white/50 ml-auto">{clientBC.ars > 0 ? ((ganBC.ars / clientBC.ars) * 100).toFixed(0) : 0}% margen</span>
       </div>
+
+      {/* TC Blue estimation */}
+      {hasUSD && tcBlue && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 text-xs text-blue-800 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="font-semibold">TC Blue: {formatCurrency(tcBlue)}</span>
+          <span>Estimado total en ARS: <span className="font-bold">{formatCurrency(totalConIVA_ARS + totalConIVA_USD * tcBlue)}</span></span>
+          <span className="text-blue-600">Ganancia est.: <span className="font-bold">{formatCurrency(gananciaNetaARS + gananciaNetaUSD * tcBlue)}</span></span>
+        </div>
+      )}
 
       {/* Detalle señas — collapsible */}
       {(señaCobradaCli > 0 || señaPagadaProv > 0) && (
@@ -383,12 +423,26 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
 
       {/* Honorarios */}
       <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
-        <h4 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Honorarios</h4>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold text-muted-foreground uppercase">Honorarios</h4>
+          <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+            {(["ARS", "USD"] as const).map(cur => (
+              <button key={cur} onClick={() => updateRow("projects", project.id, { honorarios_currency: cur }, "projects")}
+                className={`px-3 py-1 text-xs font-medium ${(project.honorarios_currency ?? "ARS") === cur ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A] hover:bg-[#F0EDE4]"}`}>
+                {cur}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <div><label className="text-xs text-muted-foreground">Costo</label>
-            <input type="number" value={project.honorarios_cost || 0} onChange={e => updateRow("projects", project.id, { honorarios_cost: parseFloat(e.target.value) || 0 }, "projects")} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" /></div>
+            <input type="number" value={project.honorarios_cost || 0} onChange={e => updateRow("projects", project.id, { honorarios_cost: parseFloat(e.target.value) || 0 }, "projects")} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">{(project.honorarios_currency ?? "ARS") === "USD" ? formatUSD(project.honorarios_cost ?? 0) : formatCurrency(project.honorarios_cost ?? 0)}</p>
+          </div>
           <div><label className="text-xs text-muted-foreground">Precio cliente</label>
-            <input type="number" value={project.honorarios_client_price || 0} onChange={e => updateRow("projects", project.id, { honorarios_client_price: parseFloat(e.target.value) || 0 }, "projects")} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" /></div>
+            <input type="number" value={project.honorarios_client_price || 0} onChange={e => updateRow("projects", project.id, { honorarios_client_price: parseFloat(e.target.value) || 0 }, "projects")} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">{(project.honorarios_currency ?? "ARS") === "USD" ? formatUSD(project.honorarios_client_price ?? 0) : formatCurrency(project.honorarios_client_price ?? 0)}</p>
+          </div>
         </div>
       </div>
 
@@ -713,20 +767,9 @@ function ComparadorTab({ project }: { project: Project }) {
 type SortField = "date" | "description" | "amount" | "type" | "provider"
 type SortDir = "asc" | "desc"
 
-function useDolarBlue() {
-  const [rate, setRate] = useState<number | null>(null)
-  useEffect(() => {
-    fetch("/api/dollar-rate")
-      .then(r => r.json())
-      .then(d => { if (d?.data?.sell) setRate(d.data.sell) })
-      .catch(() => {})
-  }, [])
-  return rate
-}
-
 function MovimientosTab({ project }: { project: Project }) {
   const { data, addMovement, deleteMovement, updateRow } = useApp()
-  const dolarBlue = useDolarBlue()
+  const dolarBlue = data.dollarRate?.sell || null
   const [showAdd, setShowAdd] = useState(false)
   const [movPeriod, setMovPeriod] = useState<PeriodValue>("all"); const [cStart, setCStart] = useState(""); const [cEnd, setCEnd] = useState("")
   const [searchQ, setSearchQ] = useState("")
