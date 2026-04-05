@@ -13,8 +13,9 @@ function formatAmount(m: { amount: number; medio_pago?: string | null }) {
 }
 
 export function Providers() {
-  const { data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { data, addRow, updateRow, deleteRow, getCategoriesFor, addCategory, deleteCategory, selectedProviderId, setSelectedProviderId } = useApp()
+  const selectedId = selectedProviderId
+  const setSelectedId = setSelectedProviderId
   const [showNew, setShowNew] = useState(false)
   const [searchQ, setSearchQ] = useState("")
   const [filterCategory, setFilterCategory] = useState("")

@@ -78,7 +78,10 @@ export function Projects() {
             className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
-              <Tag label={project.status || "activo"} color={project.status === "activo" ? "green" : project.status === "pausado" ? "yellow" : "gray"} />
+              <div className="flex items-center gap-1.5">
+                {project.main_currency === "USD" && <Tag label="USD" color="blue" />}
+                <Tag label={project.status || "activo"} color={project.status === "activo" ? "green" : project.status === "pausado" ? "yellow" : "gray"} />
+              </div>
             </div>
             <p className="text-sm text-muted-foreground mb-3">{project.client}</p>
             {isFull && <div className="space-y-1 text-sm">
@@ -102,7 +105,8 @@ export function Projects() {
 
 // =================== PROJECT DETAIL ===================
 function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: Project; onBack: () => void; isFull: boolean; canSeeGanancias: boolean }) {
-  const { data, updateRow, deleteRow, addRow, setSection } = useApp()
+  const { data, updateRow, deleteRow, addRow, setSection, setSelectedProviderId } = useApp()
+  const goToProvider = (id: string) => { setSelectedProviderId(id); setSection("providers") }
   const [tab, setTab] = useState<ProjectTab>("movimientos")
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteProject, setShowDeleteProject] = useState(false)
@@ -225,6 +229,7 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
 // =================== BALANCE PANEL ===================
 function BalancePanel({ project }: { project: Project }) {
   const { data } = useApp()
+  const [viewCurrency, setViewCurrency] = useState<"normal" | "ARS" | "USD">("normal")
   // Currency-aware budget totals
   const costBC = projectCostByCurrency(project, data.projectItems, data.quoteComparisons)
   const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
@@ -381,12 +386,36 @@ function BalancePanel({ project }: { project: Project }) {
         </div>}
       </div>
 
-      {/* TC Blue estimation */}
+      {/* TC Blue — ver todo en una moneda */}
       {hasUSD && tcBlue && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 text-xs text-blue-800 flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="font-semibold">TC Blue: {formatCurrency(tcBlue)}</span>
-          <span>Estimado total en ARS: <span className="font-bold">{formatCurrency(totalConIVA_ARS + totalConIVA_USD * tcBlue)}</span></span>
-          <span className="text-blue-600">Ganancia est.: <span className="font-bold">{formatCurrency(gananciaNetaARS + gananciaNetaUSD * tcBlue)}</span></span>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-blue-800">TC Blue: {formatCurrency(tcBlue)}</span>
+            <div className="flex rounded-lg border border-blue-300 overflow-hidden">
+              {(["normal", "ARS", "USD"] as const).map(opt => (
+                <button key={opt} onClick={() => setViewCurrency(opt)}
+                  className={`px-3 py-1 text-[10px] font-medium transition-colors ${viewCurrency === opt ? "bg-blue-600 text-white" : "bg-white text-blue-700 hover:bg-blue-100"}`}>
+                  {opt === "normal" ? "Separado" : `Todo en ${opt}`}
+                </button>
+              ))}
+            </div>
+          </div>
+          {viewCurrency === "ARS" && (
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-blue-900">
+              <span>Presupuesto: <span className="font-bold">{formatCurrency(totalConIVA_ARS + totalConIVA_USD * tcBlue)}</span></span>
+              <span>Costo: <span className="font-bold">{formatCurrency(costBC.ars + costBC.usd * tcBlue)}</span></span>
+              <span className="text-green-700">Ganancia neta: <span className="font-bold">{formatCurrency(gananciaNetaARS + gananciaNetaUSD * tcBlue)}</span></span>
+              <span className="text-green-700">÷{pc}: <span className="font-bold">{formatCurrency(gananciaIndivARS + gananciaIndivUSD * tcBlue)}</span></span>
+            </div>
+          )}
+          {viewCurrency === "USD" && (
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-blue-900">
+              <span>Presupuesto: <span className="font-bold">{formatUSD((totalConIVA_ARS / tcBlue) + totalConIVA_USD)}</span></span>
+              <span>Costo: <span className="font-bold">{formatUSD((costBC.ars / tcBlue) + costBC.usd)}</span></span>
+              <span className="text-green-700">Ganancia neta: <span className="font-bold">{formatUSD((gananciaNetaARS / tcBlue) + gananciaNetaUSD)}</span></span>
+              <span className="text-green-700">÷{pc}: <span className="font-bold">{formatUSD((gananciaIndivARS / tcBlue) + gananciaIndivUSD)}</span></span>
+            </div>
+          )}
         </div>
       )}
 
@@ -413,7 +442,8 @@ function BalancePanel({ project }: { project: Project }) {
 
 // =================== TAB: DESGLOSE ===================
 function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; isFull: boolean; canSeeGanancias: boolean }) {
-  const { data, updateRow, addRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
+  const { data, updateRow, addRow, deleteRow, getCategoriesFor, addCategory, deleteCategory, setSection, setSelectedProviderId } = useApp()
+  const goToProvider = (id: string) => { setSelectedProviderId(id); setSection("providers") }
   const [showAddItem, setShowAddItem] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ProjectItem | null>(null)
   const [inlineEditId, setInlineEditId] = useState<string | null>(null)
@@ -533,7 +563,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                       <span className="truncate max-w-[200px]">{item.description}</span>
                       {item.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded shrink-0">USD</span>}
                     </div></td>
-                    <td className="py-2 px-2 hidden md:table-cell">{provName ? <button onClick={() => setSection("proveedores")} className="text-xs text-[#5F5A46] hover:underline truncate max-w-[120px] block">{provName}</button> : <span className="text-xs text-muted-foreground">—</span>}</td>
+                    <td className="py-2 px-2 hidden md:table-cell">{provName && item.provider_id ? <button onClick={() => goToProvider(item.provider_id!)} className="text-xs text-blue-600 hover:underline truncate max-w-[120px] block">{provName}</button> : <span className="text-xs text-muted-foreground">—</span>}</td>
                     <td className="text-right py-2 px-2">{item.currency === "USD" ? formatUSD(item.cost) : formatCurrency(item.cost)}</td>
                     {hm && <td className="text-right py-2 px-2 hidden sm:table-cell text-muted-foreground">x{item.multiplier}</td>}
                     <td className="text-right py-2 px-2 font-medium">{item.currency === "USD" ? formatUSD(item.client_price) : formatCurrency(item.client_price)}</td>
@@ -553,7 +583,10 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                 <tr key={q.id} className="border-b border-border/50 last:border-0">
                   <td className="py-2 pr-2"><div className="flex items-center gap-1.5">
                     <span className="truncate max-w-[200px]">{q.item}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">({q.provider_name})</span>
+                    {(() => { const pid = q.provider_id || data.providers.find(p => p.name === q.provider_name)?.id
+                      return pid ? <button onClick={() => goToProvider(pid)} className="text-xs text-blue-600 hover:underline shrink-0">({q.provider_name})</button>
+                        : <span className="text-xs text-muted-foreground shrink-0">({q.provider_name})</span>
+                    })()}
                     {q.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded shrink-0">USD</span>}
                   </div></td>
                   <td className="text-right py-2 px-2">{q.currency === "USD" ? formatUSD(q.cost) : formatCurrency(q.cost)}</td>
@@ -620,7 +653,8 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
 
 // =================== TAB: COMPARADOR ===================
 function ComparadorTab({ project }: { project: Project }) {
-  const { data, addRow, updateRow, deleteRow, getCategoriesFor } = useApp()
+  const { data, addRow, updateRow, deleteRow, getCategoriesFor, setSection, setSelectedProviderId } = useApp()
+  const goToProvider = (id: string) => { setSelectedProviderId(id); setSection("providers") }
   const [showNew, setShowNew] = useState(false)
   const [searchQ, setSearchQ] = useState("")
   const [activeTab, setActiveTab] = useState<string>("todos")
@@ -738,7 +772,10 @@ function ComparadorTab({ project }: { project: Project }) {
               return (
                 <tr key={q.id} className={`border-b last:border-0 group ${q.selected ? "bg-green-50" : "hover:bg-[#FAFAF9]"}`}>
                   <td className="px-3 py-2">{q.selected && <Check size={14} className="text-green-600" />}</td>
-                  <td className="px-3 py-2"><span className="font-medium">{q.provider_name}</span>{q.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded ml-1">USD</span>}</td>
+                  <td className="px-3 py-2">{(() => { const pid = q.provider_id || data.providers.find(p => p.name === q.provider_name)?.id
+                    return pid ? <button onClick={() => goToProvider(pid)} className="font-medium text-blue-600 hover:underline">{q.provider_name}</button>
+                      : <span className="font-medium">{q.provider_name}</span>
+                  })()}{q.currency === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded ml-1">USD</span>}</td>
                   <td className="px-3 py-2 text-right">{fmt(q.cost)}</td>
                   <td className="px-3 py-2 text-right">{fmt(hm ? q.price_x14 : q.cost)}</td>
                   <td className="px-3 py-2 text-right hidden sm:table-cell">{fmt(hm ? q.price_x16 : q.cost)}</td>
@@ -812,7 +849,8 @@ type SortField = "date" | "description" | "amount" | "type" | "provider"
 type SortDir = "asc" | "desc"
 
 function MovimientosTab({ project }: { project: Project }) {
-  const { data, addMovement, deleteMovement, updateRow } = useApp()
+  const { data, addMovement, deleteMovement, updateRow, setSection, setSelectedProviderId } = useApp()
+  const goToProvider = (id: string) => { setSelectedProviderId(id); setSection("providers") }
   const dolarBlue = data.dollarRate?.sell || null
   const [showAdd, setShowAdd] = useState(false)
   const [movPeriod, setMovPeriod] = useState<PeriodValue>("all"); const [cStart, setCStart] = useState(""); const [cEnd, setCEnd] = useState("")
@@ -987,7 +1025,7 @@ function MovimientosTab({ project }: { project: Project }) {
                       </td>
                       {/* Provider */}
                       <td className="px-3 py-2.5 hidden md:table-cell">
-                        <span className="text-xs text-muted-foreground">{provName || "—"}</span>
+                        {provName && mov.provider_id ? <button onClick={() => goToProvider(mov.provider_id!)} className="text-xs text-blue-600 hover:underline">{provName}</button> : <span className="text-xs text-muted-foreground">—</span>}
                       </td>
                       {/* Type */}
                       <td className="px-3 py-2.5">

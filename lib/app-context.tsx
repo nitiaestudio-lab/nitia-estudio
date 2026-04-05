@@ -32,6 +32,8 @@ interface AppContextType {
   setSection: (section: Section) => void
   selectedProjectId: string | null
   setSelectedProjectId: (id: string | null) => void
+  selectedProviderId: string | null
+  setSelectedProviderId: (id: string | null) => void
   isLoading: boolean
   isSyncing: boolean
 
@@ -70,6 +72,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(EMPTY_DATA)
   const [section, setSection] = useState<Section>("dashboard")
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
 
@@ -419,6 +422,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       role, setRole, userPermissions, setUserPermissions, data, setData, section, setSection,
       selectedProjectId, setSelectedProjectId,
+      selectedProviderId, setSelectedProviderId,
       isLoading, isSyncing,
       addRow, updateRow, deleteRow, deleteRows,
       addMovement, deleteMovement,
