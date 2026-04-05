@@ -666,6 +666,35 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
         )
       })}
 
+      {/* Total consolidado */}
+      {isFull && (() => {
+        const costBC = projectCostByCurrency(project, data.projectItems, data.quoteComparisons)
+        const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
+        const ganBC = projectGananciaByCurrency(project, data.projectItems, data.quoteComparisons)
+        return (
+          <div className="bg-[#295E29] text-white rounded-xl p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-white/60 mb-2">Total Desglose</p>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-[10px] text-white/50 uppercase">Costo</p>
+                {costBC.ars > 0 && <p className="text-lg font-bold">{formatCurrency(costBC.ars)}</p>}
+                {costBC.usd > 0 && <p className="text-sm font-bold text-blue-200">{formatUSD(costBC.usd)}</p>}
+              </div>
+              <div>
+                <p className="text-[10px] text-white/50 uppercase">Precio Cliente</p>
+                {clientBC.ars > 0 && <p className="text-lg font-bold">{formatCurrency(clientBC.ars)}</p>}
+                {clientBC.usd > 0 && <p className="text-sm font-bold text-blue-200">{formatUSD(clientBC.usd)}</p>}
+              </div>
+              {canSeeGanancias && <div>
+                <p className="text-[10px] text-white/50 uppercase">Ganancia</p>
+                {ganBC.ars > 0 && <p className="text-lg font-bold text-green-300">{formatCurrency(ganBC.ars)}</p>}
+                {ganBC.usd > 0 && <p className="text-sm font-bold text-green-200">{formatUSD(ganBC.usd)}</p>}
+              </div>}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Config financiera */}
       {canSeeGanancias && <details className="bg-[#F0EDE4] rounded-xl p-4">
         <summary className="text-sm font-semibold text-[#5F5A46] cursor-pointer">Configuración financiera</summary>
