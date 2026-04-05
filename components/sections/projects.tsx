@@ -374,7 +374,7 @@ function BalancePanel({ project }: { project: Project }) {
           <span className="text-xs text-white/50 ml-auto">{clientBC.ars > 0 ? ((ganBC.ars / clientBC.ars) * 100).toFixed(0) : 0}% margen</span>
         </div>}
         {ganBC.usd !== 0 && <div className="flex flex-wrap items-center gap-x-5 gap-y-1 pt-1 border-t border-white/20">
-          <span className="text-xs text-white/60">Ganancia <span className="text-white/40">(sin IVA)</span></span>
+          <span className="text-xs text-white/60">Ganancia</span>
           <span className="font-bold text-blue-200">{formatUSD(ganBC.usd)}</span>
           <span className="text-xs text-white/60">÷{pc}</span>
           <span className="font-bold text-blue-200">{formatUSD(gananciaIndivUSD)}</span>
