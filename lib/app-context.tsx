@@ -148,10 +148,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { if (role) loadData() }, [role, loadData])
 
-  // Auto-fetch dollar rate on load and every 4 hours
+  // Auto-fetch dollar rate on load and every 4 hours (only when logged in)
   useEffect(() => {
+    if (!role) return
     const checkAndFetch = async () => {
       try {
         const res = await fetch("/api/dollar-rate")
@@ -170,7 +171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkAndFetch()
     const interval = setInterval(checkAndFetch, 4 * 60 * 60 * 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [role])
 
   const refreshData = useCallback(async () => { await loadData() }, [loadData])
 
