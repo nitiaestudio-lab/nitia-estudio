@@ -371,41 +371,6 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
   return (
     <div className="space-y-6">
       {canSeeGanancias && <BalancePanel project={project} />}
-      {/* Seguimiento de Señas — collapsible */}
-      {(() => {
-        const isSeña = (m: Movement) => m.concepto === "seña" || m.concepto?.startsWith("seña") || m.category === "Seña proveedor" || m.category === "Aporte propio seña" || m.category === "Diferencia seña"
-        const señaMovs = data.movements.filter(m => m.project_id === project.id && isSeña(m))
-        if (señaMovs.length === 0) return null
-        return (
-          <details className="bg-purple-50/50 border border-purple-200 rounded-xl p-4">
-            <summary className="text-sm font-semibold text-purple-900 cursor-pointer flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-              Movimientos de señas ({señaMovs.length})
-            </summary>
-            <div className="space-y-1.5 mt-3">
-              {señaMovs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(m => {
-                const prov = data.providers.find(p => p.id === m.provider_id)
-                const isSeñaDiff = m.category === "Diferencia seña" || m.category === "Aporte propio seña"
-                return (
-                  <div key={m.id} className="flex items-center justify-between py-1.5 px-2 rounded text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSeñaDiff ? "bg-amber-500" : m.type === "ingreso" ? "bg-green-500" : "bg-red-500"}`}></span>
-                      <span className="truncate">{m.description}</span>
-                      {prov && <span className="text-[10px] px-1 py-0.5 bg-white rounded text-purple-600 shrink-0">{prov.name}</span>}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`font-bold ${isSeñaDiff ? "text-amber-700" : m.type === "ingreso" ? "text-green-700" : "text-red-700"}`}>
-                        {m.type === "ingreso" ? "+" : "-"}{formatCurrency(m.amount)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">{new Date(m.date).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </details>
-        )
-      })()}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1281,17 +1246,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
       ? data.projectItems.filter(i => i.project_id === project.id && i.provider_id === señaActiveProvId).reduce((s, i) => s + i.cost, 0)
         + data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === señaActiveProvId && q.selected).reduce((s, q) => s + q.cost, 0)
       : provOwed)
-  // Base de precio cliente (para la seña del cliente)
-  const señaClientBase = señaItemIds.length > 0
-    ? data.projectItems.filter(i => señaItemIds.includes(i.id)).reduce((s, i) => s + i.client_price, 0)
-      + data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).reduce((s, q) => s + quoteClientPrice(q), 0)
-    : (señaActiveProvId
-      ? data.projectItems.filter(i => i.project_id === project.id && i.provider_id === señaActiveProvId).reduce((s, i) => s + i.client_price, 0)
-        + data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === señaActiveProvId && q.selected).reduce((s, q) => s + quoteClientPrice(q), 0)
-      : 0)
   const señaProvAmount = (señaProvPctNum / 100) * señaCostBase  // lo que cobra el proveedor
-  const señaCliAmount = (señaCliPctNum / 100) * señaClientBase  // lo que paga el cliente
-  const señaDiff = esSeña && señaProvAmount > señaCliAmount ? señaProvAmount - señaCliAmount : 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1338,20 +1293,6 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         sena_cliente_pct: señaCliPctNum,
         medio_pago: currency === "USD" ? "USD" : null,
       } as Movement)
-      // If provider% > client%, also register the difference from own funds
-      if (señaDiff > 0) {
-        await addMov({
-          id: generateId(), date,
-          description: `[Aporte propio seña] ${provName} (${señaProvPctNum}% prov - ${señaCliPctNum}% cli)${itemNames ? ` → ${itemNames}` : ""}`,
-          amount: señaDiff, type: "egreso" as const,
-          project_id: project.id, account_id: aid || null, provider_id: señaActiveProvId,
-          category: "Aporte propio seña", auto_split: false, split_percentage: 0,
-          concepto: señaItemIds.length > 0 ? `seña:${señaItemIds.join(",")}` : "seña",
-          sena_real_pct: señaProvPctNum,
-          sena_cliente_pct: señaCliPctNum,
-          medio_pago: currency === "USD" ? "USD" : null,
-        } as Movement)
-      }
     }
 
     // If money goes to a personal account, also create personal finance record
@@ -1532,19 +1473,9 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
           {señaCostBase > 0 && (
             <div className="bg-purple-50/50 border border-purple-200 rounded-lg p-3 space-y-2">
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="text-purple-600">Cliente paga ({señaCliPctNum}% del precio cliente):</span> <strong className="text-green-700">{formatCurrency(señaCliAmount)}</strong></div>
-                <div><span className="text-purple-600">Proveedor cobra ({señaProvPctNum}% del precio costo):</span> <strong className="text-red-700">{formatCurrency(señaProvAmount)}</strong></div>
+                <div><span className="text-purple-600">Seña cliente ({señaCliPctNum}%):</span> <strong className="text-green-700">{formatCurrency((señaCliPctNum / 100) * señaCostBase)}</strong></div>
+                <div><span className="text-purple-600">Seña proveedor ({señaProvPctNum}%):</span> <strong className="text-red-700">{formatCurrency(señaProvAmount)}</strong></div>
               </div>
-              {señaDiff > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded p-2">
-                  <p className="text-xs font-medium text-amber-800">
-                    Aporte propio: {formatCurrency(señaDiff)}
-                  </p>
-                </div>
-              )}
-              {señaDiff <= 0 && (
-                <p className="text-xs text-green-600">La seña del cliente cubre la del proveedor.</p>
-              )}
               <div className="flex items-center gap-2 pt-1 border-t border-purple-200">
                 <input type="checkbox" checked={señaPagadaProv} onChange={e => setSeñaPagadaProv(e.target.checked)} className="w-4 h-4" />
                 <span className="text-xs text-purple-700 font-medium">Ya le pagué la seña al proveedor (registrar egreso de {formatCurrency(señaProvAmount)})</span>
