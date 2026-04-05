@@ -31,13 +31,13 @@ export const getSelectedQuotes = (quotes: QuoteComparison[], projectId: string):
 
 // Calculate client price for a quote based on type and selected multiplier
 export const quoteClientPrice = (q: QuoteComparison): number => {
-  if (q.type === "material") return q.cost
+  if (q.type.toLowerCase() === "material") return q.cost
   const mult = q.selected_multiplier || 1.4
   return q.cost * mult
 }
 
 export const quoteGanancia = (q: QuoteComparison): number => {
-  if (q.type === "material") return 0
+  if (q.type.toLowerCase() === "material") return 0
   return quoteClientPrice(q) - q.cost
 }
 
@@ -69,7 +69,7 @@ export const projectClientPriceByCurrency = (project: Project, items: ProjectIte
 export const projectGananciaByCurrency = (project: Project, items: ProjectItem[], quotes: QuoteComparison[] = []): CurrencyAmount => {
   const pItems = items.filter(i => i.project_id === project.id)
   const pQuotes = getSelectedQuotes(quotes, project.id)
-  const gan = (i: ProjectItem) => i.type === "material" ? 0 : i.client_price - i.cost
+  const gan = (i: ProjectItem) => i.type.toLowerCase() === "material" ? 0 : i.client_price - i.cost
   return {
     ars: (project.honorarios_currency === "USD" ? 0 : ((project.honorarios_client_price ?? 0) - (project.honorarios_cost ?? 0))) + pItems.filter(isARSItem).reduce((s, i) => s + gan(i), 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + quoteGanancia(q), 0),
     usd: (project.honorarios_currency === "USD" ? ((project.honorarios_client_price ?? 0) - (project.honorarios_cost ?? 0)) : 0) + pItems.filter(isUSDItem).reduce((s, i) => s + gan(i), 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + quoteGanancia(q), 0),
@@ -116,7 +116,7 @@ export const projectTotalClientPrice = (project: Project, items: ProjectItem[], 
 export const projectTotalGanancia = (project: Project, items: ProjectItem[], quotes: QuoteComparison[] = []): number => {
   const honorariosGan = (project.honorarios_client_price ?? 0) - (project.honorarios_cost ?? 0)
   const itemsGan = items.filter(i => i.project_id === project.id)
-    .reduce((s, i) => s + (i.type === "material" ? 0 : i.client_price - i.cost), 0)
+    .reduce((s, i) => s + (i.type.toLowerCase() === "material" ? 0 : i.client_price - i.cost), 0)
   const quotesGan = getSelectedQuotes(quotes, project.id).reduce((s, q) => s + quoteGanancia(q), 0)
   return honorariosGan + itemsGan + quotesGan
 }
