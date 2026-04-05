@@ -269,7 +269,7 @@ export async function getCurrentUserData(role: string) {
     const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from("users")
-      .select("id, name, email, role")
+      .select("id, name, email, role, totp_enabled")
       .eq("role", role)
       .maybeSingle()
 
