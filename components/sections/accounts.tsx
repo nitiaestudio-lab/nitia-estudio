@@ -241,14 +241,11 @@ export function Accounts() {
           <table className="w-full text-sm">
             <thead className="bg-[#F0EDE4] border-b border-border hidden sm:table-header-group">
               <tr>
-                <th className="px-4 py-3 text-left font-medium">Fecha</th>
-                <th className="px-4 py-3 text-left font-medium">Descripción</th>
-                <th className="px-4 py-3 text-left font-medium">Cuenta</th>
-                <th className="px-4 py-3 text-left font-medium">Categoría</th>
-                <th className="px-4 py-3 text-left font-medium">Moneda</th>
-                <th className="px-4 py-3 text-left font-medium">Proyecto</th>
-                <th className="px-4 py-3 text-right font-medium">Importe</th>
-                <th className="px-4 py-3 w-20"></th>
+                <th className="px-3 py-2.5 text-left font-medium text-xs w-20">Fecha</th>
+                <th className="px-3 py-2.5 text-left font-medium text-xs">Descripción</th>
+                <th className="px-3 py-2.5 text-left font-medium text-xs w-28">Cuenta</th>
+                <th className="px-3 py-2.5 text-right font-medium text-xs w-32">Importe</th>
+                <th className="px-3 py-2.5 w-16"></th>
               </tr>
             </thead>
             <tbody>
@@ -257,63 +254,60 @@ export function Accounts() {
                 const isUSD = mov.medio_pago === "USD" || acct?.type === "dolares"
                 const projName = getProjectName(mov.project_id)
                 const providerName = getProviderName(mov.provider_id)
-                const acctDisplay = getAccountDisplay(mov.account_id)
+                const medioPagoLabel: Record<string, string> = { efectivo: "Efectivo", transferencia: "Transf.", cheque: "Cheque", tarjeta: "Tarjeta", mercadopago: "MP", USD: "Dólares" }
                 return (
                   <tr key={mov.id} className="border-b border-border last:border-0 hover:bg-[#FAFAF9] flex flex-col sm:table-row p-3 sm:p-0">
-                    {/* Mobile: stacked layout */}
-                    <td className="px-4 py-1 sm:py-3 text-[#76746A] text-xs sm:text-sm">
-                      <span className="sm:hidden font-medium text-foreground mr-2">📅</span>
+                    <td className="px-3 py-1 sm:py-2.5 text-[#76746A] text-xs">
                       {formatDate(mov.date)}
                     </td>
-                    <td className="px-4 py-1 sm:py-3">
+                    <td className="px-3 py-1 sm:py-2.5">
                       <div className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+                        <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
                           mov.type === "ingreso" ? "bg-green-50" : "bg-red-50"}`}>
-                          {mov.type === "ingreso" ? <ArrowDownLeft size={12} className="text-green-600" /> : <ArrowUpRight size={12} className="text-red-600" />}
+                          {mov.type === "ingreso" ? <ArrowDownLeft size={10} className="text-green-600" /> : <ArrowUpRight size={10} className="text-red-600" />}
                         </div>
-                        <div className="min-w-0">
-                          <span className="truncate block">{mov.description}</span>
-                          {providerName && <span className="text-[11px] text-[#76746A] block truncate">{providerName}</span>}
+                        <div className="min-w-0 flex-1">
+                          <span className="text-sm truncate block">{mov.description}</span>
+                          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                            {providerName && <span className="text-[10px] text-[#76746A]">Prov: {providerName}</span>}
+                            {providerName && (projName || mov.category) && <span className="text-[10px] text-[#76746A]">·</span>}
+                            {projName && <span className="text-[10px] text-[#5F5A46]">{projName}</span>}
+                            {projName && mov.category && <span className="text-[10px] text-[#76746A]">·</span>}
+                            {mov.category && <span className="text-[10px] px-1 py-0 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
+                            {mov.medio_pago && mov.medio_pago !== "USD" && <span className="text-[10px] text-[#76746A]">· {medioPagoLabel[mov.medio_pago] || mov.medio_pago}</span>}
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-1 sm:py-3 text-[#76746A] text-xs sm:text-sm">
-                      <span className="block">{acctDisplay.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded inline-block mt-0.5 ${acctDisplay.isUSD ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-600"}`}>
-                        {acctDisplay.isUSD ? "USD" : "ARS"}
-                      </span>
+                    <td className="px-3 py-1 sm:py-2.5 text-xs">
+                      {acct ? (
+                        <div>
+                          <span className="block text-[#1C1A12] truncate">{acct.name}</span>
+                          <span className={`text-[10px] font-medium ${acct.type === "dolares" ? "text-blue-600" : "text-[#76746A]"}`}>
+                            {acct.type === "dolares" ? "Dólares" : "Pesos"}
+                          </span>
+                        </div>
+                      ) : <span className="text-[#76746A]">—</span>}
                     </td>
-                    <td className="px-4 py-1 sm:py-3">{mov.category && <Tag label={mov.category} color="gray" />}</td>
-                    <td className="px-4 py-1 sm:py-3">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${isUSD ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
-                        {isUSD ? "USD" : "ARS"}
-                      </span>
+                    <td className="px-3 py-1 sm:py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className={`font-semibold ${mov.type === "ingreso" ? "text-green-600" : "text-red-600"}`}>
+                          {mov.type === "ingreso" ? "+" : "-"}{isUSD ? formatUSD(mov.amount) : formatCurrency(mov.amount)}
+                        </span>
+                        <span className={`text-[9px] font-bold px-1 py-0 rounded ${isUSD ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>
+                          {isUSD ? "USD" : "ARS"}
+                        </span>
+                      </div>
                     </td>
-                    <td className="px-4 py-1 sm:py-3">
-                      {projName && (
-                        <button onClick={() => { /* navigate to project */ }}
-                          className="text-xs text-[#5F5A46] hover:underline flex items-center gap-1">
-                          {projName}<ExternalLink size={10} />
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 py-1 sm:py-3 text-right">
-                      <span className={`font-medium ${mov.type === "ingreso" ? "text-green-600" : "text-red-600"}`}>
-                        {mov.type === "ingreso" ? "+" : "-"}{isUSD ? formatUSD(mov.amount) : formatCurrency(mov.amount)}
-                      </span>
-                      {mov.medio_pago && (
-                        <span className="text-[11px] text-[#76746A] block mt-0.5 capitalize">{mov.medio_pago}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-1 sm:py-3">
-                      <div className="flex gap-1 justify-end">
+                    <td className="px-3 py-1 sm:py-2.5">
+                      <div className="flex gap-0.5 justify-end">
                         <button onClick={() => setEditingMovement(mov)}
-                          className="p-1.5 text-[#76746A] hover:text-[#5F5A46] hover:bg-accent rounded transition-colors">
-                          <Pencil size={14} />
+                          className="p-1 text-[#76746A] hover:text-[#5F5A46] hover:bg-accent rounded transition-colors">
+                          <Pencil size={13} />
                         </button>
                         <button onClick={() => deleteMovement(mov.id)}
-                          className="p-1.5 text-[#76746A] hover:text-red-600 hover:bg-red-50 rounded transition-colors">
-                          <Trash2 size={14} />
+                          className="p-1 text-[#76746A] hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     </td>
@@ -499,13 +493,31 @@ function AccountModal({ account, onClose, onSave, onDelete }: {
         onSave({ id: account?.id ?? generateId(), name, type, balance: parseFloat(balance) || 0, color })
       }} className="space-y-4">
         <FormInput label="Nombre" value={name} onChange={setName} placeholder="Ej: Cuenta Santander" />
+        {/* Moneda */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Moneda de la cuenta</label>
+          <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+            <button type="button" onClick={() => { if (type === "dolares") setType("banco") }}
+              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${type !== "dolares" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A] hover:bg-[#F0EDE4]"}`}>
+              $ Pesos (ARS)
+            </button>
+            <button type="button" onClick={() => setType("dolares")}
+              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${type === "dolares" ? "bg-blue-600 text-white" : "bg-white text-[#76746A] hover:bg-[#F0EDE4]"}`}>
+              U$D Dólares
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <FormSelect label="Tipo" value={type || ""} onChange={setType}
-            options={[
-              { value: "banco", label: "Banco" }, { value: "efectivo", label: "Efectivo" },
-              { value: "mercadopago", label: "Mercado Pago" }, { value: "dolares", label: "Dólares (U$D)" },
-              { value: "otro", label: "Otro" },
-            ]} />
+          {type !== "dolares" ? (
+            <FormSelect label="Tipo" value={type || ""} onChange={setType}
+              options={[
+                { value: "banco", label: "Banco" }, { value: "efectivo", label: "Efectivo" },
+                { value: "mercadopago", label: "Mercado Pago" }, { value: "otro", label: "Otro" },
+              ]} />
+          ) : (
+            <FormSelect label="Tipo" value="dolares" onChange={() => {}}
+              options={[{ value: "dolares", label: "Cuenta en dólares" }]} />
+          )}
           <FormInput label={type === "dolares" ? "Saldo (U$D)" : "Saldo ($)"} type="number" value={balance} onChange={setBalance} />
         </div>
         <div className="flex items-center gap-3">
