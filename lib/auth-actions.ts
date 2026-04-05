@@ -77,8 +77,8 @@ export async function sendPasswordResetEmail(email: string) {
     // Enviar magic link usando Supabase Auth
     // IMPORTANTE: La URL de redirect debe estar en la lista permitida de Supabase Dashboard > Authentication > URL Configuration
     // FIX: Corregir precedencia de operadores
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL 
-      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://nitia-estudio-two.vercel.app")
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://app.nitiaestudio.com")
     
     const { error } = await supabase.auth.signInWithOtp({
       email: email,
@@ -372,7 +372,7 @@ export async function requestPinChangeEmail(email: string) {
 
     // Enviar magic link para reset
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "https://nitia-estudio-two.vercel.app"}/reset-pin?email=${encodeURIComponent(email)}`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "https://app.nitiaestudio.com"}/reset-pin?email=${encodeURIComponent(email)}`,
     })
 
     if (error) {

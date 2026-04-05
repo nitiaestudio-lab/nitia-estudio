@@ -276,6 +276,7 @@ function Setup2FAModal({ role, isEnabled, onClose }: { role: string; isEnabled: 
   const [step, setStep] = useState<"choice" | "setup" | "verify">(isEnabled ? "choice" : "setup")
   const [secret, setSecret] = useState("")
   const [otpauthUrl, setOtpauthUrl] = useState("")
+  const [qrImage, setQrImage] = useState("")
   const [code, setCode] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -286,6 +287,14 @@ function Setup2FAModal({ role, isEnabled, onClose }: { role: string; isEnabled: 
     if (result.success && result.secret) {
       setSecret(result.secret)
       setOtpauthUrl(result.otpauthUrl || "")
+      // Generate QR code image
+      if (result.otpauthUrl) {
+        try {
+          const qrRes = await fetch("/api/generate-qr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: result.otpauthUrl }) })
+          const qrData = await qrRes.json()
+          if (qrData.qrCode) setQrImage(qrData.qrCode)
+        } catch { /* QR generation failed, user can use manual code */ }
+      }
       setStep("verify")
     } else setError(result.error || "Error")
     setLoading(false)
@@ -326,8 +335,9 @@ function Setup2FAModal({ role, isEnabled, onClose }: { role: string; isEnabled: 
       {step === "verify" && (
         <form onSubmit={handleVerify} className="space-y-4">
           <p className="text-sm text-muted-foreground">Escaneá este código QR con tu app de autenticación:</p>
-          <div className="bg-[#F7F5ED] p-4 rounded-lg text-center">
-            <p className="text-xs text-muted-foreground mb-2">O ingresá manualmente:</p>
+          <div className="bg-[#F7F5ED] p-4 rounded-lg text-center space-y-3">
+            {qrImage && <img src={qrImage} alt="QR Code 2FA" className="mx-auto w-48 h-48" />}
+            <p className="text-xs text-muted-foreground">O ingresá manualmente:</p>
             <code className="text-sm font-mono bg-white px-3 py-1 rounded border select-all">{secret}</code>
           </div>
           <FormInput label="Código de verificación (6 dígitos)" value={code} onChange={setCode} inputMode="numeric" />

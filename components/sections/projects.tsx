@@ -950,6 +950,10 @@ function MovimientosTab({ project }: { project: Project }) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
   const [editValue, setEditValue] = useState("")
 
+  const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
+  const presupARS = project.budget_final ?? clientBC.ars
+  const presupUSD = project.budget_final_usd ?? clientBC.usd
+
   const all = data.movements.filter(m => m.project_id === project.id)
   const df = filterByDateRange(all, movPeriod, cStart, cEnd)
   const movs = useMemo(() => {
@@ -1036,6 +1040,16 @@ function MovimientosTab({ project }: { project: Project }) {
           <div className="mt-3 pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
             <span>Total estimado en ARS: <span className="font-semibold text-foreground">{formatCurrency(totalEstimadoPesos)}</span></span>
             <span>Blue: ${new Intl.NumberFormat("es-AR").format(dolarBlue)}</span>
+          </div>
+        )}
+        {(presupARS > 0 || presupUSD > 0) && (
+          <div className="mt-3 pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+            <span>Presupuesto</span>
+            <span className="font-medium text-foreground">
+              {presupARS > 0 && formatCurrency(presupARS)}
+              {presupARS > 0 && presupUSD > 0 && " · "}
+              {presupUSD > 0 && formatUSD(presupUSD)}
+            </span>
           </div>
         )}
       </div>
