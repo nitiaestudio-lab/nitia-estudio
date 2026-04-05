@@ -891,20 +891,12 @@ function MovimientosTab({ project }: { project: Project }) {
                             {mov.description}
                           </span>
                         )}
-                        {mov.category && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
-                        {mov.concepto === "seña" || mov.concepto?.startsWith("seña") ? (
+                        {mov.category && mov.category !== "Proyecto" && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
+                        {(mov.concepto === "seña" || mov.concepto?.startsWith("seña")) && (
                           <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">Seña</span>
-                        ) : mov.concepto ? (
-                          <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">{mov.concepto}</span>
-                        ) : null}
-                        {mov.sena_real_pct != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">Prov {mov.sena_real_pct}%</span>}
-                        {mov.sena_cliente_pct != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">Cli {mov.sena_cliente_pct}%</span>}
-                        {(mov.category === "Diferencia seña" || mov.category === "Aporte propio seña") && (
-                          <p className="text-[10px] text-amber-600 mt-0.5">Aporte propio — Cuenta: {accName || "sin cuenta"}</p>
                         )}
-                        {mov.category === "Seña proveedor" && (
-                          <p className="text-[10px] text-purple-600 mt-0.5">Pago seña a {provName || "proveedor"} — Cuenta: {accName || "sin cuenta"}</p>
-                        )}
+                        {mov.medio_pago === "USD" && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">USD</span>}
+                        {accName && <span className="ml-1 text-[10px] text-[#76746A]">· {accName}</span>}
                       </td>
                       {/* Provider */}
                       <td className="px-3 py-2.5 hidden md:table-cell">

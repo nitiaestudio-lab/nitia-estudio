@@ -161,7 +161,7 @@ export function getDateRange(period: string): { start: Date; end: Date } {
   let start = new Date()
   switch (period) {
     case "hoy": start.setHours(0, 0, 0, 0); break
-    case "semana": start.setDate(now.getDate() - now.getDay()); start.setHours(0, 0, 0, 0); break
+    case "semana": { const day = now.getDay(); const diff = day === 0 ? 6 : day - 1; start.setDate(now.getDate() - diff); start.setHours(0, 0, 0, 0); break }
     case "mes": start = new Date(now.getFullYear(), now.getMonth(), 1); break
     case "3meses": start = new Date(now.getFullYear(), now.getMonth() - 3, 1); break
     case "ano": start = new Date(now.getFullYear(), 0, 1); break

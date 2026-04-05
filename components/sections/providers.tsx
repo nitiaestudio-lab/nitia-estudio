@@ -370,7 +370,6 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
           const project = data.projects.find(p => p.id === mov.project_id)
           const account = data.accounts.find(a => a.id === mov.account_id)
           const isSeña = mov.concepto === "seña" || mov.concepto?.startsWith("seña")
-          const isSeñaDiff = mov.category === "Diferencia seña" || mov.category === "Aporte propio seña"
           const isSeñaProv = mov.category === "Seña proveedor"
           // Parse item IDs from concepto like "seña:id1,id2"
           const señaItemIds = mov.concepto?.startsWith("seña:") ? mov.concepto.split(":")[1]?.split(",") || [] : []
@@ -379,11 +378,11 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                 .concat(data.quoteComparisons.filter(q => señaItemIds.includes(q.id)).map(q => q.item))
             : []
           return (
-            <div key={mov.id} className={`py-3 border-b border-border last:border-0 text-sm group ${isSeñaDiff ? "bg-amber-50/50" : isSeña ? "bg-purple-50/30" : ""}`}>
+            <div key={mov.id} className={`py-3 border-b border-border last:border-0 text-sm group ${isSeña || isSeñaProv ? "bg-purple-50/30" : ""}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${isSeñaDiff ? "bg-amber-500" : mov.type === "egreso" ? "bg-red-500" : "bg-green-500"}`}></span>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${mov.type === "egreso" ? "bg-red-500" : "bg-green-500"}`}></span>
                     {editingMov?.id === mov.id && editingMov.field === "description" ? (
                       <input value={editMovValue} onChange={e => setEditMovValue(e.target.value)} autoFocus
                         onKeyDown={e => { if (e.key === "Enter") saveEditMov(mov.id); if (e.key === "Escape") setEditingMov(null) }}
@@ -392,8 +391,8 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                     ) : (
                       <span className="font-medium cursor-pointer hover:underline" onDoubleClick={() => startEditMov(mov.id, "description", mov.description)}>{mov.description}</span>
                     )}
-                    {(isSeña || isSeñaDiff || isSeñaProv) && <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">{isSeñaDiff ? "Aporte propio" : isSeñaProv ? "Seña prov." : "Seña"}</span>}
-                    {mov.category && !isSeñaDiff && !isSeñaProv && mov.category !== "Diferencia seña" && <span className="text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
+                    {(isSeña || isSeñaProv) && <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">{isSeñaProv ? "Seña prov." : "Seña"}</span>}
+                    {mov.category && !isSeñaProv && mov.category !== "Diferencia seña" && mov.category !== "Aporte propio seña" && <span className="text-[10px] px-1.5 py-0.5 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap mt-1 ml-4">
                     {editingMov?.id === mov.id && editingMov.field === "date" ? (
@@ -417,8 +416,8 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                       ))}
                     </div>
                   )}
-                  {isSeñaProv && account && (
-                    <p className="ml-4 mt-1 text-[10px] text-purple-600">Pago seña — Cuenta: {account.name}</p>
+                  {account && (
+                    <span className="ml-4 text-[10px] text-[#76746A]">Cuenta: {account.name}{account.type === "dolares" ? " (USD)" : " (Pesos)"}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -428,7 +427,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                       onBlur={() => saveEditMov(mov.id)}
                       className="w-28 px-2 py-0.5 border border-border rounded text-sm bg-white text-right font-bold" />
                   ) : (
-                    <span className={`font-bold cursor-pointer hover:underline ${isSeñaDiff ? "text-amber-700" : mov.type === "egreso" ? "text-red-600" : "text-green-600"}`}
+                    <span className={`font-bold cursor-pointer hover:underline ${mov.type === "egreso" ? "text-red-600" : "text-green-600"}`}
                       onDoubleClick={() => startEditMov(mov.id, "amount", String(mov.amount))}>
                       {mov.type === "egreso" ? "-" : "+"}{formatAmount(mov)}
                     </span>
