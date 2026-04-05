@@ -26,9 +26,9 @@ import {
   Settings2, ArrowUpDown, Info, Save, XCircle,
 } from "lucide-react"
 
-type ProjectTab = "movimientos" | "desglose" | "comparador" | "archivos" | "tareas"
+type ProjectTab = "pyl" | "movimientos" | "desglose" | "comparador" | "archivos" | "tareas"
 const TAB_LABELS: Record<ProjectTab, string> = {
-  movimientos: "Movimientos", desglose: "Desglose", comparador: "Comparador", archivos: "Archivos", tareas: "Tareas",
+  pyl: "P&L", movimientos: "Movimientos", desglose: "Desglose", comparador: "Comparador", archivos: "Archivos", tareas: "Tareas",
 }
 
 // =================== PROJECTS LIST ===================
@@ -107,13 +107,19 @@ export function Projects() {
 function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: Project; onBack: () => void; isFull: boolean; canSeeGanancias: boolean }) {
   const { data, updateRow, deleteRow, addRow, setSection, setSelectedProviderId } = useApp()
   const goToProvider = (id: string) => { setSelectedProviderId(id); setSection("providers") }
-  const [tab, setTab] = useState<ProjectTab>("movimientos")
+  const [tab, setTab] = useState<ProjectTab>("pyl")
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteProject, setShowDeleteProject] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const projectTasks = data.tasks.filter(t => t.project_id === project.id)
   const pendingProjectTasks = projectTasks.filter(t => t.status !== "completada")
     .sort((a, b) => { const p: Record<string, number> = { alta: 0, media: 1, baja: 2 }; return (p[a.priority] ?? 1) - (p[b.priority] ?? 1) })
+
+  // Filter tabs based on permissions
+  const visibleTabs = (Object.keys(TAB_LABELS) as ProjectTab[]).filter(t => {
+    if (t === "pyl") return isFull && canSeeGanancias
+    return true
+  })
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
@@ -132,9 +138,6 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
           <Btn variant="ghost" size="sm" onClick={() => setShowDeleteProject(true)}><Trash2 size={14} className="text-red-500" /></Btn>
         </div>
       </div>
-
-      {/* Estado Financiero — consolidated */}
-      {isFull && canSeeGanancias && <BalancePanel project={project} />}
 
       {/* Tareas pendientes */}
       {pendingProjectTasks.length > 0 && (
@@ -157,12 +160,13 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
 
       {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto border-b border-border pb-0">
-        {(Object.keys(TAB_LABELS) as ProjectTab[]).map(t => (
+        {visibleTabs.map(t => (
           <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${tab === t ? "border-[#5F5A46] text-[#1C1A12]" : "border-transparent text-[#76746A] hover:text-[#1C1A12]"}`}>
             {TAB_LABELS[t]}{t === "tareas" && projectTasks.length > 0 ? ` (${projectTasks.length})` : ""}
           </button>
         ))}
       </div>
+      {tab === "pyl" && isFull && canSeeGanancias && <BalancePanel project={project} />}
       {tab === "desglose" && <DesgloseTab project={project} isFull={isFull} canSeeGanancias={canSeeGanancias} />}
       {tab === "comparador" && <ComparadorTab project={project} />}
       {tab === "movimientos" && <MovimientosTab project={project} />}
@@ -288,11 +292,6 @@ function BalancePanel({ project }: { project: Project }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 mb-1">
-        <TrendingUp size={16} className="text-[#5F5A46]" />
-        <h3 className="text-sm font-semibold text-[#5F5A46] uppercase tracking-wider">Estado Financiero</h3>
-      </div>
-
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         {/* Header: TC Blue + toggle */}
         {hasUSD && tcBlue && (
