@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useApp } from "@/lib/app-context"
 import { formatCurrency, formatUSD, projectTotalClientPrice, projectTotalCost, projectIncome, projectClientPriceByCurrency } from "@/lib/helpers"
-import { Stat, SecHead, Tag, HR } from "@/components/nitia-ui"
+import { Stat, SecHead, Tag, HR, Dual } from "@/components/nitia-ui"
 import { canSee } from "@/lib/seed-data"
 import { TrendingUp, FolderOpen, Users, DollarSign, CheckCircle, Clock, AlertCircle, CalendarClock, RefreshCw, Pencil, X } from "lucide-react"
 
@@ -60,11 +60,15 @@ export function Dashboard() {
           <Stat label="Proyectos Activos" value={activeProjects.length} sub={`de ${data.projects.length} totales`} />
         </div>
         {isFull && <>
-          <Stat label="Presupuesto Total" value={formatCurrency(totalBudget)} sub={totalBudgetBC.usd > 0 ? `+ ${formatUSD(totalBudgetBC.usd)}` : undefined} highlight />
+          <Stat label="Presupuesto Total" ars={totalBudget} usd={totalBudgetBC.usd} highlight />
           <div onClick={() => setSection("accounts")} className="cursor-pointer">
-            <Stat label="Saldo en Cuentas" value={formatCurrency(totalBalanceARS)} sub={totalBalanceUSD > 0 ? `+ ${formatUSD(totalBalanceUSD)}` : undefined} />
+            <Stat label="Saldo en Cuentas" ars={totalBalanceARS} usd={totalBalanceUSD} />
           </div>
-          <Stat label="Estimado por Cobrar" value={formatCurrency(Math.max(0, estimatedPending))} sub={`${formatCurrency(totalCollectedARS)} cobrado${totalCollectedUSD > 0 ? ` + ${formatUSD(totalCollectedUSD)}` : ""}`} />
+          <Stat label="Estimado por Cobrar" ars={Math.max(0, estimatedPending)} usd={totalCollectedUSD > 0 ? 0 : undefined} sub={(() => {
+            const parts = [formatCurrency(totalCollectedARS)]
+            if (totalCollectedUSD > 0) parts.push(formatUSD(totalCollectedUSD))
+            return `${parts.join(" · ")} cobrado`
+          })()} />
         </>}
       </div>
 
@@ -175,7 +179,10 @@ export function Dashboard() {
                 className="flex items-center justify-between py-3 border-b border-border last:border-0 cursor-pointer hover:bg-[#F7F5ED] -mx-2 px-2 rounded">
                 <div><h4 className="font-medium">{project.name}</h4><p className="text-sm text-muted-foreground">{project.client}</p></div>
                 <div className="flex items-center gap-3">
-                  {isFull && <span className="text-sm font-medium">{formatCurrency(total)}{totalBC.usd > 0 && <span className="text-[10px] text-blue-600 ml-1">+ {formatUSD(totalBC.usd)}</span>}</span>}
+                  {isFull && <div className="text-right">
+                    {total > 0 && <p className="text-sm font-medium">{formatCurrency(total)}</p>}
+                    {totalBC.usd > 0 && <p className="text-sm font-medium text-blue-700">{formatUSD(totalBC.usd)}</p>}
+                  </div>}
                   <Tag label={project.status || "activo"} color={project.status === "activo" ? "green" : "yellow"} />
                 </div>
               </div>
@@ -190,8 +197,8 @@ export function Dashboard() {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">Total mensual</span>
             <div className="text-right">
-              <span className="text-xl font-bold">{formatCurrency(fixedCostsTotal)}</span>
-              {fixedCostsTotalUSD > 0 && <span className="text-sm text-blue-600 ml-2">{formatUSD(fixedCostsTotalUSD)}</span>}
+              {fixedCostsTotal > 0 && <p className="text-xl font-bold">{formatCurrency(fixedCostsTotal)}</p>}
+              {fixedCostsTotalUSD > 0 && <p className="text-xl font-bold text-blue-700">{formatUSD(fixedCostsTotalUSD)}</p>}
             </div>
           </div>
         </div>

@@ -81,12 +81,12 @@ export const formatUSD = (n: number): string => `U$D ${new Intl.NumberFormat("es
 export const formatCurrencyAmount = (ca: CurrencyAmount): string => {
   const parts = [formatCurrency(ca.ars)]
   if (ca.usd > 0) parts.push(formatUSD(ca.usd))
-  return parts.join(" + ")
+  return parts.join(" · ")
 }
 
-// Smart dual currency display — treats both currencies equally
+// Smart dual currency display — no "+" sign
 export const dualAmount = (ars: number, usd: number): string => {
-  if (ars !== 0 && usd !== 0) return `${formatCurrency(ars)} + ${formatUSD(usd)}`
+  if (ars !== 0 && usd !== 0) return `${formatCurrency(ars)} · ${formatUSD(usd)}`
   if (usd !== 0) return formatUSD(usd)
   return formatCurrency(ars)
 }

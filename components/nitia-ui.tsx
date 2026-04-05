@@ -2,7 +2,25 @@
 
 import { forwardRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
+import { formatCurrency, formatUSD } from "@/lib/helpers"
 import { X, Download, Calendar } from "lucide-react"
+
+// =================== DUAL CURRENCY ===================
+/** Shows ARS and USD on separate lines with equal weight. Omits zero amounts. */
+export function Dual({ ars, usd, size = "md", className }: {
+  ars: number; usd: number; size?: "sm" | "md" | "lg"; className?: string
+}) {
+  const sizeMap = { sm: "text-sm", md: "text-base", lg: "text-lg" }
+  const s = sizeMap[size]
+  if (ars !== 0 && usd !== 0) return (
+    <div className={cn("space-y-0.5", className)}>
+      <p className={cn(s, "font-bold leading-tight")}>{formatCurrency(ars)}</p>
+      <p className={cn(s, "font-bold leading-tight text-blue-700")}>{formatUSD(usd)}</p>
+    </div>
+  )
+  if (usd !== 0) return <p className={cn(s, "font-bold text-blue-700", className)}>{formatUSD(usd)}</p>
+  return <p className={cn(s, "font-bold", className)}>{formatCurrency(ars)}</p>
+}
 
 // =================== TAG ===================
 const colorMap: Record<string, string> = {
@@ -148,15 +166,29 @@ export function FormTextarea({ label, value, onChange, placeholder, error, rows 
 }
 
 // =================== STAT ===================
-export function Stat({ label, value, change, changeType, highlight, sub, value2 }: {
-  label: string; value: string | number; change?: string; changeType?: "up" | "down"
+export function Stat({ label, value, change, changeType, highlight, sub, value2, ars, usd }: {
+  label: string; value?: string | number; change?: string; changeType?: "up" | "down"
   highlight?: boolean; sub?: string; value2?: string
+  /** Pass ars + usd for dual currency display (separate lines, equal weight) */
+  ars?: number; usd?: number
 }) {
+  const hasDual = ars !== undefined || usd !== undefined
+  const arsVal = ars ?? 0; const usdVal = usd ?? 0
   return (
     <div className={cn("p-4 rounded-lg border", highlight ? "bg-[#295E29] text-white border-[#295E29]" : "bg-card border-border")}>
       <p className={cn("text-sm mb-2", highlight ? "text-white/70" : "text-muted-foreground")}>{label}</p>
-      <p className={cn("text-2xl font-bold", highlight ? "text-white" : "text-foreground")}>{value}</p>
-      {value2 && <p className={cn("text-lg font-bold mt-0.5", highlight ? "text-white/90" : "text-blue-700")}>{value2}</p>}
+      {hasDual ? (
+        <div className="space-y-0.5">
+          {arsVal !== 0 && <p className={cn("text-xl font-bold leading-tight", highlight ? "text-white" : "text-foreground")}>{formatCurrency(arsVal)}</p>}
+          {usdVal !== 0 && <p className={cn("text-xl font-bold leading-tight", highlight ? "text-white/90" : "text-blue-700")}>{formatUSD(usdVal)}</p>}
+          {arsVal === 0 && usdVal === 0 && <p className={cn("text-xl font-bold", highlight ? "text-white" : "text-foreground")}>{formatCurrency(0)}</p>}
+        </div>
+      ) : (
+        <>
+          <p className={cn("text-2xl font-bold", highlight ? "text-white" : "text-foreground")}>{value}</p>
+          {value2 && <p className={cn("text-lg font-bold mt-0.5", highlight ? "text-white/90" : "text-blue-700")}>{value2}</p>}
+        </>
+      )}
       {sub && <p className={cn("text-xs mt-1", highlight ? "text-white/60" : "text-muted-foreground")}>{sub}</p>}
       {change && <p className={cn("text-xs mt-2", changeType === "up" ? "text-green-600" : "text-red-600")}>{change}</p>}
     </div>

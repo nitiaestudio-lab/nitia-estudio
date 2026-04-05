@@ -2,7 +2,7 @@
 
 import { useState, useRef, useMemo } from "react"
 import { useApp } from "@/lib/app-context"
-import { formatCurrency, formatDate, generateId, today, filterByDateRange } from "@/lib/helpers"
+import { formatCurrency, formatUSD, formatDate, generateId, today, filterByDateRange } from "@/lib/helpers"
 import { SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect, FormTextarea, EditableSelect, HR, Stat, PeriodFilter, type PeriodValue } from "@/components/nitia-ui"
 import type { Provider, ProviderDocument } from "@/lib/types"
 import { Plus, Phone, Mail, ArrowLeft, Trash2, Pencil, Upload, FileText, Download, Search, FolderOpen, Eye, FileSpreadsheet, ExternalLink, MapPin } from "lucide-react"
@@ -87,7 +87,8 @@ export function Providers() {
                 {prov.phone && <p className="flex items-center gap-1"><Phone size={10} />{prov.phone}</p>}
                 {prov.advance_percent && <p>Seña: {prov.advance_percent}%</p>}
               </div>
-              {(paidARS > 0 || paidUSD > 0) && <p className="text-sm text-red-600 mt-2 font-medium">Pagado: {formatCurrency(paidARS)}{paidUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(paidUSD)}` : ""}</p>}
+              {paidARS > 0 && <p className="text-sm text-red-600 mt-2 font-medium">Pagado: {formatCurrency(paidARS)}</p>}
+              {paidUSD > 0 && <p className="text-sm text-red-600 font-medium">Pagado: {formatUSD(paidUSD)}</p>}
             </div>
           )
         })}
@@ -233,9 +234,15 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
           <SecHead title="Resumen Financiero" />
           {/* Barra de progreso */}
           <div className="space-y-1">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Pagado: {formatCurrency(totalPaidSinSeña)}{totalPaidUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(totalPaidUSD)}` : ""}{señaPagada > 0 ? ` + seña ${formatCurrency(señaPagada)}` : ""}</span>
-              <span>Total: {formatCurrency(totalOwedAll)}{totalOwedAllUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(totalOwedAllUSD)}` : ""}</span>
+            <div className="space-y-0.5 text-xs text-muted-foreground">
+              <div className="flex justify-between">
+                <span>Pagado: {formatCurrency(totalPaidSinSeña)}{señaPagada > 0 ? ` (seña ${formatCurrency(señaPagada)})` : ""}</span>
+                <span>Total: {formatCurrency(totalOwedAll)}</span>
+              </div>
+              {(totalPaidUSD > 0 || totalOwedAllUSD > 0) && <div className="flex justify-between text-blue-700">
+                {totalPaidUSD > 0 && <span>Pagado: {formatUSD(totalPaidUSD)}</span>}
+                {totalOwedAllUSD > 0 && <span>Total: {formatUSD(totalOwedAllUSD)}</span>}
+              </div>}
             </div>
             <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all bg-green-500" style={{ width: `${totalOwedAll > 0 ? Math.min(((totalPaidSinSeña + señaPagada) / totalOwedAll) * 100, 100) : 0}%` }} />
@@ -245,21 +252,26 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
           {/* Deuda destacada */}
           <div className={`text-center p-3 rounded-lg ${totalDebt > 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
             <p className="text-xs text-muted-foreground mb-0.5">{totalDebt > 0 ? "Falta pagar" : "Estado"}</p>
-            <p className={`text-xl font-bold ${totalDebt > 0 ? "text-red-700" : "text-green-700"}`}>
-              {totalDebt > 0 ? formatCurrency(totalDebt) : "Al día ✓"}
-              {totalDebtUSD > 0 && <span className="text-sm font-normal ml-1">+ U$D {new Intl.NumberFormat("es-AR").format(totalDebtUSD)}</span>}
-            </p>
+            {totalDebt > 0 && <p className="text-xl font-bold text-red-700">{formatCurrency(totalDebt)}</p>}
+            {totalDebtUSD > 0 && <p className="text-lg font-bold text-red-700">{formatUSD(totalDebtUSD)}</p>}
+            {totalDebt <= 0 && totalDebtUSD <= 0 && <p className="text-xl font-bold text-green-700">Al día ✓</p>}
           </div>
           {(señaPagada > 0 || señaPagadaUSD > 0) && (
             <div className="flex justify-between items-center px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
               <span className="text-xs text-purple-700 font-medium">Seña pagada</span>
-              <span className="text-sm font-bold text-purple-700">{formatCurrency(señaPagada)}{señaPagadaUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(señaPagadaUSD)}` : ""}</span>
+              <div className="text-right">
+                <span className="text-sm font-bold text-purple-700">{formatCurrency(señaPagada)}</span>
+                {señaPagadaUSD > 0 && <span className="text-sm font-bold text-purple-700 ml-2">{formatUSD(señaPagadaUSD)}</span>}
+              </div>
             </div>
           )}
           {provider.advance_percent && (
             <div className="flex justify-between items-center px-2 text-xs text-muted-foreground">
               <span>Seña requerida ({provider.advance_percent}%)</span>
-              <span>{formatCurrency(totalOwedAll * (provider.advance_percent / 100))}{totalOwedAllUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(totalOwedAllUSD * (provider.advance_percent / 100))}` : ""}</span>
+              <div className="text-right">
+                <span>{formatCurrency(totalOwedAll * (provider.advance_percent / 100))}</span>
+                {totalOwedAllUSD > 0 && <span className="text-blue-700 ml-2">{formatUSD(totalOwedAllUSD * (provider.advance_percent / 100))}</span>}
+              </div>
             </div>
           )}
           <div className="text-xs text-muted-foreground text-center">{movements.length} movimiento{movements.length !== 1 ? "s" : ""} registrado{movements.length !== 1 ? "s" : ""}</div>
@@ -277,13 +289,25 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                   className="text-sm font-medium text-blue-600 hover:underline flex items-center gap-1">
                   {bp.project.name}<ExternalLink size={10} />
                 </button>
-                <div className="flex items-center gap-4 text-sm flex-wrap justify-end">
-                  <span className="text-muted-foreground">Comprometido: {formatCurrency(bp.totalOwed)}{bp.totalOwedUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(bp.totalOwedUSD)}` : ""}</span>
-                  <span className="text-green-600">Pagado: {formatCurrency(bp.paid)}{bp.paidUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(bp.paidUSD)}` : ""}</span>
-                  {(bp.seña > 0 || bp.señaUSD > 0) && <span className="text-purple-600">Seña: {formatCurrency(bp.seña)}{bp.señaUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(bp.señaUSD)}` : ""}</span>}
-                  <span className={`font-bold ${bp.pending > 0 || bp.pendingUSD > 0 ? "text-red-600" : "text-green-600"}`}>
-                    {bp.pending > 0 || bp.pendingUSD > 0 ? `Pendiente: ${formatCurrency(bp.pending)}${bp.pendingUSD > 0 ? ` + U$D ${new Intl.NumberFormat("es-AR").format(bp.pendingUSD)}` : ""}` : "Al día ✓"}
-                  </span>
+                <div className="text-sm space-y-0.5 text-right">
+                  {/* ARS row */}
+                  <div className="flex items-center gap-3 justify-end flex-wrap">
+                    <span className="text-muted-foreground">Comp: {formatCurrency(bp.totalOwed)}</span>
+                    <span className="text-green-600">Pagado: {formatCurrency(bp.paid)}</span>
+                    {bp.seña > 0 && <span className="text-purple-600">Seña: {formatCurrency(bp.seña)}</span>}
+                    <span className={`font-bold ${bp.pending > 0 ? "text-red-600" : "text-green-600"}`}>
+                      {bp.pending > 0 ? `Pend: ${formatCurrency(bp.pending)}` : "✓"}
+                    </span>
+                  </div>
+                  {/* USD row */}
+                  {(bp.totalOwedUSD > 0 || bp.paidUSD > 0) && <div className="flex items-center gap-3 justify-end flex-wrap text-blue-700">
+                    <span>Comp: {formatUSD(bp.totalOwedUSD)}</span>
+                    <span>Pagado: {formatUSD(bp.paidUSD)}</span>
+                    {bp.señaUSD > 0 && <span className="text-purple-600">Seña: {formatUSD(bp.señaUSD)}</span>}
+                    <span className={`font-bold ${bp.pendingUSD > 0 ? "text-red-600" : "text-green-600"}`}>
+                      {bp.pendingUSD > 0 ? `Pend: ${formatUSD(bp.pendingUSD)}` : "✓"}
+                    </span>
+                  </div>}
                 </div>
               </div>
             ))}

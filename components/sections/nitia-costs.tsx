@@ -128,10 +128,10 @@ export function NitiaCosts() {
       </div>
 
       <div className="grid md:grid-cols-4 gap-4">
-        <Stat label="Total Mensual" value={formatCurrency(totalActive)} sub={totalActiveUSD > 0 ? `+ ${formatUSD(totalActiveUSD)}` : undefined} highlight />
+        <Stat label="Total Mensual" ars={totalActive} usd={totalActiveUSD} highlight />
         <Stat label="Costos Activos" value={String(activeCosts.length)} />
         <Stat label="Pagados este mes" value={`${paidCount}/${activeCosts.length}`} sub={formatCurrency(paidTotal)} />
-        <Stat label="Por Socia (50%)" value={formatCurrency(totalActive / 2)} sub={totalActiveUSD > 0 ? `+ ${formatUSD(totalActiveUSD / 2)}` : undefined} />
+        <Stat label="Por Socia (50%)" ars={totalActive / 2} usd={totalActiveUSD / 2} />
       </div>
 
       {/* Costs by Category with payment checkboxes */}
@@ -235,7 +235,10 @@ export function NitiaCosts() {
         <HR />
         <div className="flex justify-between text-sm">
           <span className="font-semibold text-muted-foreground">Total mensual</span>
-          <span className="font-bold">{formatCurrency(totalActive)}{totalActiveUSD > 0 && <span className="text-blue-600 ml-1 text-xs">+ {formatUSD(totalActiveUSD)}</span>}</span>
+          <div className="text-right">
+            <p className="font-bold">{formatCurrency(totalActive)}</p>
+            {totalActiveUSD > 0 && <p className="font-bold text-blue-700">{formatUSD(totalActiveUSD)}</p>}
+          </div>
         </div>
       </div>
 

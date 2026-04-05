@@ -15,7 +15,7 @@ import {
 } from "@/lib/export-utils"
 import {
   SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect, FormTextarea,
-  Stat, HR, PeriodFilter, type PeriodValue, ConfirmDeleteModal, EditableSelect,
+  Stat, HR, PeriodFilter, type PeriodValue, ConfirmDeleteModal, EditableSelect, Dual,
 } from "@/components/nitia-ui"
 import { canSee } from "@/lib/seed-data"
 import type { Project, ProjectItem, ProjectFile, Movement, QuoteComparison, Category } from "@/lib/types"
@@ -60,15 +60,19 @@ export function Projects() {
         {(() => {
           const totalARS = data.projects.reduce((s, p) => s + projectClientPriceByCurrency(p, data.projectItems, data.quoteComparisons).ars, 0)
           const totalUSD = data.projects.reduce((s, p) => s + projectClientPriceByCurrency(p, data.projectItems, data.quoteComparisons).usd, 0)
-          return <Stat label="Total Presupuestado" value={dualAmount(totalARS, totalUSD)} highlight />
+          return <Stat label="Total Presupuestado" ars={totalARS} usd={totalUSD} highlight />
         })()}
-        <Stat label="Total Cobrado" value={formatCurrency(data.movements.filter(m => m.project_id && m.type === "ingreso").reduce((s, m) => s + m.amount, 0))} />
+        {(() => {
+          const cobARS = data.movements.filter(m => m.project_id && m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+          const cobUSD = data.movements.filter(m => m.project_id && m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+          return <Stat label="Total Cobrado" ars={cobARS} usd={cobUSD} />
+        })()}
         <Stat label="Pausados" value={data.projects.filter(p => p.status === "pausado").length} />
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map(project => {
           const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
-          const income = projectIncome(data.movements, project.id)
+          const incomeARS = data.movements.filter(m => m.project_id === project.id && m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
           const incomeUSD = data.movements.filter(m => m.project_id === project.id && m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
           return (<div key={project.id} onClick={() => setSelectedProjectId(project.id)}
             className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:shadow-md transition-shadow">
@@ -77,9 +81,15 @@ export function Projects() {
               <Tag label={project.status || "activo"} color={project.status === "activo" ? "green" : project.status === "pausado" ? "yellow" : "gray"} />
             </div>
             <p className="text-sm text-muted-foreground mb-3">{project.client}</p>
-            {isFull && <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Presup: <span className="font-medium">{dualAmount(clientBC.ars, clientBC.usd)}</span></span>
-              <span className="text-green-600">Cobrado: <span className="font-medium">{dualAmount(income, incomeUSD)}</span></span>
+            {isFull && <div className="space-y-1 text-sm">
+              {(clientBC.ars > 0 || incomeARS > 0) && <div className="flex justify-between">
+                <span className="text-muted-foreground">Presup: <span className="font-medium">{formatCurrency(clientBC.ars)}</span></span>
+                <span className="text-green-600">Cobrado: <span className="font-medium">{formatCurrency(incomeARS)}</span></span>
+              </div>}
+              {(clientBC.usd > 0 || incomeUSD > 0) && <div className="flex justify-between">
+                <span className="text-blue-700">Presup: <span className="font-medium">{formatUSD(clientBC.usd)}</span></span>
+                <span className="text-green-600">Cobrado: <span className="font-medium">{formatUSD(incomeUSD)}</span></span>
+              </div>}
             </div>}
           </div>)
         })}
@@ -153,17 +163,23 @@ function ProjectDetail({ project, onBack, isFull, canSeeGanancias }: { project: 
                 <button onClick={() => setEditingBudget(false)} className="text-red-500 hover:bg-red-50 p-1 rounded"><X size={16} /></button>
               </div>
             ) : (
-              <p className="text-lg font-bold cursor-pointer hover:text-[#5F5A46]" onClick={() => { setBudgetValue(String(budgetFinal ?? totalClient)); setEditingBudget(true) }}>
-                {dualAmount(budgetFinal || totalClient, totalClientUSD)}
-              </p>
+              <div className="cursor-pointer hover:text-[#5F5A46]" onClick={() => { setBudgetValue(String(budgetFinal ?? totalClient)); setEditingBudget(true) }}>
+                <Dual ars={budgetFinal || totalClient} usd={totalClientUSD} size="lg" />
+              </div>
             )}
             <p className="text-[10px] text-muted-foreground mt-1">
-              {budgetFinal ? `Sugerido: ${dualAmount(totalClient, totalClientUSD)}` : "Click para editar"}
+              {budgetFinal ? "Click para editar" : "Click para fijar"}
             </p>
           </div>
-          <Stat label="Cobrado" value={dualAmount(income, incomeUSD)} sub={`${dualAmount((budgetFinal || totalClient) - income, totalClientUSD - incomeUSD)} pendiente`} />
-          <Stat label="Pagado proveedores" value={dualAmount(expenses, expensesUSD)} />
-          {canSeeGanancias && <Stat label="Ganancia" value={dualAmount(totalGanancia, totalGananciaUSD)} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
+          <Stat label="Cobrado" ars={income} usd={incomeUSD} sub={(() => {
+            const pARS = (budgetFinal || totalClient) - income; const pUSD = totalClientUSD - incomeUSD
+            const parts: string[] = []
+            if (pARS !== 0) parts.push(formatCurrency(pARS))
+            if (pUSD !== 0) parts.push(formatUSD(pUSD))
+            return parts.length > 0 ? `${parts.join(" · ")} pend.` : "Al día"
+          })()} />
+          <Stat label="Pagado proveedores" ars={expenses} usd={expensesUSD} />
+          {canSeeGanancias && <Stat label="Ganancia" ars={totalGanancia} usd={totalGananciaUSD} sub={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(0) : 0}% margen`} highlight />}
         </div>
       </div>}
 
@@ -299,17 +315,22 @@ function BalancePanel({ project }: { project: Project }) {
             {clienteDebeARS > 0 || clienteDebeUSD > 0 ? <AlertCircle size={14} className="text-amber-500" /> : <CheckCircle2 size={14} className="text-green-600" />}
           </div>
           <Bar value={incomeARS} max={totalConIVA_ARS} color={incomeARS >= totalConIVA_ARS ? "green" : "amber"} />
-          <div className="flex justify-between text-sm mt-2">
-            <span className="text-muted-foreground">Total c/IVA: <span className="font-medium text-foreground">{dualAmount(totalConIVA_ARS, totalConIVA_USD)}</span></span>
-            <span className="text-green-600 font-medium">{dualAmount(incomeARS, incomeUSD)}</span>
-          </div>
-          <p className={`text-sm font-bold mt-1 ${clienteDebeARS > 0 || clienteDebeUSD > 0 ? "text-amber-600" : "text-green-600"}`}>
-            {clienteDebeARS > 0 || clienteDebeUSD > 0
-              ? `Debe: ${dualAmount(clienteDebeARS, clienteDebeUSD)}`
-              : clienteDebeARS < 0 || clienteDebeUSD < 0
-                ? `De más: ${dualAmount(Math.abs(clienteDebeARS), Math.abs(clienteDebeUSD))}`
-                : "Al día ✓"}
-          </p>
+          {/* ARS row */}
+          {(totalConIVA_ARS > 0 || incomeARS > 0) && <div className="flex justify-between text-sm mt-2">
+            <span className="text-muted-foreground">c/IVA: <span className="font-medium text-foreground">{formatCurrency(totalConIVA_ARS)}</span></span>
+            <span className="text-green-600 font-medium">{formatCurrency(incomeARS)}</span>
+          </div>}
+          {(totalConIVA_ARS > 0 || incomeARS > 0) && <p className={`text-xs font-bold ${clienteDebeARS > 0 ? "text-amber-600" : clienteDebeARS < 0 ? "text-green-600" : "text-green-600"}`}>
+            {clienteDebeARS > 0 ? `Debe: ${formatCurrency(clienteDebeARS)}` : clienteDebeARS < 0 ? `De más: ${formatCurrency(Math.abs(clienteDebeARS))}` : "Al día ✓"}
+          </p>}
+          {/* USD row */}
+          {(totalConIVA_USD > 0 || incomeUSD > 0) && <div className="flex justify-between text-sm mt-2 pt-2 border-t border-border/50">
+            <span className="text-blue-700">c/IVA: <span className="font-medium">{formatUSD(totalConIVA_USD)}</span></span>
+            <span className="text-green-600 font-medium">{formatUSD(incomeUSD)}</span>
+          </div>}
+          {(totalConIVA_USD > 0 || incomeUSD > 0) && <p className={`text-xs font-bold ${clienteDebeUSD > 0 ? "text-amber-600" : clienteDebeUSD < 0 ? "text-green-600" : "text-green-600"}`}>
+            {clienteDebeUSD > 0 ? `Debe: ${formatUSD(clienteDebeUSD)}` : clienteDebeUSD < 0 ? `De más: ${formatUSD(Math.abs(clienteDebeUSD))}` : "Al día ✓"}
+          </p>}
         </div>
 
         <div className="bg-card border border-border rounded-xl p-4">
@@ -318,30 +339,46 @@ function BalancePanel({ project }: { project: Project }) {
             {provDebeARS > 0 || provDebeUSD > 0 ? <AlertCircle size={14} className="text-red-500" /> : <CheckCircle2 size={14} className="text-green-600" />}
           </div>
           <Bar value={expensesARS} max={costBC.ars} color={expensesARS >= costBC.ars ? "green" : "red"} />
-          <div className="flex justify-between text-sm mt-2">
-            <span className="text-muted-foreground">Costo: <span className="font-medium text-foreground">{dualAmount(costBC.ars, costBC.usd)}</span></span>
-            <span className="text-red-600 font-medium">{dualAmount(expensesARS, expensesUSD)}</span>
-          </div>
-          <p className={`text-sm font-bold mt-1 ${provDebeARS > 0 || provDebeUSD > 0 ? "text-red-600" : "text-green-600"}`}>
-            {provDebeARS > 0 || provDebeUSD > 0
-              ? `Debemos: ${dualAmount(provDebeARS, provDebeUSD)}`
-              : provDebeARS < 0 || provDebeUSD < 0
-                ? `De más: ${dualAmount(Math.abs(provDebeARS), Math.abs(provDebeUSD))}`
-                : "Al día ✓"}
-          </p>
+          {/* ARS row */}
+          {(costBC.ars > 0 || expensesARS > 0) && <div className="flex justify-between text-sm mt-2">
+            <span className="text-muted-foreground">Costo: <span className="font-medium text-foreground">{formatCurrency(costBC.ars)}</span></span>
+            <span className="text-red-600 font-medium">{formatCurrency(expensesARS)}</span>
+          </div>}
+          {(costBC.ars > 0 || expensesARS > 0) && <p className={`text-xs font-bold ${provDebeARS > 0 ? "text-red-600" : "text-green-600"}`}>
+            {provDebeARS > 0 ? `Falta pagar: ${formatCurrency(provDebeARS)}` : provDebeARS < 0 ? `De más: ${formatCurrency(Math.abs(provDebeARS))}` : "Al día ✓"}
+          </p>}
+          {/* USD row */}
+          {(costBC.usd > 0 || expensesUSD > 0) && <div className="flex justify-between text-sm mt-2 pt-2 border-t border-border/50">
+            <span className="text-blue-700">Costo: <span className="font-medium">{formatUSD(costBC.usd)}</span></span>
+            <span className="text-red-600 font-medium">{formatUSD(expensesUSD)}</span>
+          </div>}
+          {(costBC.usd > 0 || expensesUSD > 0) && <p className={`text-xs font-bold ${provDebeUSD > 0 ? "text-red-600" : "text-green-600"}`}>
+            {provDebeUSD > 0 ? `Falta pagar: ${formatUSD(provDebeUSD)}` : provDebeUSD < 0 ? `De más: ${formatUSD(Math.abs(provDebeUSD))}` : "Al día ✓"}
+          </p>}
         </div>
       </div>
 
-      {/* Ganancia — compacta */}
-      <div className="bg-[#295E29] text-white rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1">
-        <span className="text-xs text-white/60">Ganancia</span>
-        <span className="font-bold">{dualAmount(ganBC.ars, ganBC.usd)}</span>
-        <span className="text-xs text-white/50">IVA -{dualAmount(ivaGananciaARS, ivaGananciaUSD)}</span>
-        <span className="text-xs text-white/60">Neta</span>
-        <span className="font-bold">{dualAmount(gananciaNetaARS, gananciaNetaUSD)}</span>
-        <span className="text-xs text-white/60">÷{pc}</span>
-        <span className="font-bold">{dualAmount(gananciaIndivARS, gananciaIndivUSD)}</span>
-        <span className="text-xs text-white/50 ml-auto">{clientBC.ars > 0 ? ((ganBC.ars / clientBC.ars) * 100).toFixed(0) : 0}% margen</span>
+      {/* Ganancia — separated by currency */}
+      <div className="bg-[#295E29] text-white rounded-xl px-4 py-3 space-y-1">
+        {ganBC.ars !== 0 && <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          <span className="text-xs text-white/60">Ganancia</span>
+          <span className="font-bold">{formatCurrency(ganBC.ars)}</span>
+          <span className="text-xs text-white/50">IVA -{formatCurrency(ivaGananciaARS)}</span>
+          <span className="text-xs text-white/60">Neta</span>
+          <span className="font-bold">{formatCurrency(gananciaNetaARS)}</span>
+          <span className="text-xs text-white/60">÷{pc}</span>
+          <span className="font-bold">{formatCurrency(gananciaIndivARS)}</span>
+          <span className="text-xs text-white/50 ml-auto">{clientBC.ars > 0 ? ((ganBC.ars / clientBC.ars) * 100).toFixed(0) : 0}% margen</span>
+        </div>}
+        {ganBC.usd !== 0 && <div className="flex flex-wrap items-center gap-x-5 gap-y-1 pt-1 border-t border-white/20">
+          <span className="text-xs text-white/60">Ganancia</span>
+          <span className="font-bold text-blue-200">{formatUSD(ganBC.usd)}</span>
+          <span className="text-xs text-white/50">IVA -{formatUSD(ivaGananciaUSD)}</span>
+          <span className="text-xs text-white/60">Neta</span>
+          <span className="font-bold text-blue-200">{formatUSD(gananciaNetaUSD)}</span>
+          <span className="text-xs text-white/60">÷{pc}</span>
+          <span className="font-bold text-blue-200">{formatUSD(gananciaIndivUSD)}</span>
+        </div>}
       </div>
 
       {/* TC Blue estimation */}
@@ -527,9 +564,9 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
             {(si.length > 0 || sq.length > 0) && (() => {
               const subARS = si.filter(i => i.currency !== "USD").reduce((s, i) => s + i.client_price, 0) + sq.filter(q => q.currency !== "USD").reduce((s, q) => s + quoteClientPrice(q), 0)
               const subUSD = si.filter(i => i.currency === "USD").reduce((s, i) => s + i.client_price, 0) + sq.filter(q => q.currency === "USD").reduce((s, q) => s + quoteClientPrice(q), 0)
-              return <div className="flex justify-between pt-3 mt-2 border-t border-border text-sm">
-                <span className="font-semibold text-muted-foreground">Subtotal</span>
-                <span className="font-semibold">{dualAmount(subARS, subUSD)}</span>
+              return <div className="pt-3 mt-2 border-t border-border text-sm space-y-0.5">
+                {subARS > 0 && <div className="flex justify-between"><span className="font-semibold text-muted-foreground">Subtotal</span><span className="font-semibold">{formatCurrency(subARS)}</span></div>}
+                {subUSD > 0 && <div className="flex justify-between"><span className="font-semibold text-blue-700">{subARS > 0 ? "" : "Subtotal"}</span><span className="font-semibold text-blue-700">{formatUSD(subUSD)}</span></div>}
               </div>
             })()}
           </div>
@@ -730,9 +767,18 @@ function ComparadorTab({ project }: { project: Project }) {
           <div className="bg-[#295E29] text-white rounded-xl p-4 space-y-2 sticky bottom-4">
             <h4 className="font-semibold text-sm text-white/80">Total Seleccionado ({selected.length} items)</h4>
             <div className="grid grid-cols-3 gap-4">
-              <div><p className="text-xs text-white/60">Costo</p><p className="text-lg font-bold">{dualAmount(costARS, costUSD)}</p></div>
-              <div><p className="text-xs text-white/60">Precio</p><p className="text-lg font-bold">{dualAmount(priceARS, priceUSD)}</p></div>
-              <div><p className="text-xs text-white/60">Ganancia</p><p className="text-lg font-bold">{dualAmount(ganARS, ganUSD)}</p></div>
+              <div><p className="text-xs text-white/60">Costo</p>
+                {costARS > 0 && <p className="text-lg font-bold">{formatCurrency(costARS)}</p>}
+                {costUSD > 0 && <p className="text-lg font-bold text-blue-200">{formatUSD(costUSD)}</p>}
+              </div>
+              <div><p className="text-xs text-white/60">Precio</p>
+                {priceARS > 0 && <p className="text-lg font-bold">{formatCurrency(priceARS)}</p>}
+                {priceUSD > 0 && <p className="text-lg font-bold text-blue-200">{formatUSD(priceUSD)}</p>}
+              </div>
+              <div><p className="text-xs text-white/60">Ganancia</p>
+                {ganARS !== 0 && <p className="text-lg font-bold">{formatCurrency(ganARS)}</p>}
+                {ganUSD !== 0 && <p className="text-lg font-bold text-blue-200">{formatUSD(ganUSD)}</p>}
+              </div>
             </div>
             <Btn variant="soft" size="sm" className="bg-white/20 text-white hover:bg-white/30" onClick={async () => {
               for (const q of selected) {
@@ -847,13 +893,16 @@ function MovimientosTab({ project }: { project: Project }) {
       <div className="bg-card border border-border rounded-xl p-4">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Ingresos</p>
-            <p className="text-base font-semibold text-green-700">{dualAmount(totalIngresos, usdIngresos)}</p>
+            <p className="text-base font-semibold text-green-700">{formatCurrency(totalIngresos)}</p>
+            {usdIngresos > 0 && <p className="text-sm font-semibold text-green-600">{formatUSD(usdIngresos)}</p>}
           </div>
           <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Egresos</p>
-            <p className="text-base font-semibold text-red-700">{dualAmount(totalEgresos, usdEgresos)}</p>
+            <p className="text-base font-semibold text-red-700">{formatCurrency(totalEgresos)}</p>
+            {usdEgresos > 0 && <p className="text-sm font-semibold text-red-600">{formatUSD(usdEgresos)}</p>}
           </div>
           <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Balance</p>
-            <p className={`text-base font-semibold ${balance >= 0 ? "text-foreground" : "text-amber-700"}`}>{dualAmount(balance, usdBalance)}</p>
+            <p className={`text-base font-semibold ${balance >= 0 ? "text-foreground" : "text-amber-700"}`}>{formatCurrency(balance)}</p>
+            {usdMovs.length > 0 && <p className={`text-sm font-semibold ${usdBalance >= 0 ? "text-blue-700" : "text-amber-600"}`}>{formatUSD(usdBalance)}</p>}
           </div>
         </div>
         {usdMovs.length > 0 && dolarBlue && (
@@ -1062,12 +1111,17 @@ function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit
   const projectTsk = data.tasks.filter(t => t.project_id === project.id)
   const projectFls = data.projectFiles.filter(f => f.project_id === project.id)
   const budgetFinal = project.budget_final ?? totalClient
-  const fmtWithUSD = dualAmount
-
   const InfoRow = ({ label, value, color }: { label: string; value: string; color?: string }) => (
     <div className="flex justify-between py-2 border-b border-border/30 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className={`text-sm font-medium ${color || ""}`}>{value}</span>
+    </div>
+  )
+  /** Dual currency info row — shows ARS and USD on separate lines */
+  const DualInfoRow = ({ label, ars, usd, color }: { label: string; ars: number; usd: number; color?: string }) => (
+    <div className="py-2 border-b border-border/30 last:border-0 space-y-0.5">
+      {ars !== 0 && <div className="flex justify-between"><span className="text-sm text-muted-foreground">{label}</span><span className={`text-sm font-medium ${color || ""}`}>{formatCurrency(ars)}</span></div>}
+      {usd !== 0 && <div className="flex justify-between"><span className="text-sm text-blue-700">{ars === 0 ? label : ""}</span><span className={`text-sm font-medium text-blue-700`}>{formatUSD(usd)}</span></div>}
     </div>
   )
 
@@ -1099,13 +1153,13 @@ function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit
         {/* Financial summary */}
         {isFull && <div className="bg-[#F7F5ED] rounded-xl p-4">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Resumen Financiero</h4>
-          <InfoRow label="Presupuesto" value={fmtWithUSD(budgetFinal, totalClientUSD)} />
-          <InfoRow label="Cobrado" value={fmtWithUSD(income, incomeUSD)} color="text-green-600" />
-          <InfoRow label="Pendiente de cobro" value={formatCurrency(budgetFinal - income)} color={budgetFinal - income > 0 ? "text-amber-600" : "text-green-600"} />
-          <InfoRow label="Pagado a proveedores" value={fmtWithUSD(expenses, expensesUSD)} color="text-red-600" />
+          <DualInfoRow label="Presupuesto" ars={budgetFinal} usd={totalClientUSD} />
+          <DualInfoRow label="Cobrado" ars={income} usd={incomeUSD} color="text-green-600" />
+          <DualInfoRow label="Pend. de cobro" ars={budgetFinal - income} usd={totalClientUSD - incomeUSD} color="text-amber-600" />
+          <DualInfoRow label="Pagado proveedores" ars={expenses} usd={expensesUSD} color="text-red-600" />
           {canSeeGanancias && <>
-            <InfoRow label="Costo total" value={fmtWithUSD(totalCost, totalCostUSD)} />
-            <InfoRow label="Ganancia bruta" value={fmtWithUSD(totalGanancia, totalGananciaUSD)} color="text-green-700" />
+            <DualInfoRow label="Costo total" ars={totalCost} usd={totalCostUSD} />
+            <DualInfoRow label="Ganancia bruta" ars={totalGanancia} usd={totalGananciaUSD} color="text-green-700" />
             <InfoRow label="Margen" value={`${totalClient > 0 ? ((totalGanancia / totalClient) * 100).toFixed(1) : 0}%`} />
           </>}
         </div>}
@@ -1139,18 +1193,32 @@ function ProjectFormModal({ project, onClose, onSave }: { project?: Project; onC
   const [name, setName] = useState(project?.name ?? ""); const [client, setClient] = useState(project?.client ?? ""); const [address, setAddress] = useState(project?.address ?? "")
   const [type, setType] = useState(project?.type ?? "interiorismo"); const [status, setStatus] = useState(project?.status ?? "activo")
   const [email, setEmail] = useState(project?.client_email ?? ""); const [phone, setPhone] = useState(project?.client_phone ?? ""); const [pc, setPc] = useState(String(project?.partner_count ?? "2"))
+  const [mainCur, setMainCur] = useState<"ARS" | "USD">(project?.main_currency ?? "ARS")
   return (<Modal isOpen={true} title={project ? "Editar Proyecto" : "Nuevo Proyecto"} onClose={onClose} size="lg">
     <form onSubmit={e => { e.preventDefault(); onSave({ id: project?.id ?? generateId(), name, client, address, type, status, margin: project?.margin ?? 1,
-      client_email: email || null, client_phone: phone || null, partner_count: parseInt(pc) || 2,
+      client_email: email || null, client_phone: phone || null, partner_count: parseInt(pc) || 2, main_currency: mainCur,
       iva_cliente_pct: project?.iva_cliente_pct ?? 21, iva_ganancia_pct: project?.iva_ganancia_pct ?? 10.5,
       sena_proveedor_pct: project?.sena_proveedor_pct ?? 60, sena_cliente_pct: project?.sena_cliente_pct ?? 50,
       created_at: project?.created_at ?? new Date().toISOString() })}} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><FormInput label="Nombre" value={name} onChange={setName} /><FormInput label="Cliente" value={client} onChange={setClient} /></div>
       <FormInput label="Dirección" value={address} onChange={setAddress} />
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <FormSelect label="Tipo" value={type || ""} onChange={setType} options={[{ value: "arquitectura", label: "Arquitectura" }, { value: "interiorismo", label: "Interiorismo" }, { value: "ambos", label: "Ambos" }]} />
         <FormSelect label="Estado" value={status || ""} onChange={setStatus} options={[{ value: "activo", label: "Activo" }, { value: "pausado", label: "Pausado" }, { value: "finalizado", label: "Finalizado" }]} />
-        <FormInput label="Socias" type="number" value={pc} onChange={setPc} /></div>
+        <FormInput label="Socias" type="number" value={pc} onChange={setPc} />
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-foreground">Moneda principal</label>
+          <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+            {(["ARS", "USD"] as const).map(cur => (
+              <button key={cur} type="button" onClick={() => setMainCur(cur)}
+                className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${mainCur === cur ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A] hover:bg-[#F0EDE4]"}`}>
+                {cur === "ARS" ? "$ Pesos" : "U$D Dólares"}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground">Define la moneda base del presupuesto</p>
+        </div>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><FormInput label="Email" type="email" value={email} onChange={setEmail} /><FormInput label="Teléfono" value={phone} onChange={setPhone} /></div>
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!name || !client}>{project ? "Guardar" : "Crear"}</Btn></div>
     </form>
@@ -1358,18 +1426,26 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
     const paidUSD = provMovs.filter(m => m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
     const debtARS = owedARS - paidARS
     const debtUSD = owedUSD - paidUSD
-    const fmtDual = dualAmount
     if (!prov) return null
     return (
       <div className="bg-[#F7F5ED] rounded-lg p-3 space-y-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase">Deuda con {prov.name}</p>
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Comprometido: {fmtDual(owedARS, owedUSD)}</span>
-          <span className="text-green-600">Pagado: {fmtDual(paidARS, paidUSD)}</span>
-        </div>
-        <p className={`text-sm font-bold ${(debtARS > 0 || debtUSD > 0) ? "text-red-600" : "text-green-600"}`}>
-          {(debtARS > 0 || debtUSD > 0) ? `Pendiente: ${fmtDual(debtARS, debtUSD)}` : "Al día ✓"}
-        </p>
+        {/* ARS line */}
+        {(owedARS > 0 || paidARS > 0) && <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Comp: <span className="font-medium">{formatCurrency(owedARS)}</span></span>
+          <span className="text-green-600">Pagado: {formatCurrency(paidARS)}</span>
+        </div>}
+        {(owedARS > 0 || paidARS > 0) && <p className={`text-xs font-bold ${debtARS > 0 ? "text-red-600" : "text-green-600"}`}>
+          {debtARS > 0 ? `Falta pagar: ${formatCurrency(debtARS)}` : "Al día ✓"}
+        </p>}
+        {/* USD line */}
+        {(owedUSD > 0 || paidUSD > 0) && <div className="flex justify-between text-sm pt-1 border-t border-border/50">
+          <span className="text-blue-700">Comp: <span className="font-medium">{formatUSD(owedUSD)}</span></span>
+          <span className="text-green-600">Pagado: {formatUSD(paidUSD)}</span>
+        </div>}
+        {(owedUSD > 0 || paidUSD > 0) && <p className={`text-xs font-bold ${debtUSD > 0 ? "text-red-600" : "text-green-600"}`}>
+          {debtUSD > 0 ? `Falta pagar: ${formatUSD(debtUSD)}` : "Al día ✓"}
+        </p>}
         {(items.length > 0 || quotes.length > 0) && (
           <div className="border-t border-border pt-2 space-y-1">
             <p className="text-[10px] text-muted-foreground uppercase">Ítems de este proveedor:</p>
