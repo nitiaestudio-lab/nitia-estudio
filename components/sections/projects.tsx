@@ -240,11 +240,11 @@ function BalancePanel({ project }: { project: Project }) {
   const ivaGan = project.iva_ganancia_pct ?? 10.5
   const sCliPct = project.sena_cliente_pct ?? 50
 
-  // Dual-currency IVA and totals
+  // Dual-currency IVA and totals — USD nunca lleva IVA
   const ivaClienteARS = calcIVACliente(clientBC.ars, ivaCli)
-  const ivaClienteUSD = calcIVACliente(clientBC.usd, ivaCli)
+  const ivaClienteUSD = 0
   const totalConIVA_ARS = clientBC.ars + ivaClienteARS
-  const totalConIVA_USD = clientBC.usd + ivaClienteUSD
+  const totalConIVA_USD = clientBC.usd // USD sin IVA
 
   // Split movements by currency
   const projMovs = data.movements.filter(m => m.project_id === project.id)
@@ -259,11 +259,11 @@ function BalancePanel({ project }: { project: Project }) {
   const provDebeARS = costBC.ars - expensesARS
   const provDebeUSD = costBC.usd - expensesUSD
 
-  // Dual-currency ganancia
+  // Dual-currency ganancia — USD sin IVA
   const ivaGananciaARS = calcIVAGanancia(ganBC.ars, ivaGan)
-  const ivaGananciaUSD = calcIVAGanancia(ganBC.usd, ivaGan)
+  const ivaGananciaUSD = 0
   const gananciaNetaARS = ganBC.ars - ivaGananciaARS
-  const gananciaNetaUSD = ganBC.usd - ivaGananciaUSD
+  const gananciaNetaUSD = ganBC.usd // USD = ganancia neta directa
   const gananciaIndivARS = calcGananciaIndividual(gananciaNetaARS, pc)
   const gananciaIndivUSD = calcGananciaIndividual(gananciaNetaUSD, pc)
 
@@ -328,9 +328,9 @@ function BalancePanel({ project }: { project: Project }) {
           {(totalConIVA_ARS > 0 || incomeARS > 0) && <p className={`text-xs font-bold ${clienteDebeARS > 0 ? "text-amber-600" : clienteDebeARS < 0 ? "text-green-600" : "text-green-600"}`}>
             {clienteDebeARS > 0 ? `Debe: ${formatCurrency(clienteDebeARS)}` : clienteDebeARS < 0 ? `De más: ${formatCurrency(Math.abs(clienteDebeARS))}` : "Al día ✓"}
           </p>}
-          {/* USD row */}
+          {/* USD row — sin IVA */}
           {(totalConIVA_USD > 0 || incomeUSD > 0) && <div className="flex justify-between text-sm mt-2 pt-2 border-t border-border/50">
-            <span className="text-blue-700">c/IVA: <span className="font-medium">{formatUSD(totalConIVA_USD)}</span></span>
+            <span className="text-blue-700">Total: <span className="font-medium">{formatUSD(totalConIVA_USD)}</span></span>
             <span className="text-green-600 font-medium">{formatUSD(incomeUSD)}</span>
           </div>}
           {(totalConIVA_USD > 0 || incomeUSD > 0) && <p className={`text-xs font-bold ${clienteDebeUSD > 0 ? "text-amber-600" : clienteDebeUSD < 0 ? "text-green-600" : "text-green-600"}`}>
@@ -376,11 +376,8 @@ function BalancePanel({ project }: { project: Project }) {
           <span className="text-xs text-white/50 ml-auto">{clientBC.ars > 0 ? ((ganBC.ars / clientBC.ars) * 100).toFixed(0) : 0}% margen</span>
         </div>}
         {ganBC.usd !== 0 && <div className="flex flex-wrap items-center gap-x-5 gap-y-1 pt-1 border-t border-white/20">
-          <span className="text-xs text-white/60">Ganancia</span>
+          <span className="text-xs text-white/60">Ganancia <span className="text-white/40">(sin IVA)</span></span>
           <span className="font-bold text-blue-200">{formatUSD(ganBC.usd)}</span>
-          <span className="text-xs text-white/50">IVA -{formatUSD(ivaGananciaUSD)}</span>
-          <span className="text-xs text-white/60">Neta</span>
-          <span className="font-bold text-blue-200">{formatUSD(gananciaNetaUSD)}</span>
           <span className="text-xs text-white/60">÷{pc}</span>
           <span className="font-bold text-blue-200">{formatUSD(gananciaIndivUSD)}</span>
         </div>}
