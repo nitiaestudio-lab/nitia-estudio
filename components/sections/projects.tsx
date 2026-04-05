@@ -1237,19 +1237,53 @@ function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit
           </div>
         </div>
 
-        {/* Client info */}
+        {/* Presupuesto total */}
+        <div className="bg-[#295E29] rounded-xl p-4 text-white">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60 mb-1">Presupuesto Total</p>
+          <div className="flex items-baseline gap-4">
+            {budgetFinal > 0 && <span className="text-2xl font-bold">{formatCurrency(budgetFinal)}</span>}
+            {budgetFinalUSD > 0 && <span className="text-2xl font-bold text-blue-200">{formatUSD(budgetFinalUSD)}</span>}
+          </div>
+        </div>
+
+        {/* Tarjeta de contacto del cliente */}
+        <div className="bg-[#F7F5ED] rounded-xl p-5">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Contacto del Cliente</h4>
+          <p className="text-lg font-semibold text-foreground">{project.client}</p>
+          {project.address && <p className="text-sm text-muted-foreground mt-0.5">{project.address}</p>}
+          {(project.client_email || project.client_phone) && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {project.client_email && (
+                <a href={`mailto:${project.client_email}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-foreground hover:bg-[#F0EDE4] transition-colors">
+                  <span className="text-muted-foreground">@</span> {project.client_email}
+                </a>
+              )}
+              {project.client_phone && (
+                <a href={`tel:${project.client_phone}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-foreground hover:bg-[#F0EDE4] transition-colors">
+                  <span className="text-muted-foreground">Tel</span> {project.client_phone}
+                </a>
+              )}
+              {project.client_phone && (
+                <a href={`https://wa.me/${project.client_phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 hover:bg-green-100 transition-colors">
+                  WhatsApp
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Datos del proyecto */}
         <div className="bg-[#F7F5ED] rounded-xl p-4">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Datos del Cliente</h4>
-          <InfoRow label="Cliente" value={project.client} />
-          {project.client_email && <InfoRow label="Email" value={project.client_email} />}
-          {project.client_phone && <InfoRow label="Teléfono" value={project.client_phone} />}
-          {project.address && <InfoRow label="Dirección" value={project.address} />}
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Proyecto</h4>
           {project.type && <InfoRow label="Tipo" value={project.type} />}
           {project.start_date && <InfoRow label="Inicio" value={formatDate(project.start_date)} />}
           {project.end_date && <InfoRow label="Fin" value={formatDate(project.end_date)} />}
+          {project.main_currency && <InfoRow label="Moneda principal" value={project.main_currency} />}
+          <InfoRow label="Socias" value={String(project.partner_count ?? 2)} />
         </div>
 
-        {/* Financial summary */}
+        {/* Resumen financiero */}
         {isFull && <div className="bg-[#F7F5ED] rounded-xl p-4">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Resumen Financiero</h4>
           <DualInfoRow label="Presupuesto" ars={budgetFinal} usd={budgetFinalUSD} />
