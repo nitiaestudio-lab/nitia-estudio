@@ -1243,6 +1243,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   const [selectedItemId, setSelectedItemId] = useState("")
   const [currency, setCurrency] = useState<"ARS" | "USD">("ARS")
   const [conceptoSel, setConceptoSel] = useState("")
+  const [tcBlue, setTcBlue] = useState(String(data.dollarRate?.sell || ""))
   // Seña tracking
   const [esSeña, setEsSeña] = useState(false)
   const [señaClientePct, setSeñaClientePct] = useState(String(project.sena_cliente_pct ?? 50))
@@ -1250,6 +1251,13 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   const [señaPagadaProv, setSeñaPagadaProv] = useState(false)
   const [señaProvIdLocal, setSeñaProvIdLocal] = useState("") // proveedor de seña si no hay uno en egreso/pago directo
   const [señaItemIds, setSeñaItemIds] = useState<string[]>([]) // productos seleccionados para la seña
+
+  // Currency mismatch detection
+  const selectedAccount = accounts.find((a: any) => a.id === aid)
+  const isPaymentUSD = currency === "USD"
+  const isAccountUSD = selectedAccount?.type === "dolares"
+  const hasMismatch = aid && ((isPaymentUSD && !isAccountUSD) || (!isPaymentUSD && isAccountUSD))
+  const tcNum = parseFloat(tcBlue) || 0
 
   // Provider debt for this project
   const activeProvId = type === "egreso" ? pid : pagoProvId
@@ -1348,19 +1356,29 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
     const prov = providers.find((p: any) => p.id === provId)
     const items = data.projectItems.filter(i => i.project_id === project.id && i.provider_id === provId)
     const quotes = data.quoteComparisons.filter(q => q.project_id === project.id && q.provider_id === provId && q.selected)
-    const owed = items.reduce((s, i) => s + i.cost, 0) + quotes.reduce((s, q) => s + q.cost, 0)
-    const paid = data.movements.filter(m => m.project_id === project.id && m.provider_id === provId && m.type === "egreso").reduce((s, m) => s + m.amount, 0)
-    const debt = owed - paid
+    const owedARS = items.filter(i => i.currency !== "USD").reduce((s, i) => s + i.cost, 0) + quotes.filter(q => q.currency !== "USD").reduce((s, q) => s + q.cost, 0)
+    const owedUSD = items.filter(i => i.currency === "USD").reduce((s, i) => s + i.cost, 0) + quotes.filter(q => q.currency === "USD").reduce((s, q) => s + q.cost, 0)
+    const provMovs = data.movements.filter(m => m.project_id === project.id && m.provider_id === provId && m.type === "egreso")
+    const paidARS = provMovs.filter(m => m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+    const paidUSD = provMovs.filter(m => m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+    const debtARS = owedARS - paidARS
+    const debtUSD = owedUSD - paidUSD
+    const fmtDual = (ars: number, usd: number) => {
+      const parts: string[] = []
+      if (ars !== 0) parts.push(formatCurrency(ars))
+      if (usd !== 0) parts.push(formatUSD(usd))
+      return parts.join(" + ") || "$0"
+    }
     if (!prov) return null
     return (
       <div className="bg-[#F7F5ED] rounded-lg p-3 space-y-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase">Deuda con {prov.name}</p>
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Comprometido: {formatCurrency(owed)}</span>
-          <span className="text-green-600">Pagado: {formatCurrency(paid)}</span>
+          <span className="text-muted-foreground">Comprometido: {fmtDual(owedARS, owedUSD)}</span>
+          <span className="text-green-600">Pagado: {fmtDual(paidARS, paidUSD)}</span>
         </div>
-        <p className={`text-sm font-bold ${debt > 0 ? "text-red-600" : "text-green-600"}`}>
-          {debt > 0 ? `Pendiente: ${formatCurrency(debt)}` : "Al día ✓"}
+        <p className={`text-sm font-bold ${(debtARS > 0 || debtUSD > 0) ? "text-red-600" : "text-green-600"}`}>
+          {(debtARS > 0 || debtUSD > 0) ? `Pendiente: ${fmtDual(debtARS, debtUSD)}` : "Al día ✓"}
         </p>
         {(items.length > 0 || quotes.length > 0) && (
           <div className="border-t border-border pt-2 space-y-1">
@@ -1373,7 +1391,10 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
                     className="w-3 h-3" />}
                   <span className="truncate">{item.description}</span>
                 </label>
-                <span className="font-medium shrink-0">{formatCurrency(item.cost)}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="font-medium">{item.currency === "USD" ? formatUSD(item.cost) : formatCurrency(item.cost)}</span>
+                  <span className={`text-[9px] px-1 rounded ${item.currency === "USD" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{item.currency || "ARS"}</span>
+                </div>
               </div>
             ))}
             {quotes.map(q => (
@@ -1384,7 +1405,10 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
                     className="w-3 h-3" />}
                   <span className="truncate">{q.item} <span className="text-muted-foreground">(cotización)</span></span>
                 </label>
-                <span className="font-medium shrink-0">{formatCurrency(q.cost)}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="font-medium">{q.currency === "USD" ? formatUSD(q.cost) : formatCurrency(q.cost)}</span>
+                  <span className={`text-[9px] px-1 rounded ${q.currency === "USD" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{q.currency || "ARS"}</span>
+                </div>
               </div>
             ))}
             {type === "egreso" && selectedItemId && (
@@ -1407,6 +1431,32 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         <button type="button" onClick={() => setCurrency("ARS")} className={`px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
         <button type="button" onClick={() => setCurrency("USD")} className={`px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
       </div>
+      {/* Currency mismatch: TC blue conversion */}
+      {hasMismatch && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+          <p className="text-sm font-medium text-blue-800">
+            ⚠️ Pago en {isPaymentUSD ? "USD" : "pesos"} → cuenta en {isAccountUSD ? "dólares" : "pesos"}
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-blue-700 block mb-1">TC Blue (Infobae)</label>
+              <input type="number" value={tcBlue} onChange={e => setTcBlue(e.target.value)}
+                className="w-full px-3 py-1.5 rounded border border-blue-200 text-sm bg-white" inputMode="decimal" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-blue-700 block mb-1">Se debitará de la cuenta</label>
+              <p className="text-base font-bold text-blue-900">
+                {isAccountUSD ? formatUSD(tcNum > 0 ? amount / tcNum : 0) : formatCurrency(tcNum > 0 ? amount * tcNum : 0)}
+              </p>
+            </div>
+          </div>
+          <p className="text-[10px] text-blue-600">
+            {isPaymentUSD
+              ? `U$D ${amount.toLocaleString("es-AR")} × $${tcNum.toLocaleString("es-AR")} = ${formatCurrency(amount * tcNum)}`
+              : `$${amount.toLocaleString("es-AR")} ÷ $${tcNum.toLocaleString("es-AR")} = U$D ${(tcNum > 0 ? amount / tcNum : 0).toFixed(2)}`}
+          </p>
+        </div>
+      )}
 
       <FormSelect label="Concepto del pago" value={conceptoSel} onChange={setConceptoSel}
         options={[{ value: "", label: "Sin especificar" }, { value: "mano_de_obra", label: "Mano de obra" }, { value: "mobiliario", label: "Mobiliario" }, { value: "material", label: "Materiales" }, { value: "honorarios", label: "Honorarios" }, { value: "varios", label: "Varios" }]} />

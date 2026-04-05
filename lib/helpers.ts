@@ -52,8 +52,8 @@ export const projectCostByCurrency = (project: Project, items: ProjectItem[], qu
   const pItems = items.filter(i => i.project_id === project.id)
   const pQuotes = getSelectedQuotes(quotes, project.id)
   return {
-    ars: (project.honorarios_cost ?? 0) + pItems.filter(isARSItem).reduce((s, i) => s + i.cost, 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + q.cost, 0),
-    usd: pItems.filter(isUSDItem).reduce((s, i) => s + i.cost, 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + q.cost, 0),
+    ars: (project.honorarios_currency === "USD" ? 0 : (project.honorarios_cost ?? 0)) + pItems.filter(isARSItem).reduce((s, i) => s + i.cost, 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + q.cost, 0),
+    usd: (project.honorarios_currency === "USD" ? (project.honorarios_cost ?? 0) : 0) + pItems.filter(isUSDItem).reduce((s, i) => s + i.cost, 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + q.cost, 0),
   }
 }
 
@@ -61,8 +61,8 @@ export const projectClientPriceByCurrency = (project: Project, items: ProjectIte
   const pItems = items.filter(i => i.project_id === project.id)
   const pQuotes = getSelectedQuotes(quotes, project.id)
   return {
-    ars: (project.honorarios_client_price ?? 0) + pItems.filter(isARSItem).reduce((s, i) => s + i.client_price, 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + quoteClientPrice(q), 0),
-    usd: pItems.filter(isUSDItem).reduce((s, i) => s + i.client_price, 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + quoteClientPrice(q), 0),
+    ars: (project.honorarios_currency === "USD" ? 0 : (project.honorarios_client_price ?? 0)) + pItems.filter(isARSItem).reduce((s, i) => s + i.client_price, 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + quoteClientPrice(q), 0),
+    usd: (project.honorarios_currency === "USD" ? (project.honorarios_client_price ?? 0) : 0) + pItems.filter(isUSDItem).reduce((s, i) => s + i.client_price, 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + quoteClientPrice(q), 0),
   }
 }
 
@@ -71,8 +71,8 @@ export const projectGananciaByCurrency = (project: Project, items: ProjectItem[]
   const pQuotes = getSelectedQuotes(quotes, project.id)
   const gan = (i: ProjectItem) => i.type === "material" ? 0 : i.client_price - i.cost
   return {
-    ars: ((project.honorarios_client_price ?? 0) - (project.honorarios_cost ?? 0)) + pItems.filter(isARSItem).reduce((s, i) => s + gan(i), 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + quoteGanancia(q), 0),
-    usd: pItems.filter(isUSDItem).reduce((s, i) => s + gan(i), 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + quoteGanancia(q), 0),
+    ars: (project.honorarios_currency === "USD" ? 0 : ((project.honorarios_client_price ?? 0) - (project.honorarios_cost ?? 0))) + pItems.filter(isARSItem).reduce((s, i) => s + gan(i), 0) + pQuotes.filter(isARSItem).reduce((s, q) => s + quoteGanancia(q), 0),
+    usd: (project.honorarios_currency === "USD" ? ((project.honorarios_client_price ?? 0) - (project.honorarios_cost ?? 0)) : 0) + pItems.filter(isUSDItem).reduce((s, i) => s + gan(i), 0) + pQuotes.filter(isUSDItem).reduce((s, q) => s + quoteGanancia(q), 0),
   }
 }
 

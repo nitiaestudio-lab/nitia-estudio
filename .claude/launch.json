@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nitia-dev",
+      "runtimeExecutable": "/opt/homebrew/bin/npx",
+      "runtimeArgs": ["next", "dev"],
+      "port": 3000
+    }
+  ]
+}
