@@ -1,7 +1,40 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
-const DOLAR_API_URL = "https://dolarapi.com/v1/dolares/blue"
+const INFOBAE_API_URL = "https://storage.googleapis.com/dolar-data/dolar-data.json"
+const DOLAR_API_FALLBACK_URL = "https://dolarapi.com/v1/dolares/blue"
+
+/** Fetch dólar blue rates. Primary: Infobae GCS feed. Fallback: dolarapi.com */
+async function fetchDolarBlue(): Promise<{ buy: number; sell: number; source: string }> {
+  // --- Primary: Infobae GCS feed ---
+  try {
+    const res = await fetch(INFOBAE_API_URL, { next: { revalidate: 0 } })
+    if (res.ok) {
+      const json = await res.json()
+      const blueEntry = json?.data?.find(
+        (d: { ric?: string }) => d.ric === "ARSB="
+      )
+      if (blueEntry && typeof blueEntry.sellValue === "number" && blueEntry.sellValue > 0) {
+        const sell: number = blueEntry.sellValue
+        // Infobae only publishes the sell value; derive buy with the standard ~$10 ARS spread
+        const buy: number = blueEntry.buyValue ?? sell - 10
+        return { buy, sell, source: "infobae" }
+      }
+    }
+  } catch {
+    // fall through to backup
+  }
+
+  // --- Fallback: dolarapi.com ---
+  const res = await fetch(DOLAR_API_FALLBACK_URL, { next: { revalidate: 0 } })
+  if (!res.ok) throw new Error("API dolarapi.com no disponible")
+  const api = await res.json()
+  return {
+    buy: api.compra ?? 0,
+    sell: api.venta ?? 0,
+    source: "dolarapi",
+  }
+}
 
 export async function GET() {
   try {
@@ -20,14 +53,11 @@ export async function POST(req: Request) {
     const sb = await createClient()
 
     if (body.action === "fetch") {
-      // Fetch from dolarapi.com
-      const res = await fetch(DOLAR_API_URL, { next: { revalidate: 0 } })
-      if (!res.ok) return NextResponse.json({ ok: false, error: "API dolarapi.com no disponible" }, { status: 502 })
-      const api = await res.json()
+      const { buy, sell, source } = await fetchDolarBlue()
       const value = {
-        buy: api.compra ?? 0,
-        sell: api.venta ?? 0,
-        source: "api",
+        buy,
+        sell,
+        source,
         last_api_fetch: new Date().toISOString(),
         manual_override: null,
       }
@@ -52,13 +82,11 @@ export async function POST(req: Request) {
 
     if (body.action === "clear_override") {
       // Clear manual override, re-fetch from API
-      const res = await fetch(DOLAR_API_URL, { next: { revalidate: 0 } })
-      if (!res.ok) return NextResponse.json({ ok: false, error: "API no disponible" }, { status: 502 })
-      const api = await res.json()
+      const { buy, sell, source } = await fetchDolarBlue()
       const value = {
-        buy: api.compra ?? 0,
-        sell: api.venta ?? 0,
-        source: "api",
+        buy,
+        sell,
+        source,
         last_api_fetch: new Date().toISOString(),
         manual_override: null,
       }
