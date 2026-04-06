@@ -201,19 +201,41 @@ export async function validateResetToken(token: string) {
   }
 }
 
-export async function resetPin(token: string, newPin: string) {
+export async function resetPin(identifier: string, newPin: string) {
   try {
     if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
       return { success: false, error: "PIN debe ser 4 dígitos numéricos" }
     }
 
-    // Validate the token server-side
-    const { valid, email } = await validateResetToken(token)
-    if (!valid || !email) {
-      return { success: false, error: "Link expirado o inválido. Solicitá uno nuevo." }
+    let email: string | null = null
+    let tokenKey: string | null = null
+
+    // Check if identifier is a token (UUID format) or an email
+    const isEmail = identifier.includes("@")
+    if (isEmail) {
+      email = identifier
+    } else {
+      // Validate the token server-side
+      const result = await validateResetToken(identifier)
+      if (!result.valid || !result.email) {
+        return { success: false, error: "Link expirado o inválido. Solicitá uno nuevo." }
+      }
+      email = result.email
+      tokenKey = `reset_token_${identifier}`
     }
 
     const supabase = getSupabaseClient()
+
+    // Verify the email exists in our users table
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .single()
+
+    if (userError || !user) {
+      return { success: false, error: "Usuario no encontrado" }
+    }
 
     // Hash the new PIN
     const hashedPin = await bcrypt.hash(newPin, BCRYPT_ROUNDS)
@@ -228,8 +250,10 @@ export async function resetPin(token: string, newPin: string) {
       return { success: false, error: "Error al actualizar PIN" }
     }
 
-    // Consume the token
-    await supabase.from("app_settings").delete().eq("key", `reset_token_${token}`)
+    // Consume the token if used
+    if (tokenKey) {
+      await supabase.from("app_settings").delete().eq("key", tokenKey)
+    }
 
     return { success: true, message: "PIN actualizado exitosamente" }
   } catch (error) {

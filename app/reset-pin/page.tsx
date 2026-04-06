@@ -9,11 +9,9 @@ function ResetPinContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tokenFromParams = searchParams.get("token") || ""
-  // Legacy support: email param from old links
-  const emailFromParams = searchParams.get("email") || ""
 
   const [token, setToken] = useState(tokenFromParams)
-  const [email, setEmail] = useState(emailFromParams)
+  const [email, setEmail] = useState("")
   const [pin, setPin] = useState("")
   const [confirmPin, setConfirmPin] = useState("")
   const [error, setError] = useState("")
@@ -22,9 +20,10 @@ function ResetPinContent() {
   const [ready, setReady] = useState(false)
   const [validating, setValidating] = useState(true)
 
-  // Validate token server-side on mount
+  // Validate on mount: check token param OR Supabase hash fragment
   useEffect(() => {
     async function validate() {
+      // Option 1: Our custom reset token in query params
       if (tokenFromParams) {
         const result = await validateResetToken(tokenFromParams)
         if (result.valid && result.email) {
@@ -34,16 +33,39 @@ function ResetPinContent() {
         } else {
           setError("Link expirado o inválido. Solicitá uno nuevo.")
         }
-      } else if (emailFromParams) {
-        // Legacy support for old-style email links
-        setReady(true)
-      } else {
-        setError("Link inválido")
+        setValidating(false)
+        return
       }
+
+      // Option 2: Supabase magic link — extract email from access_token in hash
+      const hash = window.location.hash.substring(1)
+      if (hash) {
+        const params = new URLSearchParams(hash)
+        const accessToken = params.get("access_token")
+        const type = params.get("type")
+        if (accessToken && (type === "magiclink" || type === "recovery")) {
+          try {
+            // Decode JWT payload (no need to verify — Supabase already verified it)
+            const payload = JSON.parse(atob(accessToken.split(".")[1]))
+            if (payload.email) {
+              setEmail(payload.email)
+              setReady(true)
+              // Clean the hash from URL for security
+              window.history.replaceState(null, "", window.location.pathname)
+              setValidating(false)
+              return
+            }
+          } catch (e) {
+            console.error("Error parsing token:", e)
+          }
+        }
+      }
+
+      setError("Link inválido")
       setValidating(false)
     }
     validate()
-  }, [tokenFromParams, emailFromParams])
+  }, [tokenFromParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,9 +87,8 @@ function ResetPinContent() {
 
     setIsLoading(true)
     try {
-      // Use token-based reset (secure) or legacy email-based
-      const identifier = token || email
-      const result = await resetPin(identifier, pin)
+      // Use token if available, otherwise email (from Supabase magic link)
+      const result = await resetPin(token || email, pin)
       if (result.success) {
         setSuccess(true)
         setTimeout(() => router.push("/"), 3000)
