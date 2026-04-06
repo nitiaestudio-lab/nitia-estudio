@@ -133,6 +133,31 @@ export function FormInput({ label, value, onChange, type = "text", placeholder, 
   )
 }
 
+/** Money input with thousand separators display */
+export function FormMoneyInput({ label, value, onChange, placeholder, error, className }: {
+  label?: string; value: string; onChange: (v: string) => void
+  placeholder?: string; error?: string; className?: string
+}) {
+  const [focused, setFocused] = useState(false)
+  const numVal = parseFloat(value) || 0
+  const displayValue = focused ? value : (value && numVal !== 0 ? new Intl.NumberFormat("es-AR").format(numVal) : value)
+  return (
+    <div className={cn("space-y-2", className)}>
+      {label && <label className="block text-sm font-medium text-foreground">{label}</label>}
+      <input
+        type={focused ? "number" : "text"}
+        value={displayValue}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder={placeholder}
+        inputMode="decimal"
+        className={cn("w-full px-3 py-2 rounded-lg border text-sm", error ? "border-red-300 bg-red-50" : "border-[#E0DDD0] bg-white")} />
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </div>
+  )
+}
+
 export function FormSelect({ label, value, onChange, options, error, required, className }: {
   label?: string; value: string; onChange: (v: string) => void
   options: { value: string; label: string }[]; error?: string; required?: boolean

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useApp } from "@/lib/app-context"
 import { generateId, today } from "@/lib/helpers"
-import { Modal, FormInput, FormSelect, Btn, EditableSelect } from "@/components/nitia-ui"
+import { Modal, FormInput, FormMoneyInput, FormSelect, Btn, EditableSelect } from "@/components/nitia-ui"
 import type { Movement } from "@/lib/types"
 
 export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
@@ -53,7 +53,7 @@ export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
         </div>
         <FormInput label="Descripción" value={description} onChange={setDescription} />
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="Monto" type="number" value={amount} onChange={setAmount} inputMode="decimal" />
+          <FormMoneyInput label="Monto" value={amount} onChange={setAmount} />
           <FormSelect label="Cuenta" value={accountId} onChange={setAccountId}
             options={data.accounts.map(a => ({ value: a.id, label: `${a.name}${a.type === "dolares" ? " (U$D)" : ""}` }))} />
         </div>
