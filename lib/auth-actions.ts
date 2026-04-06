@@ -153,8 +153,12 @@ export async function sendPasswordResetEmail(email: string) {
       updated_at: new Date().toISOString(),
     })
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${siteUrl}/reset-pin?token=${resetToken}`,
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${siteUrl}/reset-pin?token=${resetToken}`,
+        shouldCreateUser: false,
+      },
     })
 
     if (error) {
@@ -493,8 +497,12 @@ export async function requestPinChangeEmail(email: string) {
       updated_at: new Date().toISOString(),
     })
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${siteUrl}/reset-pin?token=${resetToken}`,
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${siteUrl}/reset-pin?token=${resetToken}`,
+        shouldCreateUser: false,
+      },
     })
 
     if (error) {
