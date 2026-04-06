@@ -9,7 +9,7 @@ import { Plus, ArrowUpRight, ArrowDownLeft, Trash2, Pencil, Download, ArrowUpDow
 
 // =================== MAIN COMPONENT ===================
 export function Accounts() {
-  const { data, addMovement, deleteMovement, updateRow, addRow, deleteRow, getCategoriesFor, addCategory, deleteCategory } = useApp()
+  const { data, addMovement, deleteMovement, updateRow, addRow, deleteRow, getCategoriesFor, addCategory, deleteCategory, setSection, setSelectedProjectId } = useApp()
   const dolarRate = data.dollarRate?.sell || null
 
   // UI state
@@ -271,7 +271,7 @@ export function Accounts() {
                           <div className="flex flex-wrap items-center gap-1 mt-0.5">
                             {providerName && <span className="text-[10px] text-[#76746A]">Prov: {providerName}</span>}
                             {providerName && (projName || mov.category) && <span className="text-[10px] text-[#76746A]">·</span>}
-                            {projName && <span className="text-[10px] text-[#5F5A46]">{projName}</span>}
+                            {projName && mov.project_id && <button onClick={() => { setSelectedProjectId(mov.project_id!); setSection("projects") }} className="text-[10px] text-[#5F5A46] font-medium hover:underline">{projName}</button>}
                             {projName && mov.category && <span className="text-[10px] text-[#76746A]">·</span>}
                             {mov.category && <span className="text-[10px] px-1 py-0 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
                             {mov.medio_pago && mov.medio_pago !== "USD" && <span className="text-[10px] text-[#76746A]">· {medioPagoLabel[mov.medio_pago] || mov.medio_pago}</span>}
