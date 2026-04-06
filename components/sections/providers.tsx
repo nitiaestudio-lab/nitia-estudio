@@ -3,8 +3,8 @@
 import { useState, useRef, useMemo } from "react"
 import { useApp } from "@/lib/app-context"
 import { formatCurrency, formatUSD, formatDate, generateId, today, filterByDateRange } from "@/lib/helpers"
-import { SecHead, Tag, Btn, Empty, Modal, FormInput, FormSelect, FormTextarea, EditableSelect, HR, Stat, PeriodFilter, type PeriodValue } from "@/components/nitia-ui"
-import type { Provider, ProviderDocument } from "@/lib/types"
+import { SecHead, Tag, Btn, Empty, Modal, FormInput, FormMoneyInput, FormSelect, FormTextarea, EditableSelect, HR, Stat, PeriodFilter, type PeriodValue } from "@/components/nitia-ui"
+import type { Provider, ProviderDocument, Movement } from "@/lib/types"
 import { Plus, Phone, Mail, ArrowLeft, Trash2, Pencil, Upload, FileText, Download, Search, FolderOpen, Eye, FileSpreadsheet, ExternalLink, MapPin } from "lucide-react"
 
 function formatAmount(m: { amount: number; medio_pago?: string | null }) {
@@ -119,6 +119,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
   // Inline editing for movements
   const [editingMov, setEditingMov] = useState<{ id: string; field: string } | null>(null)
   const [editMovValue, setEditMovValue] = useState("")
+  const [editingMovModal, setEditingMovModal] = useState<Movement | null>(null)
   const startEditMov = (id: string, field: string, value: string) => { setEditingMov({ id, field }); setEditMovValue(value) }
   const saveEditMov = async (movId: string) => {
     if (!editingMov) return
@@ -428,7 +429,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                     ) : (
                       <span className="cursor-pointer hover:underline" onDoubleClick={() => startEditMov(mov.id, "date", mov.date)}>{formatDate(mov.date)}</span>
                     )}
-                    {project && <span className="text-blue-600">{project.name}</span>}
+                    {project && <button onClick={() => { setSelectedProjectId(project.id); setSection("projects") }} className="text-blue-600 font-medium hover:underline">{project.name}</button>}
                     {account && <span>Cuenta: {account.name}</span>}
                     {mov.sena_real_pct != null && <span className="text-purple-600">Prov {mov.sena_real_pct}%</span>}
                     {mov.sena_cliente_pct != null && <span className="text-purple-600">Cli {mov.sena_cliente_pct}%</span>}
@@ -458,6 +459,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
                     </span>
                   )}
                   {mov.medio_pago === "USD" && <span className="text-[10px] px-1 py-0.5 bg-blue-100 text-blue-700 rounded">USD</span>}
+                  <button onClick={() => setEditingMovModal(mov)} className="p-1 hover:bg-accent rounded opacity-0 group-hover:opacity-100 transition-opacity"><Pencil size={12} /></button>
                   <button onClick={() => deleteMov(mov.id)} className="p-1 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} className="text-red-500" /></button>
                 </div>
               </div>
@@ -472,6 +474,9 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
         onClose={() => setShowEdit(false)}
         onSave={async (p) => { await updateRow("providers", provider.id, p, "providers"); setShowEdit(false) }}
         onDelete={async () => { await deleteRow("providers", provider.id, "providers"); onBack() }} />}
+
+      {editingMovModal && <ProvEditMovModal movement={editingMovModal} onClose={() => setEditingMovModal(null)}
+        onSave={async (u) => { await updateRow("movements", editingMovModal.id, u, "movements"); setEditingMovModal(null) }} />}
 
       {showUpload && <UploadDocModal providerId={provider.id} onClose={() => setShowUpload(false)}
         onUpload={async (file, meta) => {
@@ -595,4 +600,212 @@ function UploadDocModal({ providerId, onClose, onUpload }: {
       </form>
     </Modal>
   )
+}
+
+// =================== PROVIDER EDIT MOVEMENT MODAL ===================
+function ProvEditMovModal({ movement, onClose, onSave }: { movement: Movement; onClose: () => void; onSave: (u: Partial<Movement>) => void }) {
+  const { data, uploadFile, addMovement } = useApp()
+  const [date, setDate] = useState(movement.date)
+  const [desc, setDesc] = useState(movement.description)
+  const [amt, setAmt] = useState(String(movement.amount))
+  const [type, setType] = useState(movement.type)
+  const [aid, setAid] = useState(movement.account_id ?? "")
+  const [pid, setPid] = useState(movement.provider_id ?? "")
+  const [projId, setProjId] = useState(movement.project_id ?? "")
+  const [currency, setCurrency] = useState<"ARS" | "USD">(movement.medio_pago === "USD" ? "USD" : "ARS")
+  const [concepto, setConcepto] = useState(movement.concepto ?? "")
+  const [autoSplit, setAutoSplit] = useState(movement.auto_split ?? false)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [existingReceipt, setExistingReceipt] = useState(movement.receipt_url || "")
+  const [coversOther, setCoversOther] = useState(!!(movement.covers_usd && movement.covers_usd > 0))
+  const [coversAmt, setCoversAmt] = useState(movement.covers_usd ? String(movement.covers_usd) : "")
+  const [coversTc, setCoversTc] = useState(movement.covers_tc ? String(movement.covers_tc) : "")
+  // Desglose
+  const [desglosar, setDesglosar] = useState(false)
+  const [desgloseLines, setDesgloseLines] = useState<{ accountId: string; providerId: string; amount: string }[]>([])
+
+  const editAmount = parseFloat(amt) || 0
+  const accounts = data.accounts
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    let receiptUrl = existingReceipt || null
+    let receiptPath = movement.receipt_path || null
+    if (receiptFile) {
+      const result = await uploadFile("documents", `receipts/edit/${Date.now()}_${receiptFile.name}`, receiptFile)
+      if (result) { receiptUrl = result.url; receiptPath = result.path }
+    }
+
+    // Create desglose movements if enabled
+    if (desglosar && desgloseLines.length > 0 && type === "ingreso") {
+      for (const line of desgloseLines) {
+        const lineAmt = parseFloat(line.amount) || 0
+        if (lineAmt <= 0) continue
+        const lineAcct = line.accountId ? accounts.find(a => a.id === line.accountId) : null
+        const lineProv = line.providerId ? data.providers.find(p => p.id === line.providerId) : null
+        const destLabel = [lineAcct?.name, lineProv?.name].filter(Boolean).join(" / ") || "sin destino"
+        await addMovement({
+          id: generateId(), date, description: `[Desglose] ${desc} → ${destLabel}`,
+          amount: lineAmt, type: "ingreso" as const, project_id: projId || null,
+          account_id: line.accountId || null, provider_id: line.providerId || null,
+          category: "Desglose ingreso", auto_split: false, split_percentage: 0,
+          concepto: concepto || null, medio_pago: currency === "USD" ? "USD" : null,
+        } as Movement)
+      }
+    }
+
+    onSave({
+      date, description: desc, amount: editAmount, type,
+      account_id: aid || null, provider_id: pid || null, project_id: projId || null,
+      medio_pago: currency === "USD" ? "USD" : null,
+      concepto: concepto || null,
+      auto_split: type === "ingreso" ? autoSplit : false,
+      receipt_url: receiptUrl, receipt_path: receiptPath,
+      covers_usd: coversOther ? (parseFloat(coversAmt) || null) : null,
+      covers_tc: coversOther ? (parseFloat(coversTc) || null) : null,
+    })
+  }
+
+  return (<Modal isOpen={true} title="Editar Movimiento" onClose={onClose} size="lg">
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <FormInput label="Fecha" type="date" value={date} onChange={setDate} />
+        <FormSelect label="Tipo" value={type} onChange={v => setType(v as any)} options={[{ value: "ingreso", label: "Ingreso" }, { value: "egreso", label: "Egreso" }]} />
+      </div>
+      <FormInput label="Descripción" value={desc} onChange={setDesc} />
+      <div className="grid grid-cols-2 gap-4">
+        <FormMoneyInput label="Monto" value={amt} onChange={setAmt} />
+        <FormSelect label="Cuenta" value={aid} onChange={setAid}
+          options={[{ value: "", label: "Sin cuenta" }, ...accounts.map(a => ({ value: a.id, label: `${a.name} (${a.type === "dolares" ? "Dólares" : "Pesos"})` }))]} />
+      </div>
+      <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
+        <button type="button" onClick={() => setCurrency("ARS")} className={`px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
+        <button type="button" onClick={() => setCurrency("USD")} className={`px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
+      </div>
+      {/* Cobertura otra moneda */}
+      <div className={`flex items-center gap-3 p-3 rounded-lg ${coversOther ? "bg-blue-50" : "bg-[#F7F5ED]"}`}>
+        <input type="checkbox" checked={coversOther} onChange={e => { setCoversOther(e.target.checked); if (!e.target.checked) setCoversAmt("") }} className="w-4 h-4" />
+        <p className={`text-sm font-medium ${coversOther ? "text-blue-800" : "text-muted-foreground"}`}>
+          Cubre presupuesto en {currency === "ARS" ? "U$D" : "$ ARS"}
+        </p>
+      </div>
+      {coversOther && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-blue-700 block mb-1">{currency === "ARS" ? "U$D que cubre" : "$ ARS que cubre"}</label>
+              <input type="number" value={coversAmt} onChange={e => {
+                setCoversAmt(e.target.value)
+                const v = parseFloat(e.target.value) || 0
+                if (v > 0 && editAmount > 0) setCoversTc(String(currency === "ARS" ? +(editAmount / v).toFixed(2) : +(v / editAmount).toFixed(2)))
+              }} className="w-full px-3 py-1.5 rounded border border-blue-200 text-sm bg-white" inputMode="decimal" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-blue-700 block mb-1">TC</label>
+              <input type="number" value={coversTc} onChange={e => {
+                setCoversTc(e.target.value)
+                const tc = parseFloat(e.target.value) || 0
+                if (tc > 0 && editAmount > 0) setCoversAmt(String(currency === "ARS" ? +(editAmount / tc).toFixed(2) : +(editAmount * tc).toFixed(0)))
+              }} className="w-full px-3 py-1.5 rounded border border-blue-200 text-sm bg-white" inputMode="decimal" />
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-4">
+        <FormSelect label="Concepto" value={concepto} onChange={setConcepto}
+          options={[{ value: "", label: "Sin especificar" }, { value: "mano_de_obra", label: "Mano de obra" }, { value: "mobiliario", label: "Mobiliario" }, { value: "material", label: "Materiales" }, { value: "honorarios", label: "Honorarios" }, { value: "varios", label: "Varios" }, { value: "seña", label: "Seña" }]} />
+        <FormSelect label="Proyecto" value={projId} onChange={setProjId}
+          options={[{ value: "", label: "Sin proyecto" }, ...data.projects.map(p => ({ value: p.id, label: p.name }))]} />
+      </div>
+      {type === "egreso" && (
+        <FormSelect label="Proveedor" value={pid} onChange={setPid}
+          options={[{ value: "", label: "Sin proveedor" }, ...data.providers.map(p => ({ value: p.id, label: p.name }))]} />
+      )}
+      {type === "ingreso" && (<>
+        <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg">
+          <input type="checkbox" checked={autoSplit} onChange={e => setAutoSplit(e.target.checked)} className="w-4 h-4" />
+          <p className="text-sm font-medium text-green-800">Distribuir 50/50 entre socias</p>
+        </div>
+        {/* Desglose */}
+        <div className={`flex items-center gap-3 p-3 rounded-lg ${desglosar ? "bg-orange-50" : "bg-[#F7F5ED]"}`}>
+          <input type="checkbox" checked={desglosar} onChange={e => { setDesglosar(e.target.checked); if (!e.target.checked) setDesgloseLines([]) }} className="w-4 h-4" />
+          <div>
+            <p className={`text-sm font-medium ${desglosar ? "text-orange-800" : "text-muted-foreground"}`}>Desglosar ingreso entre cuentas</p>
+          </div>
+        </div>
+        {desglosar && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-orange-700">Monto total: <strong>{formatCurrency(editAmount)}</strong></p>
+              <button type="button" onClick={() => {
+                const paulaAcct = accounts.find(a => a.owner === "paula")
+                const camiAcct = accounts.find(a => a.owner === "cami")
+                if (paulaAcct && camiAcct) {
+                  const half = String(Math.round(editAmount / 2))
+                  setDesgloseLines([
+                    { accountId: paulaAcct.id, providerId: "", amount: half },
+                    { accountId: camiAcct.id, providerId: "", amount: half },
+                  ])
+                }
+              }} className="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded font-medium hover:bg-green-200">50/50 socias</button>
+            </div>
+            {desgloseLines.map((line, idx) => (
+              <div key={idx} className="space-y-1.5 bg-white/60 rounded-lg p-2.5">
+                <div className="grid grid-cols-[1fr_100px_auto] gap-2 items-end">
+                  <FormSelect label={idx === 0 ? "Cuenta" : ""} value={line.accountId} onChange={v => {
+                    const lines = [...desgloseLines]; lines[idx].accountId = v; setDesgloseLines(lines)
+                  }} options={[{ value: "", label: "Sin cuenta" }, ...accounts.map(a => ({ value: a.id, label: `${a.name}${a.type === "dolares" ? " (U$D)" : ""}` }))]} />
+                  <FormMoneyInput label={idx === 0 ? "Monto" : ""} value={line.amount} onChange={v => {
+                    const lines = [...desgloseLines]; lines[idx].amount = v; setDesgloseLines(lines)
+                  }} />
+                  <button type="button" onClick={() => setDesgloseLines(desgloseLines.filter((_, i) => i !== idx))}
+                    className="p-1.5 text-red-500 hover:bg-red-50 rounded mb-0.5">✕</button>
+                </div>
+                <FormSelect label="" value={line.providerId} onChange={v => {
+                  const lines = [...desgloseLines]; lines[idx].providerId = v; setDesgloseLines(lines)
+                }} options={[{ value: "", label: "Sin proveedor" }, ...data.providers.map(p => ({ value: p.id, label: p.name }))]} />
+              </div>
+            ))}
+            <button type="button" onClick={() => setDesgloseLines([...desgloseLines, { accountId: accounts[0]?.id ?? "", providerId: "", amount: "" }])}
+              className="text-xs text-orange-700 font-medium hover:underline">+ Agregar línea</button>
+            {(() => {
+              const totalDesglose = desgloseLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+              const diff = editAmount - totalDesglose
+              return totalDesglose > 0 && (
+                <div className={`text-xs font-semibold ${Math.abs(diff) < 1 ? "text-green-700" : "text-red-600"}`}>
+                  Asignado: {formatCurrency(totalDesglose)} {Math.abs(diff) >= 1 && `(${diff > 0 ? "falta" : "excede"}: ${formatCurrency(Math.abs(diff))})`}
+                  {Math.abs(diff) < 1 && " ✓"}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+      </>)}
+      {/* Comprobante */}
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Comprobante</label>
+        {existingReceipt && !receiptFile && (
+          <div className="flex items-center gap-2 bg-amber-50 rounded-lg px-3 py-2">
+            {/\.(jpg|jpeg|png|gif|webp)$/i.test(existingReceipt)
+              ? <img src={existingReceipt} alt="Comprobante" className="w-16 h-16 object-cover rounded" />
+              : <span className="text-sm text-amber-700">📎 Comprobante adjunto</span>}
+            <a href={existingReceipt} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex-1">Ver</a>
+            <button type="button" onClick={() => setExistingReceipt("")} className="text-xs text-red-600 hover:underline">Quitar</button>
+          </div>
+        )}
+        {receiptFile ? (
+          <div className="flex items-center gap-2 bg-[#F0EDE4] rounded-lg px-3 py-2">
+            <span className="text-sm flex-1 truncate">{receiptFile.name} ({(receiptFile.size / 1024).toFixed(0)} KB)</span>
+            <button type="button" onClick={() => setReceiptFile(null)} className="text-xs text-red-600 hover:underline">Quitar</button>
+          </div>
+        ) : (
+          <label className="flex items-center gap-2 border border-dashed border-[#E0DDD0] rounded-lg px-3 py-2.5 cursor-pointer hover:border-[#5F5A46] transition-colors">
+            <span className="text-sm text-muted-foreground">{existingReceipt ? "Cambiar archivo..." : "Adjuntar archivo..."}</span>
+            <input type="file" className="hidden" accept="image/*,.pdf,.doc,.docx" onChange={e => { const f = e.target.files?.[0]; if (f) setReceiptFile(f) }} />
+          </label>
+        )}
+      </div>
+      <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !amt}>Guardar</Btn></div>
+    </form>
+  </Modal>)
 }
