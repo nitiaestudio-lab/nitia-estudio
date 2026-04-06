@@ -96,6 +96,8 @@ export function Accounts() {
         Proyecto: getProjectName(m.project_id),
         Proveedor: getProviderName(m.provider_id),
         "Medio de pago": m.medio_pago || "",
+        "Cubre otra moneda": m.covers_usd || "",
+        TC: m.covers_tc || "",
       }))
       const ws = XLSX.utils.json_to_sheet(movData)
       ws["!cols"] = Object.keys(movData[0] || {}).map(k => ({ wch: Math.min(Math.max(k.length, 12), 30) }))

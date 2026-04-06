@@ -1081,7 +1081,7 @@ function MovimientosTab({ project }: { project: Project }) {
             ))}
           </div>
           <PeriodFilter value={movPeriod} onChange={setMovPeriod} onCustomRange={(s, e) => { setCStart(s); setCEnd(e) }} />
-          <Btn variant="soft" size="sm" onClick={() => exportProjectMovementsXLSX(project.name, movs.map(m => ({ date: m.date, description: m.description, amount: m.amount, type: m.type, category: m.category || undefined, provider: data.providers.find(p => p.id === m.provider_id)?.name })))}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
+          <Btn variant="soft" size="sm" onClick={() => exportProjectMovementsXLSX(project.name, movs.map(m => ({ date: m.date, description: m.description, amount: m.amount, type: m.type, category: m.category || undefined, provider: data.providers.find(p => p.id === m.provider_id)?.name, account: data.accounts.find(a => a.id === m.account_id)?.name, medio_pago: m.medio_pago, covers_usd: m.covers_usd, covers_tc: m.covers_tc })))}><FileSpreadsheet size={14} className="mr-1 inline" />XLSX</Btn>
           <Btn size="sm" onClick={() => setShowAdd(true)}><Plus size={14} className="mr-1 inline" />Movimiento</Btn>
         </div>
       </div>

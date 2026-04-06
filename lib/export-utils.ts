@@ -93,7 +93,7 @@ export function exportProjectDesgloseXLSX(
 
 export function exportProjectMovementsXLSX(
   projectName: string,
-  movements: { date: string; description: string; amount: number; type: string; category?: string; provider?: string; medio_pago?: string | null }[]
+  movements: { date: string; description: string; amount: number; type: string; category?: string; provider?: string; account?: string; medio_pago?: string | null; covers_usd?: number | null; covers_tc?: number | null }[]
 ) {
   const data = movements.map(m => ({
     Fecha: m.date,
@@ -101,8 +101,11 @@ export function exportProjectMovementsXLSX(
     Tipo: m.type === "ingreso" ? "Ingreso" : "Egreso",
     Moneda: m.medio_pago === "USD" ? "USD" : "ARS",
     Monto: m.amount,
+    Cuenta: m.account || "",
     Categoría: m.category || "",
     Proveedor: m.provider || "",
+    "Cubre otra moneda": m.covers_usd || "",
+    TC: m.covers_tc || "",
   }))
 
   downloadXLSX([{ name: "Movimientos", data }], `movimientos_${projectName.replace(/\s+/g, "_")}`)
