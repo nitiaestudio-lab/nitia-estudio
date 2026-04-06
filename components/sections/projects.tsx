@@ -72,8 +72,11 @@ export function Projects() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map(project => {
           const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
-          const incomeARS = data.movements.filter(m => m.project_id === project.id && m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
-          const incomeUSD = data.movements.filter(m => m.project_id === project.id && m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+          const pMovs = data.movements.filter(m => m.project_id === project.id && m.type === "ingreso")
+          const incomeARS = pMovs.filter(m => m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+          const incomeUSD = pMovs.filter(m => m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+          const covUSD = pMovs.filter(m => m.medio_pago !== "USD" && m.covers_usd && m.covers_usd > 0).reduce((s, m) => s + (m.covers_usd || 0), 0)
+          const cobUSDTotal = incomeUSD + covUSD
           return (<div key={project.id} onClick={() => setSelectedProjectId(project.id)}
             className="bg-card border border-border rounded-xl p-5 cursor-pointer hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-3">
@@ -89,9 +92,9 @@ export function Projects() {
                 <span className="text-muted-foreground">Presup: <span className="font-medium">{formatCurrency(clientBC.ars)}</span></span>
                 <span className="text-green-600">Cobrado: <span className="font-medium">{formatCurrency(incomeARS)}</span></span>
               </div>}
-              {(clientBC.usd > 0 || incomeUSD > 0) && <div className="flex justify-between">
+              {(clientBC.usd > 0 || cobUSDTotal > 0) && <div className="flex justify-between">
                 <span className="text-blue-700">Presup: <span className="font-medium">{formatUSD(clientBC.usd)}</span></span>
-                <span className="text-green-600">Cobrado: <span className="font-medium">{formatUSD(incomeUSD)}</span></span>
+                <span className="text-green-600">Cobrado: <span className="font-medium">{formatUSD(cobUSDTotal)}</span></span>
               </div>}
             </div>}
           </div>)
@@ -199,6 +202,9 @@ function BalancePanel({ project }: { project: Project }) {
   const projMovs = data.movements.filter(m => m.project_id === project.id)
   const incomeARS = projMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
   const incomeUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
+  // Cobertura cruzada: pagos ARS que cubren USD y viceversa
+  const coversUsdFromARS = projMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD" && m.covers_usd && m.covers_usd > 0).reduce((s, m) => s + (m.covers_usd || 0), 0)
+  const coversARSFromUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD" && m.covers_usd && m.covers_usd > 0).reduce((s, m) => s + (m.covers_usd || 0), 0)
   const expensesARS = projMovs.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
   const expensesUSD = projMovs.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
 
@@ -206,8 +212,8 @@ function BalancePanel({ project }: { project: Project }) {
   const presupARS = project.budget_final ?? clientBC.ars
   const presupUSD = project.budget_final_usd ?? clientBC.usd
 
-  const clienteDebeARS = presupARS - incomeARS
-  const clienteDebeUSD = presupUSD - incomeUSD
+  const clienteDebeARS = presupARS - incomeARS - coversARSFromUSD
+  const clienteDebeUSD = presupUSD - incomeUSD - coversUsdFromARS
   const provDebeARS = costBC.ars - expensesARS
   const provDebeUSD = costBC.usd - expensesUSD
 
@@ -358,13 +364,15 @@ function BalancePanel({ project }: { project: Project }) {
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Ingresos</p>
           {viewCurrency === "normal" ? (<>
             <Row label="Cobrado" ars={incomeARS || undefined} usd={incomeUSD || undefined} color="text-green-600" />
+            {coversUsdFromARS > 0 && <Row label="Cubre presup. USD (pagado en $)" usd={coversUsdFromARS} color="text-blue-600" />}
+            {coversARSFromUSD > 0 && <Row label="Cubre presup. ARS (pagado en U$D)" ars={coversARSFromUSD} color="text-blue-600" />}
             <Row label={clienteDebeARS > 0 || clienteDebeUSD > 0 ? "Pendiente de cobro" : "Al día ✓"} ars={clienteDebeARS !== 0 ? clienteDebeARS : undefined} usd={clienteDebeUSD !== 0 ? clienteDebeUSD : undefined} color={clienteDebeARS > 0 || clienteDebeUSD > 0 ? "text-amber-600" : "text-green-600"} bold />
           </>) : viewCurrency === "ARS" ? (<>
             <Row label="Cobrado" ars={incomeARS + incomeUSD * (tcBlue || 0)} color="text-green-600" />
-            <Row label="Pendiente" ars={(presupARS + presupUSD * (tcBlue || 0)) - (incomeARS + incomeUSD * (tcBlue || 0))} color="text-amber-600" bold />
+            <Row label="Pendiente" ars={(presupARS + presupUSD * (tcBlue || 0)) - (incomeARS + incomeUSD * (tcBlue || 0)) - coversARSFromUSD - coversUsdFromARS * (tcBlue || 0)} color="text-amber-600" bold />
           </>) : (<>
             <Row label="Cobrado" usd={(incomeARS / (tcBlue || 1)) + incomeUSD} color="text-green-600" />
-            <Row label="Pendiente" usd={((presupARS / (tcBlue || 1)) + presupUSD) - ((incomeARS / (tcBlue || 1)) + incomeUSD)} color="text-amber-600" bold />
+            <Row label="Pendiente" usd={((presupARS / (tcBlue || 1)) + presupUSD) - ((incomeARS / (tcBlue || 1)) + incomeUSD) - coversUsdFromARS - coversARSFromUSD / (tcBlue || 1)} color="text-amber-600" bold />
           </>)}
 
           <div className="border-t border-border my-2" />
