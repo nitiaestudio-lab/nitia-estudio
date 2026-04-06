@@ -135,6 +135,8 @@ export interface Movement {
   created_by?: string | null
   sena_real_pct?: number | null
   sena_cliente_pct?: number | null
+  receipt_url?: string | null
+  receipt_path?: string | null
   created_at?: string
 }
 

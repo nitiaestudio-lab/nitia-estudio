@@ -1128,6 +1128,7 @@ function MovimientosTab({ project }: { project: Project }) {
                           <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">Seña</span>
                         )}
                         {mov.medio_pago === "USD" && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">USD</span>}
+                        {mov.receipt_url && <a href={mov.receipt_url} target="_blank" rel="noopener noreferrer" className="ml-1 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium hover:bg-amber-200" onClick={e => e.stopPropagation()}>📎</a>}
                         {accName && <span className="ml-1 text-[10px] text-[#76746A]">· {accName}</span>}
                       </td>
                       {/* Provider */}
@@ -1487,7 +1488,7 @@ function QuoteModal({ projectId, providers, onClose, onSave }: { projectId: stri
 }
 
 function AddMovModal({ project, accounts, providers, onClose, onSave }: { project: Project; accounts: any[]; providers: any[]; onClose: () => void; onSave: (m: Movement) => void }) {
-  const { data, addRow, addMovement: addMov } = useApp()
+  const { data, addRow, addMovement: addMov, uploadFile } = useApp()
   const [date, setDate] = useState(today()); const [desc, setDesc] = useState(""); const [amt, setAmt] = useState("")
   const [type, setType] = useState<"ingreso" | "egreso">("ingreso"); const [aid, setAid] = useState(accounts[0]?.id ?? ""); const [pid, setPid] = useState(""); const [split, setSplit] = useState(true)
   const [pagoDirecto, setPagoDirecto] = useState(false); const [pagoProvId, setPagoProvId] = useState("")
@@ -1496,6 +1497,10 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   const [conceptoSel, setConceptoSel] = useState("")
   const [tcBlue, setTcBlue] = useState(String(data.dollarRate?.sell || ""))
   // Seña tracking
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  // Desglose ingreso
+  const [desglosar, setDesglosar] = useState(false)
+  const [desgloseLines, setDesgloseLines] = useState<{ accountId: string; amount: string; desc: string }[]>([])
   const [esSeña, setEsSeña] = useState(false)
   const [señaClientePct, setSeñaClientePct] = useState(String(project.sena_cliente_pct ?? 50))
   const [señaProvPct, setSeñaProvPct] = useState(String(project.sena_proveedor_pct ?? 60))
@@ -1544,15 +1549,38 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Upload receipt if provided
+    let receiptUrl: string | null = null
+    let receiptPath: string | null = null
+    if (receiptFile) {
+      const result = await uploadFile("documents", `receipts/${project.id}/${Date.now()}_${receiptFile.name}`, receiptFile)
+      if (result) { receiptUrl = result.url; receiptPath = result.path }
+    }
     const concepto = esSeña ? `seña` : (conceptoSel || undefined)
+    // Multimoneda: convert amount when payment currency ≠ account currency
+    let finalAmount = amount
+    let finalDesc = desc
+    if (hasMismatch && tcNum > 0) {
+      if (isPaymentUSD && !isAccountUSD) {
+        // Paying USD → account in ARS: debit ARS equivalent
+        finalAmount = amount * tcNum
+        finalDesc = `${desc} (U$D ${new Intl.NumberFormat("es-AR").format(amount)} × TC $${new Intl.NumberFormat("es-AR").format(tcNum)})`
+      } else if (!isPaymentUSD && isAccountUSD) {
+        // Paying ARS → account in USD: debit USD equivalent
+        finalAmount = amount / tcNum
+        finalDesc = `${desc} ($${new Intl.NumberFormat("es-AR").format(amount)} ÷ TC $${new Intl.NumberFormat("es-AR").format(tcNum)})`
+      }
+    }
     const mainMov: Movement = {
-      id: generateId(), date, description: desc, amount, type, project_id: project.id,
+      id: generateId(), date, description: finalDesc, amount: finalAmount, type, project_id: project.id,
       account_id: aid || null, provider_id: type === "egreso" ? (pid || null) : (esSeña && señaActiveProvId ? señaActiveProvId : null),
       category: "Proyecto", auto_split: type === "ingreso" ? split : false, split_percentage: 50,
       concepto: concepto || null,
       sena_real_pct: esSeña ? señaProvPctNum : null,
       sena_cliente_pct: esSeña ? señaCliPctNum : null,
       medio_pago: currency === "USD" ? "USD" : null,
+      receipt_url: receiptUrl,
+      receipt_path: receiptPath,
     }
 
     // Create secondary movements FIRST (before onSave closes modal)
@@ -1587,6 +1615,35 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         sena_cliente_pct: señaCliPctNum,
         medio_pago: currency === "USD" ? "USD" : null,
       } as Movement)
+    }
+
+    // Desglose: create separate movements per account, skip main account_id
+    if (desglosar && desgloseLines.length > 0) {
+      for (const line of desgloseLines) {
+        const lineAmt = parseFloat(line.amount) || 0
+        if (lineAmt <= 0 || !line.accountId) continue
+        const lineAcct = accounts.find((a: any) => a.id === line.accountId)
+        const lineAcctName = lineAcct?.name || ""
+        await addMov({
+          id: generateId(), date, description: `[Desglose] ${finalDesc} → ${lineAcctName}`,
+          amount: lineAmt, type: "ingreso" as const, project_id: project.id,
+          account_id: line.accountId, provider_id: null, category: "Desglose ingreso",
+          auto_split: false, split_percentage: 0, concepto: concepto || null,
+          medio_pago: currency === "USD" ? "USD" : null,
+        } as Movement)
+        // Personal finance record for personal accounts
+        if (lineAcct?.owner && lineAcct.owner !== "nitia") {
+          await addRow("personal_finance_movements", {
+            id: generateId(), owner: lineAcct.owner, date, description: `[Desglose] ${desc} — ${project.name}`,
+            amount: lineAmt, type: "ingreso", category: "Ingreso Nitia", is_fixed: false, active: true,
+            medio_pago: currency === "USD" ? "USD" : null, created_by: lineAcct.owner,
+          } as any, "personalFinanceMovements")
+        }
+      }
+      // Main movement has no account (it's a project-level record only)
+      mainMov.account_id = null
+      onSave(mainMov)
+      return
     }
 
     // If money goes to a personal account, also create personal finance record
@@ -1731,6 +1788,44 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
             options={[{ value: "", label: "Seleccionar proveedor..." }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
           {pagoProvId && <ProviderDebtPanel provId={pagoProvId} />}
         </>}
+
+        {/* Desglose de ingreso */}
+        <div className={`flex items-center gap-3 p-3 rounded-lg ${desglosar ? "bg-orange-50" : "bg-[#F7F5ED]"}`}>
+          <input type="checkbox" checked={desglosar} onChange={e => { setDesglosar(e.target.checked); if (!e.target.checked) setDesgloseLines([]) }} className="w-4 h-4" />
+          <div>
+            <p className={`text-sm font-medium ${desglosar ? "text-orange-800" : "text-muted-foreground"}`}>Desglosar ingreso entre cuentas</p>
+            {!desglosar && <p className="text-xs text-muted-foreground">Dividir este ingreso en varias cuentas</p>}
+          </div>
+        </div>
+        {desglosar && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
+            <p className="text-xs text-orange-700">Monto total: <strong>{formatCurrency(amount)}</strong> — Distribuir entre cuentas:</p>
+            {desgloseLines.map((line, idx) => (
+              <div key={idx} className="grid grid-cols-[1fr_100px_auto] gap-2 items-end">
+                <FormSelect label={idx === 0 ? "Cuenta" : ""} value={line.accountId} onChange={v => {
+                  const lines = [...desgloseLines]; lines[idx].accountId = v; setDesgloseLines(lines)
+                }} options={accounts.map(a => ({ value: a.id, label: `${a.name}${a.type === "dolares" ? " (U$D)" : ""}` }))} />
+                <FormInput label={idx === 0 ? "Monto" : ""} type="number" value={line.amount} onChange={v => {
+                  const lines = [...desgloseLines]; lines[idx].amount = v; setDesgloseLines(lines)
+                }} inputMode="decimal" />
+                <button type="button" onClick={() => setDesgloseLines(desgloseLines.filter((_, i) => i !== idx))}
+                  className="p-1.5 text-red-500 hover:bg-red-50 rounded mb-0.5">✕</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => setDesgloseLines([...desgloseLines, { accountId: accounts[0]?.id ?? "", amount: "", desc: "" }])}
+              className="text-xs text-orange-700 font-medium hover:underline">+ Agregar cuenta</button>
+            {(() => {
+              const totalDesglose = desgloseLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+              const diff = amount - totalDesglose
+              return totalDesglose > 0 && (
+                <div className={`text-xs font-semibold ${Math.abs(diff) < 1 ? "text-green-700" : "text-red-600"}`}>
+                  Asignado: {formatCurrency(totalDesglose)} {Math.abs(diff) >= 1 && `(${diff > 0 ? "falta" : "excede"}: ${formatCurrency(Math.abs(diff))})`}
+                  {Math.abs(diff) < 1 && " ✓"}
+                </div>
+              )
+            })()}
+          </div>
+        )}
       </>}
 
       {/* Seña tracking */}
@@ -1823,6 +1918,22 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
           )}
         </div>
       )}
+
+      {/* Adjuntar comprobante */}
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Comprobante (opcional)</label>
+        {receiptFile ? (
+          <div className="flex items-center gap-2 bg-[#F0EDE4] rounded-lg px-3 py-2">
+            <span className="text-sm flex-1 truncate">{receiptFile.name} ({(receiptFile.size / 1024).toFixed(0)} KB)</span>
+            <button type="button" onClick={() => setReceiptFile(null)} className="text-xs text-red-600 hover:underline">Quitar</button>
+          </div>
+        ) : (
+          <label className="flex items-center gap-2 border border-dashed border-[#E0DDD0] rounded-lg px-3 py-2.5 cursor-pointer hover:border-[#5F5A46] transition-colors">
+            <span className="text-sm text-muted-foreground">Adjuntar archivo...</span>
+            <input type="file" className="hidden" accept="image/*,.pdf,.doc,.docx" onChange={e => { const f = e.target.files?.[0]; if (f) setReceiptFile(f) }} />
+          </label>
+        )}
+      </div>
 
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !amt}>Registrar</Btn></div>
     </form>

@@ -7,7 +7,7 @@ import { Modal, FormInput, FormSelect, Btn, EditableSelect } from "@/components/
 import type { Movement } from "@/lib/types"
 
 export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
-  const { data, addMovement, getCategoriesFor, addCategory, deleteCategory } = useApp()
+  const { data, addMovement, uploadFile, getCategoriesFor, addCategory, deleteCategory } = useApp()
   const [date, setDate] = useState(today())
   const [description, setDescription] = useState("")
   const [amount, setAmount] = useState("")
@@ -18,9 +18,16 @@ export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
   const [providerId, setProviderId] = useState("")
   const [medioPago, setMedioPago] = useState("")
   const [autoSplit, setAutoSplit] = useState(false)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    let receiptUrl: string | null = null
+    let receiptPath: string | null = null
+    if (receiptFile) {
+      const result = await uploadFile("documents", `receipts/general/${Date.now()}_${receiptFile.name}`, receiptFile)
+      if (result) { receiptUrl = result.url; receiptPath = result.path }
+    }
     const movement: Movement = {
       id: generateId(), date, description,
       amount: parseFloat(amount), type, category: category || null,
@@ -28,6 +35,8 @@ export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
       provider_id: providerId || null, medio_pago: medioPago || null,
       auto_split: type === "ingreso" ? autoSplit : false,
       split_percentage: 50,
+      receipt_url: receiptUrl,
+      receipt_path: receiptPath,
       created_at: new Date().toISOString(),
     }
     await addMovement(movement)
@@ -69,6 +78,21 @@ export function GlobalMovementModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         )}
+        {/* Adjuntar comprobante */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Comprobante (opcional)</label>
+          {receiptFile ? (
+            <div className="flex items-center gap-2 bg-[#F0EDE4] rounded-lg px-3 py-2">
+              <span className="text-sm flex-1 truncate">{receiptFile.name} ({(receiptFile.size / 1024).toFixed(0)} KB)</span>
+              <button type="button" onClick={() => setReceiptFile(null)} className="text-xs text-red-600 hover:underline">Quitar</button>
+            </div>
+          ) : (
+            <label className="flex items-center gap-2 border border-dashed border-[#E0DDD0] rounded-lg px-3 py-2.5 cursor-pointer hover:border-[#5F5A46] transition-colors">
+              <span className="text-sm text-muted-foreground">Adjuntar archivo...</span>
+              <input type="file" className="hidden" accept="image/*,.pdf,.doc,.docx" onChange={e => { const f = e.target.files?.[0]; if (f) setReceiptFile(f) }} />
+            </label>
+          )}
+        </div>
         <div className="flex justify-end gap-3 pt-4">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={!description || !amount}>Registrar</Btn>

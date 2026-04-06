@@ -275,6 +275,7 @@ export function Accounts() {
                             {projName && mov.category && <span className="text-[10px] text-[#76746A]">·</span>}
                             {mov.category && <span className="text-[10px] px-1 py-0 bg-[#F0EDE4] text-[#76746A] rounded">{mov.category}</span>}
                             {mov.medio_pago && mov.medio_pago !== "USD" && <span className="text-[10px] text-[#76746A]">· {medioPagoLabel[mov.medio_pago] || mov.medio_pago}</span>}
+                            {mov.receipt_url && <a href={mov.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-1 py-0 bg-amber-100 text-amber-700 rounded hover:bg-amber-200" onClick={e => e.stopPropagation()}>📎</a>}
                           </div>
                         </div>
                       </div>
