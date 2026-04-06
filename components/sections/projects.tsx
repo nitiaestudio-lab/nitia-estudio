@@ -951,7 +951,7 @@ type SortField = "date" | "description" | "amount" | "type" | "provider"
 type SortDir = "asc" | "desc"
 
 function MovimientosTab({ project }: { project: Project }) {
-  const { data, addMovement, deleteMovement, updateRow, setSection, setSelectedProviderId } = useApp()
+  const { data, addMovement, deleteMovement, updateRow, addRow, setSection, setSelectedProviderId } = useApp()
   const goToProvider = (id: string) => { setSelectedProviderId(id); setSection("providers") }
   const dolarBlue = data.dollarRate?.sell || null
   const [showAdd, setShowAdd] = useState(false)
@@ -1220,7 +1220,34 @@ function MovimientosTab({ project }: { project: Project }) {
       {showAdd && <AddMovModal project={project} accounts={data.accounts} providers={data.providers} onClose={() => setShowAdd(false)} onSave={async (m) => { await addMovement(m); setShowAdd(false) }} />}
       {editingMovement && <EditMovModal movement={editingMovement} accounts={data.accounts} providers={data.providers}
         onClose={() => setEditingMovement(null)}
-        onSave={async (u) => { await updateRow("movements", editingMovement.id, u, "movements"); setEditingMovement(null) }} />}
+        onSave={async (u) => { await updateRow("movements", editingMovement.id, u, "movements"); setEditingMovement(null) }}
+        onAddDesglose={async (lines, curr, description) => {
+          for (const line of lines) {
+            if (line.amount <= 0 && !line.accountId && !line.providerId) continue
+            const lineAcct = line.accountId ? data.accounts.find((a: any) => a.id === line.accountId) : null
+            const lineAcctName = lineAcct?.name || ""
+            const lineProv = line.providerId ? data.providers.find((p: any) => p.id === line.providerId) : null
+            const lineProvName = lineProv?.name || ""
+            const destLabel = [lineAcctName, lineProvName].filter(Boolean).join(" / ") || "sin destino"
+            await addMovement({
+              id: generateId(), date: editingMovement.date, description: `[Desglose] ${description} → ${destLabel}`,
+              amount: line.amount, type: "ingreso" as const, project_id: project.id,
+              account_id: line.accountId || null, provider_id: line.providerId || null,
+              category: "Desglose ingreso", auto_split: false, split_percentage: 0,
+              concepto: editingMovement.concepto || null,
+              medio_pago: curr === "USD" ? "USD" : null,
+            } as Movement)
+            if (lineAcct?.owner && lineAcct.owner !== "nitia") {
+              await addRow("personal_finance_movements", {
+                id: generateId(), owner: lineAcct.owner, date: editingMovement.date,
+                description: `[Desglose] ${description} — ${project.name}`,
+                amount: line.amount, type: "ingreso", category: "Ingreso Nitia",
+                is_fixed: false, active: true, medio_pago: curr === "USD" ? "USD" : null,
+                created_by: lineAcct.owner,
+              } as any, "personalFinanceMovements")
+            }
+          }
+        }} />}
     </div>
   )
 }
@@ -2045,7 +2072,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   </Modal>)
 }
 
-function EditMovModal({ movement, accounts, providers, onClose, onSave }: { movement: Movement; accounts: any[]; providers: any[]; onClose: () => void; onSave: (u: Partial<Movement>) => void }) {
+function EditMovModal({ movement, accounts, providers, onClose, onSave, onAddDesglose }: { movement: Movement; accounts: any[]; providers: any[]; onClose: () => void; onSave: (u: Partial<Movement>) => void; onAddDesglose?: (lines: { accountId: string; providerId: string; amount: number; desc: string }[], currency: string, description: string) => void }) {
   const { uploadFile } = useApp()
   const [date, setDate] = useState(movement.date)
   const [desc, setDesc] = useState(movement.description)
@@ -2061,6 +2088,8 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave }: { move
   const [coversOther, setCoversOther] = useState(!!(movement.covers_usd && movement.covers_usd > 0))
   const [coversAmt, setCoversAmt] = useState(movement.covers_usd ? String(movement.covers_usd) : "")
   const [coversTc, setCoversTc] = useState(movement.covers_tc ? String(movement.covers_tc) : "")
+  const [desglosar, setDesglosar] = useState(false)
+  const [desgloseLines, setDesgloseLines] = useState<{ accountId: string; providerId: string; amount: string; desc: string }[]>([])
 
   const editAmount = parseFloat(amt) || 0
 
@@ -2072,9 +2101,17 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave }: { move
       const result = await uploadFile("documents", `receipts/edit/${Date.now()}_${receiptFile.name}`, receiptFile)
       if (result) { receiptUrl = result.url; receiptPath = result.path }
     }
+    // Desglose: create separate movements per account
+    if (desglosar && desgloseLines.length > 0 && onAddDesglose) {
+      onAddDesglose(
+        desgloseLines.filter(l => (parseFloat(l.amount) || 0) > 0 || l.accountId || l.providerId).map(l => ({ accountId: l.accountId, providerId: l.providerId, amount: parseFloat(l.amount) || 0, desc: l.desc })),
+        currency, desc
+      )
+    }
     onSave({
       date, description: desc, amount: parseFloat(amt) || 0, type,
-      account_id: aid || null, provider_id: pid || null,
+      account_id: desglosar && desgloseLines.length > 0 ? null : (aid || null),
+      provider_id: pid || null,
       medio_pago: currency === "USD" ? "USD" : null,
       concepto: concepto || null,
       auto_split: type === "ingreso" ? autoSplit : false,
@@ -2135,12 +2172,69 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave }: { move
         <FormSelect label="Proveedor" value={pid} onChange={setPid}
           options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
       )}
-      {type === "ingreso" && (
+      {type === "ingreso" && (<>
         <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg">
           <input type="checkbox" checked={autoSplit} onChange={e => setAutoSplit(e.target.checked)} className="w-4 h-4" />
           <p className="text-sm font-medium text-green-800">Distribuir 50/50 entre socias</p>
         </div>
-      )}
+        {/* Desglose de ingreso */}
+        <div className={`flex items-center gap-3 p-3 rounded-lg ${desglosar ? "bg-orange-50" : "bg-[#F7F5ED]"}`}>
+          <input type="checkbox" checked={desglosar} onChange={e => { setDesglosar(e.target.checked); if (!e.target.checked) setDesgloseLines([]) }} className="w-4 h-4" />
+          <div>
+            <p className={`text-sm font-medium ${desglosar ? "text-orange-800" : "text-muted-foreground"}`}>Desglosar ingreso entre cuentas</p>
+            {!desglosar && <p className="text-xs text-muted-foreground">Dividir este ingreso en varias cuentas</p>}
+          </div>
+        </div>
+        {desglosar && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-orange-700">Monto total: <strong>{formatCurrency(editAmount)}</strong></p>
+              <button type="button" onClick={() => {
+                const paulaAcct = accounts.find((a: any) => a.owner === "paula")
+                const camiAcct = accounts.find((a: any) => a.owner === "cami")
+                if (paulaAcct && camiAcct) {
+                  const half = String(Math.round(editAmount / 2))
+                  setDesgloseLines([
+                    { accountId: paulaAcct.id, providerId: "", amount: half, desc: "Paula" },
+                    { accountId: camiAcct.id, providerId: "", amount: half, desc: "Cami" },
+                  ])
+                }
+              }} className="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded font-medium hover:bg-green-200">
+                50/50 socias
+              </button>
+            </div>
+            {desgloseLines.map((line, idx) => (
+              <div key={idx} className="space-y-1.5 bg-white/60 rounded-lg p-2.5">
+                <div className="grid grid-cols-[1fr_100px_auto] gap-2 items-end">
+                  <FormSelect label={idx === 0 ? "Cuenta" : ""} value={line.accountId} onChange={v => {
+                    const lines = [...desgloseLines]; lines[idx].accountId = v; setDesgloseLines(lines)
+                  }} options={[{ value: "", label: "Sin cuenta" }, ...accounts.map(a => ({ value: a.id, label: `${a.name}${a.type === "dolares" ? " (U$D)" : ""}` }))]} />
+                  <FormMoneyInput label={idx === 0 ? "Monto" : ""} value={line.amount} onChange={v => {
+                    const lines = [...desgloseLines]; lines[idx].amount = v; setDesgloseLines(lines)
+                  }} />
+                  <button type="button" onClick={() => setDesgloseLines(desgloseLines.filter((_, i) => i !== idx))}
+                    className="p-1.5 text-red-500 hover:bg-red-50 rounded mb-0.5">✕</button>
+                </div>
+                <FormSelect label="" value={line.providerId} onChange={v => {
+                  const lines = [...desgloseLines]; lines[idx].providerId = v; setDesgloseLines(lines)
+                }} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
+              </div>
+            ))}
+            <button type="button" onClick={() => setDesgloseLines([...desgloseLines, { accountId: accounts[0]?.id ?? "", providerId: "", amount: "", desc: "" }])}
+              className="text-xs text-orange-700 font-medium hover:underline">+ Agregar línea</button>
+            {(() => {
+              const totalDesglose = desgloseLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+              const diff = editAmount - totalDesglose
+              return totalDesglose > 0 && (
+                <div className={`text-xs font-semibold ${Math.abs(diff) < 1 ? "text-green-700" : "text-red-600"}`}>
+                  Asignado: {formatCurrency(totalDesglose)} {Math.abs(diff) >= 1 && `(${diff > 0 ? "falta" : "excede"}: ${formatCurrency(Math.abs(diff))})`}
+                  {Math.abs(diff) < 1 && " ✓"}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+      </>)}
       {/* Comprobante */}
       <div className="space-y-2">
         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Comprobante</label>
