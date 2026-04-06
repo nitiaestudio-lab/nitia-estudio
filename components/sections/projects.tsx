@@ -508,7 +508,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
   const [showAddItem, setShowAddItem] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ProjectItem | null>(null)
   const [inlineEditId, setInlineEditId] = useState<string | null>(null)
-  const [inlineEdit, setInlineEdit] = useState<Partial<ProjectItem & { costStr: string; multStr: string }>>({})
+  const [inlineEdit, setInlineEdit] = useState<Partial<ProjectItem & { costStr: string; multStr: string; priceStr: string }>>({})
   const [showManageSections, setShowManageSections] = useState(false)
   const [newSectionName, setNewSectionName] = useState("")
   const [newSectionMult, setNewSectionMult] = useState(true)
@@ -593,10 +593,12 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
               <th className="w-16 py-2"></th></tr></thead>
               <tbody>{si.map(item => {
                 const isEd = inlineEditId === item.id
-                const startEdit = () => { setInlineEditId(item.id); setInlineEdit({ description: item.description, costStr: String(item.cost), multStr: String(item.multiplier), currency: item.currency || "ARS", provider_id: item.provider_id, paid: item.paid }) }
+                const startEdit = () => { setInlineEditId(item.id); setInlineEdit({ description: item.description, costStr: String(item.cost), multStr: String(item.multiplier), priceStr: String(item.client_price), currency: item.currency || "ARS", provider_id: item.provider_id, paid: item.paid }) }
                 const saveEdit = async () => {
                   const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = hm ? (parseFloat(inlineEdit.multStr || "1") || 1) : 1
-                  await updateRow("project_items", item.id, { description: inlineEdit.description, cost: c, client_price: hm ? c * m : c, multiplier: m, currency: inlineEdit.currency, provider_id: inlineEdit.provider_id || null, paid: inlineEdit.paid }, "projectItems")
+                  const directPrice = parseFloat(inlineEdit.priceStr || "0") || 0
+                  const finalPrice = hm ? (directPrice > 0 ? directPrice : c * m) : c
+                  await updateRow("project_items", item.id, { description: inlineEdit.description, cost: c, client_price: finalPrice, multiplier: m, currency: inlineEdit.currency, provider_id: inlineEdit.provider_id || null, paid: inlineEdit.paid }, "projectItems")
                   setInlineEditId(null)
                 }
                 const cancelEdit = () => setInlineEditId(null)
@@ -610,7 +612,7 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
                     <td className="py-1.5 px-1 hidden md:table-cell"><select value={inlineEdit.provider_id ?? ""} onChange={e => setInlineEdit({ ...inlineEdit, provider_id: e.target.value || null })} className="px-1.5 py-0.5 rounded border border-amber-300 text-xs bg-white max-w-[120px]"><option value="">—</option>{data.providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
                     <td className="py-1.5 px-1"><input type="number" value={inlineEdit.costStr ?? ""} onChange={e => setInlineEdit({ ...inlineEdit, costStr: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm text-right bg-white max-w-[100px] ml-auto block" /></td>
                     {hm && <td className="py-1.5 px-1 hidden sm:table-cell"><input type="number" value={inlineEdit.multStr ?? ""} step="0.1" onChange={e => setInlineEdit({ ...inlineEdit, multStr: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm text-right bg-white max-w-[60px] ml-auto block" /></td>}
-                    <td className="py-1.5 px-2 text-right text-sm font-medium text-muted-foreground">{(() => { const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = hm ? (parseFloat(inlineEdit.multStr || "1") || 1) : 1; const fmt = inlineEdit.currency === "USD" ? formatUSD : formatCurrency; return fmt(c * m) })()}</td>
+                    <td className="py-1.5 px-1">{hm ? <input type="number" value={inlineEdit.priceStr ?? ""} placeholder="auto" onChange={e => setInlineEdit({ ...inlineEdit, priceStr: e.target.value })} className="w-full px-1.5 py-0.5 rounded border border-amber-300 text-sm text-right bg-white max-w-[100px] ml-auto block" /> : <span className="text-sm text-muted-foreground text-right block">{(() => { const c = parseFloat(inlineEdit.costStr || "0") || 0; const fmt = inlineEdit.currency === "USD" ? formatUSD : formatCurrency; return fmt(c) })()}</span>}</td>
                     {hm && <td className="py-1.5 px-2 text-right text-sm text-green-600 hidden sm:table-cell">{(() => { const c = parseFloat(inlineEdit.costStr || "0") || 0; const m = parseFloat(inlineEdit.multStr || "1") || 1; const fmt = inlineEdit.currency === "USD" ? formatUSD : formatCurrency; return fmt(c * m - c) })()}</td>}
                     <td className="py-1.5 text-right"><div className="flex gap-1 justify-end">
                       <button onClick={saveEdit} className="p-1 hover:bg-green-100 rounded"><Save size={13} className="text-green-600" /></button>
