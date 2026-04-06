@@ -560,12 +560,14 @@ function DesgloseTab({ project, isFull, canSeeGanancias }: { project: Project; i
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div><label className="text-xs text-muted-foreground">Costo</label>
-            <input type="number" value={project.honorarios_cost || 0} onChange={e => updateRow("projects", project.id, { honorarios_cost: parseFloat(e.target.value) || 0 }, "projects")} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" />
-            <p className="text-[10px] text-muted-foreground mt-0.5">{(project.honorarios_currency ?? "ARS") === "USD" ? formatUSD(project.honorarios_cost ?? 0) : formatCurrency(project.honorarios_cost ?? 0)}</p>
+          <div><label className="text-xs text-muted-foreground">Tipo</label>
+            <input type="text" value={project.honorarios_type || ""} placeholder="Ej: Dirección de obra" onChange={e => updateRow("projects", project.id, { honorarios_type: e.target.value || null }, "projects")} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" />
           </div>
-          <div><label className="text-xs text-muted-foreground">Precio cliente</label>
-            <input type="number" value={project.honorarios_client_price || 0} onChange={e => updateRow("projects", project.id, { honorarios_client_price: parseFloat(e.target.value) || 0 }, "projects")} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" />
+          <div><label className="text-xs text-muted-foreground">Monto</label>
+            <input type="number" value={project.honorarios_client_price || 0} onChange={e => {
+              const val = parseFloat(e.target.value) || 0
+              updateRow("projects", project.id, { honorarios_client_price: val, honorarios_cost: 0 }, "projects")
+            }} className="w-full px-3 py-1.5 rounded border border-[#E0DDD0] text-sm" />
             <p className="text-[10px] text-muted-foreground mt-0.5">{(project.honorarios_currency ?? "ARS") === "USD" ? formatUSD(project.honorarios_client_price ?? 0) : formatCurrency(project.honorarios_client_price ?? 0)}</p>
           </div>
         </div>

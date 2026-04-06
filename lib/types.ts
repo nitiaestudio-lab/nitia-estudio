@@ -41,6 +41,7 @@ export interface Project {
   honorarios_cost?: number
   honorarios_client_price?: number
   honorarios_currency?: string
+  honorarios_type?: string | null
   main_currency?: 'ARS' | 'USD'
   iva_cliente_pct?: number
   iva_ganancia_pct?: number
