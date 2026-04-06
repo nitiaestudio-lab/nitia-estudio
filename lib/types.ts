@@ -137,6 +137,8 @@ export interface Movement {
   sena_cliente_pct?: number | null
   receipt_url?: string | null
   receipt_path?: string | null
+  covers_usd?: number | null
+  covers_tc?: number | null
   created_at?: string
 }
 

@@ -1130,6 +1130,7 @@ function MovimientosTab({ project }: { project: Project }) {
                           <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">Seña</span>
                         )}
                         {mov.medio_pago === "USD" && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">USD</span>}
+                        {mov.covers_usd && mov.covers_usd > 0 && <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded font-medium" title={`TC: $${mov.covers_tc || "?"}`}>Cubre U$D {new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 }).format(mov.covers_usd)}</span>}
                         {mov.receipt_url && (
                           <span className="ml-1 inline-flex items-center group/receipt relative">
                             <a href={mov.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium hover:bg-amber-200" onClick={e => e.stopPropagation()}>📎</a>
@@ -1513,6 +1514,10 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
   const [tcBlue, setTcBlue] = useState(String(data.dollarRate?.sell || ""))
   // Seña tracking
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  // Cobertura USD — pago en pesos que cubre presupuesto en dólares
+  const [coversUsd, setCoversUsd] = useState(false)
+  const [coversUsdAmt, setCoversUsdAmt] = useState("")
+  const [coversTc, setCoversTc] = useState(String(data.dollarRate?.sell || ""))
   // Desglose ingreso
   const [desglosar, setDesglosar] = useState(false)
   const [desgloseLines, setDesgloseLines] = useState<{ accountId: string; providerId: string; amount: string; desc: string }[]>([])
@@ -1596,6 +1601,8 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
       medio_pago: currency === "USD" ? "USD" : null,
       receipt_url: receiptUrl,
       receipt_path: receiptPath,
+      covers_usd: coversUsd ? (parseFloat(coversUsdAmt) || (parseFloat(coversTc) > 0 ? amount / parseFloat(coversTc) : null)) : null,
+      covers_tc: coversUsd ? (parseFloat(coversTc) || null) : null,
     }
 
     // Create secondary movements FIRST (before onSave closes modal)
@@ -1785,6 +1792,43 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
               ? `U$D ${amount.toLocaleString("es-AR")} × $${tcNum.toLocaleString("es-AR")} = ${formatCurrency(amount * tcNum)}`
               : `$${amount.toLocaleString("es-AR")} ÷ $${tcNum.toLocaleString("es-AR")} = U$D ${(tcNum > 0 ? amount / tcNum : 0).toFixed(2)}`}
           </p>
+        </div>
+      )}
+
+      {/* Cobertura USD — pago en pesos que cubre presupuesto en dólares */}
+      {currency === "ARS" && (
+        <div className={`flex items-center gap-3 p-3 rounded-lg ${coversUsd ? "bg-blue-50" : "bg-[#F7F5ED]"}`}>
+          <input type="checkbox" checked={coversUsd} onChange={e => { setCoversUsd(e.target.checked); if (!e.target.checked) setCoversUsdAmt("") }} className="w-4 h-4" />
+          <div>
+            <p className={`text-sm font-medium ${coversUsd ? "text-blue-800" : "text-muted-foreground"}`}>Cubre presupuesto en U$D</p>
+            {!coversUsd && <p className="text-xs text-muted-foreground">Pago en pesos que cubre dólares del presupuesto</p>}
+          </div>
+        </div>
+      )}
+      {coversUsd && currency === "ARS" && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-blue-700 block mb-1">TC del día</label>
+              <input type="number" value={coversTc} onChange={e => setCoversTc(e.target.value)}
+                className="w-full px-3 py-1.5 rounded border border-blue-200 text-sm bg-white" inputMode="decimal" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-blue-700 block mb-1">U$D que cubre</label>
+              <input type="number" value={coversUsdAmt} onChange={e => setCoversUsdAmt(e.target.value)}
+                placeholder={(() => { const tc = parseFloat(coversTc) || 0; return tc > 0 ? `≈ ${(amount / tc).toFixed(2)}` : "" })()}
+                className="w-full px-3 py-1.5 rounded border border-blue-200 text-sm bg-white" inputMode="decimal" />
+            </div>
+          </div>
+          {(() => {
+            const tc = parseFloat(coversTc) || 0
+            const usdAmt = parseFloat(coversUsdAmt) || (tc > 0 ? amount / tc : 0)
+            return usdAmt > 0 && (
+              <p className="text-xs text-blue-700">
+                {formatCurrency(amount)} a TC ${new Intl.NumberFormat("es-AR").format(tc)} = <strong>U$D {new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 }).format(usdAmt)}</strong> del presupuesto
+              </p>
+            )
+          })()}
         </div>
       )}
 
@@ -1994,6 +2038,11 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave }: { move
   const [autoSplit, setAutoSplit] = useState(movement.auto_split ?? false)
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [existingReceipt, setExistingReceipt] = useState(movement.receipt_url || "")
+  const [coversUsd, setCoversUsd] = useState(!!(movement.covers_usd && movement.covers_usd > 0))
+  const [coversUsdAmt, setCoversUsdAmt] = useState(movement.covers_usd ? String(movement.covers_usd) : "")
+  const [coversTc, setCoversTc] = useState(movement.covers_tc ? String(movement.covers_tc) : "")
+
+  const editAmount = parseFloat(amt) || 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -2003,6 +2052,7 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave }: { move
       const result = await uploadFile("documents", `receipts/edit/${Date.now()}_${receiptFile.name}`, receiptFile)
       if (result) { receiptUrl = result.url; receiptPath = result.path }
     }
+    const tcVal = parseFloat(coversTc) || 0
     onSave({
       date, description: desc, amount: parseFloat(amt) || 0, type,
       account_id: aid || null, provider_id: pid || null,
@@ -2010,6 +2060,8 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave }: { move
       concepto: concepto || null,
       auto_split: type === "ingreso" ? autoSplit : false,
       receipt_url: receiptUrl, receipt_path: receiptPath,
+      covers_usd: coversUsd ? (parseFloat(coversUsdAmt) || (tcVal > 0 ? editAmount / tcVal : null)) : null,
+      covers_tc: coversUsd ? (tcVal || null) : null,
     })
   }
 
@@ -2029,6 +2081,32 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave }: { move
         <button type="button" onClick={() => setCurrency("ARS")} className={`px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
         <button type="button" onClick={() => setCurrency("USD")} className={`px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
       </div>
+      {/* Cobertura USD */}
+      {currency === "ARS" && (
+        <div className={`flex items-center gap-3 p-3 rounded-lg ${coversUsd ? "bg-blue-50" : "bg-[#F7F5ED]"}`}>
+          <input type="checkbox" checked={coversUsd} onChange={e => { setCoversUsd(e.target.checked); if (!e.target.checked) setCoversUsdAmt("") }} className="w-4 h-4" />
+          <div>
+            <p className={`text-sm font-medium ${coversUsd ? "text-blue-800" : "text-muted-foreground"}`}>Cubre presupuesto en U$D</p>
+          </div>
+        </div>
+      )}
+      {coversUsd && currency === "ARS" && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-blue-700 block mb-1">TC del día</label>
+              <input type="number" value={coversTc} onChange={e => setCoversTc(e.target.value)}
+                className="w-full px-3 py-1.5 rounded border border-blue-200 text-sm bg-white" inputMode="decimal" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-blue-700 block mb-1">U$D que cubre</label>
+              <input type="number" value={coversUsdAmt} onChange={e => setCoversUsdAmt(e.target.value)}
+                placeholder={(() => { const tc = parseFloat(coversTc) || 0; return tc > 0 ? `≈ ${(editAmount / tc).toFixed(2)}` : "" })()}
+                className="w-full px-3 py-1.5 rounded border border-blue-200 text-sm bg-white" inputMode="decimal" />
+            </div>
+          </div>
+        </div>
+      )}
       <FormSelect label="Concepto" value={concepto} onChange={setConcepto}
         options={[{ value: "", label: "Sin especificar" }, { value: "mano_de_obra", label: "Mano de obra" }, { value: "mobiliario", label: "Mobiliario" }, { value: "material", label: "Materiales" }, { value: "honorarios", label: "Honorarios" }, { value: "varios", label: "Varios" }, { value: "seña", label: "Seña" }]} />
       {type === "egreso" && (
