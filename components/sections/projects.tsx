@@ -1410,19 +1410,27 @@ function AddItemModal({ type, hasMultiplier, defaultMultiplier, providers, onClo
 }) {
   const [desc, setDesc] = useState(""); const [cost, setCost] = useState(""); const [mult, setMult] = useState(hasMultiplier ? String(defaultMultiplier) : "1"); const [prov, setProv] = useState("")
   const [currency, setCurrency] = useState<"ARS" | "USD">("ARS")
-  const c = parseFloat(cost) || 0; const m = hasMultiplier ? (parseFloat(mult) || defaultMultiplier) : 1; const cp = c * m
+  const [absorbed, setAbsorbed] = useState(false)
+  const [directPrice, setDirectPrice] = useState("")
+  const c = parseFloat(cost) || 0; const m = hasMultiplier ? (parseFloat(mult) || defaultMultiplier) : 1
+  const dp = parseFloat(directPrice) || 0
+  const cp = absorbed ? 0 : (dp > 0 ? dp : c * m)
   const fmtAmt = (n: number) => currency === "USD" ? `U$D ${new Intl.NumberFormat("es-AR").format(n)}` : formatCurrency(n)
   return (<Modal isOpen={true} title={`Agregar ${type}`} onClose={onClose}>
-    <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), project_id: "", type: type as any, description: desc, cost: c, client_price: hasMultiplier ? cp : c, multiplier: m, currency, provider_id: prov || null, paid: false, sort_order: 0 })}} className="space-y-4">
+    <form onSubmit={e => { e.preventDefault(); onSave({ id: generateId(), project_id: "", type: type as any, description: desc, cost: c, client_price: cp, multiplier: m, currency, provider_id: prov || null, paid: false, sort_order: 0 })}} className="space-y-4">
       <FormInput label="Descripción" value={desc} onChange={setDesc} />
       <FormSelect label="Proveedor" value={prov} onChange={setProv} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
-      <div className="grid grid-cols-2 gap-4"><FormInput label="Costo" type="number" value={cost} onChange={setCost} inputMode="decimal" />{hasMultiplier && <FormInput label="Multiplicador" type="number" value={mult} onChange={setMult} step="0.1" />}</div>
+      <div className="grid grid-cols-2 gap-4"><FormInput label="Costo" type="number" value={cost} onChange={setCost} inputMode="decimal" />{hasMultiplier && !absorbed && <FormInput label="Multiplicador" type="number" value={mult} onChange={setMult} step="0.1" />}</div>
+      {hasMultiplier && !absorbed && <FormInput label="Precio cliente (opcional, dejar vacío para auto)" type="number" value={directPrice} onChange={setDirectPrice} inputMode="decimal" />}
       <div className="flex rounded-lg border border-[#E0DDD0] overflow-hidden">
         <button type="button" onClick={() => setCurrency("ARS")} className={`flex-1 px-4 py-1.5 text-sm font-medium ${currency === "ARS" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>$ ARS</button>
         <button type="button" onClick={() => setCurrency("USD")} className={`flex-1 px-4 py-1.5 text-sm font-medium ${currency === "USD" ? "bg-[#5F5A46] text-white" : "bg-white text-[#76746A]"}`}>U$D</button>
       </div>
-      <div className="bg-[#F0EDE4] rounded-lg p-4"><div className="flex justify-between"><span className="text-sm text-muted-foreground">Precio cliente:</span><span className="text-lg font-semibold">{fmtAmt(cp)}</span></div>
-        {hasMultiplier ? <p className="text-xs text-muted-foreground mt-1">Ganancia: {fmtAmt(cp - c)}</p> : <p className="text-xs text-muted-foreground mt-1">Sin ganancia</p>}</div>
+      <div className="flex items-center gap-2"><input type="checkbox" checked={absorbed} onChange={e => setAbsorbed(e.target.checked)} className="w-4 h-4" /><label className="text-sm text-muted-foreground">Costo absorbido (no se pasa al cliente)</label></div>
+      <div className="bg-[#F0EDE4] rounded-lg p-4">{absorbed
+        ? <p className="text-sm text-red-600">Costo absorbido: {fmtAmt(c)} (precio cliente: {fmtAmt(0)})</p>
+        : <><div className="flex justify-between"><span className="text-sm text-muted-foreground">Precio cliente:</span><span className="text-lg font-semibold">{fmtAmt(cp)}</span></div>
+        {hasMultiplier ? <p className="text-xs text-muted-foreground mt-1">Ganancia: {fmtAmt(cp - c)}</p> : <p className="text-xs text-muted-foreground mt-1">Sin ganancia</p>}</>}</div>
       <div className="flex justify-end gap-3 pt-4"><Btn variant="ghost" onClick={onClose}>Cancelar</Btn><Btn type="submit" disabled={!desc || !cost}>Agregar</Btn></div>
     </form>
   </Modal>)
