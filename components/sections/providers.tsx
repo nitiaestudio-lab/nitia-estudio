@@ -636,21 +636,34 @@ function ProvEditMovModal({ movement, onClose, onSave }: { movement: Movement; o
       if (result) { receiptUrl = result.url; receiptPath = result.path }
     }
 
-    // Create desglose movements if enabled
+    // Desglose: líneas con proveedor → egreso, sin proveedor → ganancia (solo finanzas personales)
     if (desglosar && desgloseLines.length > 0 && type === "ingreso") {
       for (const line of desgloseLines) {
         const lineAmt = parseFloat(line.amount) || 0
         if (lineAmt <= 0) continue
         const lineAcct = line.accountId ? accounts.find(a => a.id === line.accountId) : null
         const lineProv = line.providerId ? data.providers.find(p => p.id === line.providerId) : null
-        const destLabel = [lineAcct?.name, lineProv?.name].filter(Boolean).join(" / ") || "sin destino"
-        await addMovement({
-          id: generateId(), date, description: `[Desglose] ${desc} → ${destLabel}`,
-          amount: lineAmt, type: "ingreso" as const, project_id: projId || null,
-          account_id: line.accountId || null, provider_id: line.providerId || null,
-          category: "Desglose ingreso", auto_split: false, split_percentage: 0,
-          concepto: concepto || null, medio_pago: currency === "USD" ? "USD" : null,
-        } as Movement)
+
+        if (line.providerId) {
+          // Con proveedor → EGRESO al proveedor
+          const destLabel = [lineAcct?.name, lineProv?.name].filter(Boolean).join(" / ") || "sin destino"
+          await addMovement({
+            id: generateId(), date, description: `[Desglose pago] ${desc} → ${destLabel}`,
+            amount: lineAmt, type: "egreso" as const, project_id: projId || null,
+            account_id: line.accountId || null, provider_id: line.providerId,
+            category: "Desglose proveedor", auto_split: false, split_percentage: 0,
+            concepto: concepto || null, medio_pago: currency === "USD" ? "USD" : null,
+          } as Movement)
+        } else if (lineAcct?.owner && lineAcct.owner !== "nitia") {
+          // Sin proveedor → GANANCIA: solo finanzas personales
+          const projName = data.projects.find(p => p.id === projId)?.name || ""
+          await addRow("personal_finance_movements", {
+            id: generateId(), owner: lineAcct.owner, date,
+            description: `[Ganancia] ${desc}${projName ? ` — ${projName}` : ""}`,
+            amount: lineAmt, type: "ingreso", category: "Ingreso Nitia", is_fixed: false, active: true,
+            medio_pago: currency === "USD" ? "USD" : null, created_by: lineAcct.owner,
+          } as any, "personalFinanceMovements")
+        }
       }
     }
 
@@ -730,11 +743,13 @@ function ProvEditMovModal({ movement, onClose, onSave }: { movement: Movement; o
         <div className={`flex items-center gap-3 p-3 rounded-lg ${desglosar ? "bg-orange-50" : "bg-[#F7F5ED]"}`}>
           <input type="checkbox" checked={desglosar} onChange={e => { setDesglosar(e.target.checked); if (!e.target.checked) setDesgloseLines([]) }} className="w-4 h-4" />
           <div>
-            <p className={`text-sm font-medium ${desglosar ? "text-orange-800" : "text-muted-foreground"}`}>Desglosar ingreso entre cuentas</p>
+            <p className={`text-sm font-medium ${desglosar ? "text-orange-800" : "text-muted-foreground"}`}>Desglosar ingreso</p>
+            {!desglosar && <p className="text-xs text-muted-foreground">Separar pago a proveedor y ganancia</p>}
           </div>
         </div>
         {desglosar && (
           <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
+            <p className="text-[10px] text-orange-600 -mt-1">Con proveedor = pago (egreso) · Sin proveedor = ganancia socias</p>
             <div className="flex items-center justify-between">
               <p className="text-xs text-orange-700">Monto total: <strong>{formatCurrency(editAmount)}</strong></p>
               <button type="button" onClick={() => {
@@ -761,9 +776,14 @@ function ProvEditMovModal({ movement, onClose, onSave }: { movement: Movement; o
                   <button type="button" onClick={() => setDesgloseLines(desgloseLines.filter((_, i) => i !== idx))}
                     className="p-1.5 text-red-500 hover:bg-red-50 rounded mb-0.5">✕</button>
                 </div>
-                <FormSelect label="" value={line.providerId} onChange={v => {
-                  const lines = [...desgloseLines]; lines[idx].providerId = v; setDesgloseLines(lines)
-                }} options={[{ value: "", label: "Sin proveedor" }, ...data.providers.map(p => ({ value: p.id, label: p.name }))]} />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1"><FormSelect label="" value={line.providerId} onChange={v => {
+                    const lines = [...desgloseLines]; lines[idx].providerId = v; setDesgloseLines(lines)
+                  }} options={[{ value: "", label: "Sin proveedor (ganancia)" }, ...data.providers.map(p => ({ value: p.id, label: p.name }))]} /></div>
+                  {line.providerId
+                    ? <span className="text-[10px] text-red-600 font-medium whitespace-nowrap">→ Egreso</span>
+                    : <span className="text-[10px] text-green-600 font-medium whitespace-nowrap">→ Ganancia</span>}
+                </div>
               </div>
             ))}
             <button type="button" onClick={() => setDesgloseLines([...desgloseLines, { accountId: accounts[0]?.id ?? "", providerId: "", amount: "" }])}

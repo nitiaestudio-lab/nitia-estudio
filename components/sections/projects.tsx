@@ -1225,22 +1225,25 @@ function MovimientosTab({ project }: { project: Project }) {
           for (const line of lines) {
             if (line.amount <= 0 && !line.accountId && !line.providerId) continue
             const lineAcct = line.accountId ? data.accounts.find((a: any) => a.id === line.accountId) : null
-            const lineAcctName = lineAcct?.name || ""
             const lineProv = line.providerId ? data.providers.find((p: any) => p.id === line.providerId) : null
-            const lineProvName = lineProv?.name || ""
-            const destLabel = [lineAcctName, lineProvName].filter(Boolean).join(" / ") || "sin destino"
-            await addMovement({
-              id: generateId(), date: editingMovement.date, description: `[Desglose] ${description} → ${destLabel}`,
-              amount: line.amount, type: "ingreso" as const, project_id: project.id,
-              account_id: line.accountId || null, provider_id: line.providerId || null,
-              category: "Desglose ingreso", auto_split: false, split_percentage: 0,
-              concepto: editingMovement.concepto || null,
-              medio_pago: curr === "USD" ? "USD" : null,
-            } as Movement)
-            if (lineAcct?.owner && lineAcct.owner !== "nitia") {
+
+            if (line.providerId) {
+              // Con proveedor → EGRESO al proveedor
+              const destLabel = [lineAcct?.name, lineProv?.name].filter(Boolean).join(" / ") || "sin destino"
+              await addMovement({
+                id: generateId(), date: editingMovement.date,
+                description: `[Desglose pago] ${description} → ${destLabel}`,
+                amount: line.amount, type: "egreso" as const, project_id: project.id,
+                account_id: line.accountId || null, provider_id: line.providerId,
+                category: "Desglose proveedor", auto_split: false, split_percentage: 0,
+                concepto: editingMovement.concepto || null,
+                medio_pago: curr === "USD" ? "USD" : null,
+              } as Movement)
+            } else if (lineAcct?.owner && lineAcct.owner !== "nitia") {
+              // Sin proveedor → GANANCIA: solo finanzas personales
               await addRow("personal_finance_movements", {
                 id: generateId(), owner: lineAcct.owner, date: editingMovement.date,
-                description: `[Desglose] ${description} — ${project.name}`,
+                description: `[Ganancia] ${description} — ${project.name}`,
                 amount: line.amount, type: "ingreso", category: "Ingreso Nitia",
                 is_fixed: false, active: true, medio_pago: curr === "USD" ? "USD" : null,
                 created_by: lineAcct.owner,
@@ -1679,7 +1682,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
       } as Movement)
     }
 
-    // Desglose: create separate movements per account, skip main account_id
+    // Desglose: líneas con proveedor → egreso, sin proveedor → ganancia (solo finanzas personales)
     if (desglosar && desgloseLines.length > 0) {
       for (const line of desgloseLines) {
         const lineAmt = parseFloat(line.amount) || 0
@@ -1688,26 +1691,29 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         const lineAcctName = lineAcct?.name || ""
         const lineProv = line.providerId ? providers.find((p: any) => p.id === line.providerId) : null
         const lineProvName = lineProv?.name || ""
-        const destLabel = [lineAcctName, lineProvName].filter(Boolean).join(" / ") || "sin destino"
-        await addMov({
-          id: generateId(), date, description: `[Desglose] ${finalDesc} → ${destLabel}`,
-          amount: lineAmt, type: "ingreso" as const, project_id: project.id,
-          account_id: line.accountId || null, provider_id: line.providerId || null,
-          category: "Desglose ingreso",
-          auto_split: false, split_percentage: 0, concepto: concepto || null,
-          medio_pago: currency === "USD" ? "USD" : null,
-        } as Movement)
-        // Personal finance record for personal accounts
-        if (lineAcct?.owner && lineAcct.owner !== "nitia") {
+
+        if (line.providerId) {
+          // Con proveedor → EGRESO al proveedor (pago)
+          const destLabel = [lineAcctName, lineProvName].filter(Boolean).join(" / ") || "sin destino"
+          await addMov({
+            id: generateId(), date, description: `[Desglose pago] ${finalDesc} → ${destLabel}`,
+            amount: lineAmt, type: "egreso" as const, project_id: project.id,
+            account_id: line.accountId || null, provider_id: line.providerId,
+            category: "Desglose proveedor",
+            auto_split: false, split_percentage: 0, concepto: concepto || null,
+            medio_pago: currency === "USD" ? "USD" : null,
+          } as Movement)
+        } else if (lineAcct?.owner && lineAcct.owner !== "nitia") {
+          // Sin proveedor → GANANCIA: solo registro en finanzas personales (no duplica ingreso en P&L)
           await addRow("personal_finance_movements", {
-            id: generateId(), owner: lineAcct.owner, date, description: `[Desglose] ${desc} — ${project.name}`,
+            id: generateId(), owner: lineAcct.owner, date,
+            description: `[Ganancia] ${desc} — ${project.name}`,
             amount: lineAmt, type: "ingreso", category: "Ingreso Nitia", is_fixed: false, active: true,
             medio_pago: currency === "USD" ? "USD" : null, created_by: lineAcct.owner,
           } as any, "personalFinanceMovements")
         }
       }
-      // Main movement has no account (it's a project-level record only)
-      mainMov.account_id = null
+      // El movimiento principal mantiene su cuenta (es el ingreso real del cliente)
       onSave(mainMov)
       return
     }
@@ -1903,12 +1909,13 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         <div className={`flex items-center gap-3 p-3 rounded-lg ${desglosar ? "bg-orange-50" : "bg-[#F7F5ED]"}`}>
           <input type="checkbox" checked={desglosar} onChange={e => { setDesglosar(e.target.checked); if (!e.target.checked) setDesgloseLines([]) }} className="w-4 h-4" />
           <div>
-            <p className={`text-sm font-medium ${desglosar ? "text-orange-800" : "text-muted-foreground"}`}>Desglosar ingreso entre cuentas</p>
-            {!desglosar && <p className="text-xs text-muted-foreground">Dividir este ingreso en varias cuentas</p>}
+            <p className={`text-sm font-medium ${desglosar ? "text-orange-800" : "text-muted-foreground"}`}>Desglosar ingreso</p>
+            {!desglosar && <p className="text-xs text-muted-foreground">Separar pago a proveedor y ganancia</p>}
           </div>
         </div>
         {desglosar && (
           <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
+            <p className="text-[10px] text-orange-600 -mt-1">Con proveedor = pago (egreso) · Sin proveedor = ganancia socias</p>
             <div className="flex items-center justify-between">
               <p className="text-xs text-orange-700">Monto total: <strong>{formatCurrency(amount)}</strong></p>
               <div className="flex gap-2">
@@ -1939,9 +1946,14 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
                   <button type="button" onClick={() => setDesgloseLines(desgloseLines.filter((_, i) => i !== idx))}
                     className="p-1.5 text-red-500 hover:bg-red-50 rounded mb-0.5">✕</button>
                 </div>
-                <FormSelect label="" value={line.providerId} onChange={v => {
-                  const lines = [...desgloseLines]; lines[idx].providerId = v; setDesgloseLines(lines)
-                }} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1"><FormSelect label="" value={line.providerId} onChange={v => {
+                    const lines = [...desgloseLines]; lines[idx].providerId = v; setDesgloseLines(lines)
+                  }} options={[{ value: "", label: "Sin proveedor (ganancia)" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} /></div>
+                  {line.providerId
+                    ? <span className="text-[10px] text-red-600 font-medium whitespace-nowrap">→ Egreso</span>
+                    : <span className="text-[10px] text-green-600 font-medium whitespace-nowrap">→ Ganancia</span>}
+                </div>
               </div>
             ))}
             <button type="button" onClick={() => setDesgloseLines([...desgloseLines, { accountId: accounts[0]?.id ?? "", providerId: "", amount: "", desc: "" }])}
@@ -2110,7 +2122,7 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave, onAddDes
     }
     onSave({
       date, description: desc, amount: parseFloat(amt) || 0, type,
-      account_id: desglosar && desgloseLines.length > 0 ? null : (aid || null),
+      account_id: aid || null,
       provider_id: pid || null,
       medio_pago: currency === "USD" ? "USD" : null,
       concepto: concepto || null,
@@ -2181,12 +2193,13 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave, onAddDes
         <div className={`flex items-center gap-3 p-3 rounded-lg ${desglosar ? "bg-orange-50" : "bg-[#F7F5ED]"}`}>
           <input type="checkbox" checked={desglosar} onChange={e => { setDesglosar(e.target.checked); if (!e.target.checked) setDesgloseLines([]) }} className="w-4 h-4" />
           <div>
-            <p className={`text-sm font-medium ${desglosar ? "text-orange-800" : "text-muted-foreground"}`}>Desglosar ingreso entre cuentas</p>
-            {!desglosar && <p className="text-xs text-muted-foreground">Dividir este ingreso en varias cuentas</p>}
+            <p className={`text-sm font-medium ${desglosar ? "text-orange-800" : "text-muted-foreground"}`}>Desglosar ingreso</p>
+            {!desglosar && <p className="text-xs text-muted-foreground">Separar pago a proveedor y ganancia</p>}
           </div>
         </div>
         {desglosar && (
           <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
+            <p className="text-[10px] text-orange-600 -mt-1">Con proveedor = pago (egreso) · Sin proveedor = ganancia socias</p>
             <div className="flex items-center justify-between">
               <p className="text-xs text-orange-700">Monto total: <strong>{formatCurrency(editAmount)}</strong></p>
               <button type="button" onClick={() => {
@@ -2215,9 +2228,14 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave, onAddDes
                   <button type="button" onClick={() => setDesgloseLines(desgloseLines.filter((_, i) => i !== idx))}
                     className="p-1.5 text-red-500 hover:bg-red-50 rounded mb-0.5">✕</button>
                 </div>
-                <FormSelect label="" value={line.providerId} onChange={v => {
-                  const lines = [...desgloseLines]; lines[idx].providerId = v; setDesgloseLines(lines)
-                }} options={[{ value: "", label: "Sin proveedor" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1"><FormSelect label="" value={line.providerId} onChange={v => {
+                    const lines = [...desgloseLines]; lines[idx].providerId = v; setDesgloseLines(lines)
+                  }} options={[{ value: "", label: "Sin proveedor (ganancia)" }, ...providers.map(p => ({ value: p.id, label: p.name }))]} /></div>
+                  {line.providerId
+                    ? <span className="text-[10px] text-red-600 font-medium whitespace-nowrap">→ Egreso</span>
+                    : <span className="text-[10px] text-green-600 font-medium whitespace-nowrap">→ Ganancia</span>}
+                </div>
               </div>
             ))}
             <button type="button" onClick={() => setDesgloseLines([...desgloseLines, { accountId: accounts[0]?.id ?? "", providerId: "", amount: "", desc: "" }])}
