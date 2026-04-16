@@ -63,8 +63,8 @@ export function Projects() {
           return <Stat label="Total Presupuestado" ars={totalARS} usd={totalUSD} highlight />
         })()}
         {(() => {
-          const cobARS = data.movements.filter(m => m.project_id && m.type === "ingreso" && m.medio_pago !== "USD" && m.category !== "Ganancia desglose").reduce((s, m) => s + m.amount, 0)
-          const cobUSD = data.movements.filter(m => m.project_id && m.type === "ingreso" && m.medio_pago === "USD" && m.category !== "Ganancia desglose").reduce((s, m) => s + m.amount, 0)
+          const cobARS = data.movements.filter(m => m.project_id && m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+          const cobUSD = data.movements.filter(m => m.project_id && m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
           return <Stat label="Total Cobrado" ars={cobARS} usd={cobUSD} />
         })()}
         <Stat label="Pausados" value={data.projects.filter(p => p.status === "pausado").length} />
@@ -72,7 +72,7 @@ export function Projects() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map(project => {
           const clientBC = projectClientPriceByCurrency(project, data.projectItems, data.quoteComparisons)
-          const pMovs = data.movements.filter(m => m.project_id === project.id && m.type === "ingreso" && m.category !== "Ganancia desglose")
+          const pMovs = data.movements.filter(m => m.project_id === project.id && m.type === "ingreso")
           const incomeARS = pMovs.filter(m => m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
           const incomeUSD = pMovs.filter(m => m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
           const covUSD = pMovs.filter(m => m.medio_pago !== "USD" && m.covers_usd && m.covers_usd > 0).reduce((s, m) => s + (m.covers_usd || 0), 0)
@@ -201,8 +201,8 @@ function BalancePanel({ project }: { project: Project }) {
 
   const projMovs = data.movements.filter(m => m.project_id === project.id)
   // Excluir "Ganancia desglose" del ingreso para no duplicar (ya está contabilizada en el ingreso principal)
-  const incomeARS = projMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD" && m.category !== "Ganancia desglose").reduce((s, m) => s + m.amount, 0)
-  const incomeUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD" && m.category !== "Ganancia desglose").reduce((s, m) => s + m.amount, 0)
+  const incomeARS = projMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+  const incomeUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
   // Cobertura cruzada: pagos ARS que cubren USD y viceversa
   const coversUsdFromARS = projMovs.filter(m => m.type === "ingreso" && m.medio_pago !== "USD" && m.covers_usd && m.covers_usd > 0).reduce((s, m) => s + (m.covers_usd || 0), 0)
   const coversARSFromUSD = projMovs.filter(m => m.type === "ingreso" && m.medio_pago === "USD" && m.covers_usd && m.covers_usd > 0).reduce((s, m) => s + (m.covers_usd || 0), 0)
@@ -1023,11 +1023,11 @@ function MovimientosTab({ project }: { project: Project }) {
   const cancelEdit = () => setEditingCell(null)
 
   const arsMovs = movs.filter(m => m.medio_pago !== "USD")
-  const totalIngresos = arsMovs.filter(m => m.type === "ingreso" && m.category !== "Ganancia desglose").reduce((s, m) => s + m.amount, 0)
+  const totalIngresos = arsMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
   const totalEgresos = arsMovs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
   const balance = totalIngresos - totalEgresos
   const usdMovs = movs.filter(m => m.medio_pago === "USD")
-  const usdIngresos = usdMovs.filter(m => m.type === "ingreso" && m.category !== "Ganancia desglose").reduce((s, m) => s + m.amount, 0)
+  const usdIngresos = usdMovs.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0)
   const usdEgresos = usdMovs.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0)
   const usdBalance = usdIngresos - usdEgresos
 
@@ -1235,31 +1235,21 @@ function MovimientosTab({ project }: { project: Project }) {
                 id: generateId(), date: editingMovement.date,
                 description: `[Desglose pago] ${description} → ${destLabel}`,
                 amount: line.amount, type: "egreso" as const, project_id: project.id,
-                account_id: line.accountId || null, provider_id: line.providerId,
+                account_id: editingMovement.account_id || line.accountId || null,
+                provider_id: line.providerId,
                 category: "Desglose proveedor", auto_split: false, split_percentage: 0,
                 concepto: editingMovement.concepto || null,
                 medio_pago: curr === "USD" ? "USD" : null,
               } as Movement)
-            } else {
-              // Sin proveedor → GANANCIA: ingreso a la cuenta + finanzas personales
-              await addMovement({
-                id: generateId(), date: editingMovement.date,
-                description: `[Ganancia] ${description} → ${lineAcct?.name || "sin cuenta"}`,
-                amount: line.amount, type: "ingreso" as const, project_id: project.id,
-                account_id: line.accountId || null, provider_id: null,
-                category: "Ganancia desglose", auto_split: false, split_percentage: 0,
-                concepto: editingMovement.concepto || null,
-                medio_pago: curr === "USD" ? "USD" : null,
-              } as Movement)
-              if (lineAcct?.owner && lineAcct.owner !== "nitia") {
-                await addRow("personal_finance_movements", {
-                  id: generateId(), owner: lineAcct.owner, date: editingMovement.date,
-                  description: `[Ganancia] ${description} — ${project.name}`,
-                  amount: line.amount, type: "ingreso", category: "Ingreso Nitia",
-                  is_fixed: false, active: true, medio_pago: curr === "USD" ? "USD" : null,
-                  created_by: lineAcct.owner,
-                } as any, "personalFinanceMovements")
-              }
+            } else if (lineAcct?.owner && lineAcct.owner !== "nitia") {
+              // Sin proveedor → GANANCIA: solo finanzas personales (la plata ya está en la cuenta del ingreso)
+              await addRow("personal_finance_movements", {
+                id: generateId(), owner: lineAcct.owner, date: editingMovement.date,
+                description: `[Ganancia] ${description} — ${project.name}`,
+                amount: line.amount, type: "ingreso", category: "Ingreso Nitia",
+                is_fixed: false, active: true, medio_pago: curr === "USD" ? "USD" : null,
+                created_by: lineAcct.owner,
+              } as any, "personalFinanceMovements")
             }
           }
         }} />}
@@ -1319,8 +1309,8 @@ function ProjectProfileModal({ project, isFull, canSeeGanancias, onClose, onEdit
   const totalClient = clientBC.ars; const totalClientUSD = clientBC.usd
   const totalGanancia = ganBC.ars; const totalGananciaUSD = ganBC.usd
   const projectMoves = data.movements.filter(m => m.project_id === project.id)
-  const income = projectMoves.filter(m => m.type === "ingreso" && m.medio_pago !== "USD" && m.category !== "Ganancia desglose").reduce((s, m) => s + m.amount, 0)
-  const incomeUSD = projectMoves.filter(m => m.type === "ingreso" && m.medio_pago === "USD" && m.category !== "Ganancia desglose").reduce((s, m) => s + m.amount, 0)
+  const income = projectMoves.filter(m => m.type === "ingreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
+  const incomeUSD = projectMoves.filter(m => m.type === "ingreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
   const expenses = projectMoves.filter(m => m.type === "egreso" && m.medio_pago !== "USD").reduce((s, m) => s + m.amount, 0)
   const expensesUSD = projectMoves.filter(m => m.type === "egreso" && m.medio_pago === "USD").reduce((s, m) => s + m.amount, 0)
   const projectItems = data.projectItems.filter(i => i.project_id === project.id)
@@ -1694,7 +1684,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
       } as Movement)
     }
 
-    // Desglose: líneas con proveedor → egreso, sin proveedor → ganancia (impacta cuenta + finanzas personales)
+    // Desglose: líneas con proveedor → egreso, sin proveedor → ganancia (solo finanzas personales)
     if (desglosar && desgloseLines.length > 0) {
       for (const line of desgloseLines) {
         const lineAmt = parseFloat(line.amount) || 0
@@ -1705,27 +1695,18 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
         const lineProvName = lineProv?.name || ""
 
         if (line.providerId) {
-          // Con proveedor → EGRESO al proveedor (pago)
+          // Con proveedor → EGRESO al proveedor (pago real, sale de la cuenta del ingreso principal)
           const destLabel = [lineAcctName, lineProvName].filter(Boolean).join(" / ") || "sin destino"
           await addMov({
             id: generateId(), date, description: `[Desglose pago] ${finalDesc} → ${destLabel}`,
             amount: lineAmt, type: "egreso" as const, project_id: project.id,
-            account_id: line.accountId || null, provider_id: line.providerId,
+            account_id: aid || line.accountId || null, provider_id: line.providerId,
             category: "Desglose proveedor",
             auto_split: false, split_percentage: 0, concepto: concepto || null,
             medio_pago: currency === "USD" ? "USD" : null,
           } as Movement)
         } else {
-          // Sin proveedor → GANANCIA: ingreso a la cuenta (impacta saldo) + finanzas personales
-          await addMov({
-            id: generateId(), date, description: `[Ganancia] ${finalDesc} → ${lineAcctName || "sin cuenta"}`,
-            amount: lineAmt, type: "ingreso" as const, project_id: project.id,
-            account_id: line.accountId || null, provider_id: null,
-            category: "Ganancia desglose",
-            auto_split: false, split_percentage: 0, concepto: concepto || null,
-            medio_pago: currency === "USD" ? "USD" : null,
-          } as Movement)
-          // También registro en finanzas personales
+          // Sin proveedor → GANANCIA: registro en finanzas personales (la plata ya está en la cuenta del ingreso)
           if (lineAcct?.owner && lineAcct.owner !== "nitia") {
             await addRow("personal_finance_movements", {
               id: generateId(), owner: lineAcct.owner, date,
@@ -1736,8 +1717,7 @@ function AddMovModal({ project, accounts, providers, onClose, onSave }: { projec
           }
         }
       }
-      // El movimiento principal NO tiene cuenta (las líneas del desglose manejan las cuentas)
-      mainMov.account_id = null
+      // El movimiento principal MANTIENE su cuenta (es donde entró la plata realmente)
       onSave(mainMov)
       return
     }
@@ -2146,7 +2126,7 @@ function EditMovModal({ movement, accounts, providers, onClose, onSave, onAddDes
     }
     onSave({
       date, description: desc, amount: parseFloat(amt) || 0, type,
-      account_id: (desglosar && desgloseLines.length > 0) ? null : (aid || null),
+      account_id: aid || null,
       provider_id: pid || null,
       medio_pago: currency === "USD" ? "USD" : null,
       concepto: concepto || null,
