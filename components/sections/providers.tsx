@@ -636,7 +636,7 @@ function ProvEditMovModal({ movement, onClose, onSave }: { movement: Movement; o
       if (result) { receiptUrl = result.url; receiptPath = result.path }
     }
 
-    // Desglose: líneas con proveedor → egreso, sin proveedor → ganancia (solo finanzas personales)
+    // Desglose: líneas con proveedor → egreso, sin proveedor → ganancia (impacta cuenta + finanzas personales)
     if (desglosar && desgloseLines.length > 0 && type === "ingreso") {
       for (const line of desgloseLines) {
         const lineAmt = parseFloat(line.amount) || 0
@@ -654,15 +654,24 @@ function ProvEditMovModal({ movement, onClose, onSave }: { movement: Movement; o
             category: "Desglose proveedor", auto_split: false, split_percentage: 0,
             concepto: concepto || null, medio_pago: currency === "USD" ? "USD" : null,
           } as Movement)
-        } else if (lineAcct?.owner && lineAcct.owner !== "nitia") {
-          // Sin proveedor → GANANCIA: solo finanzas personales
+        } else {
+          // Sin proveedor → GANANCIA: ingreso a la cuenta + finanzas personales
           const projName = data.projects.find(p => p.id === projId)?.name || ""
-          await addRow("personal_finance_movements", {
-            id: generateId(), owner: lineAcct.owner, date,
-            description: `[Ganancia] ${desc}${projName ? ` — ${projName}` : ""}`,
-            amount: lineAmt, type: "ingreso", category: "Ingreso Nitia", is_fixed: false, active: true,
-            medio_pago: currency === "USD" ? "USD" : null, created_by: lineAcct.owner,
-          } as any, "personalFinanceMovements")
+          await addMovement({
+            id: generateId(), date, description: `[Ganancia] ${desc} → ${lineAcct?.name || "sin cuenta"}`,
+            amount: lineAmt, type: "ingreso" as const, project_id: projId || null,
+            account_id: line.accountId || null, provider_id: null,
+            category: "Ganancia desglose", auto_split: false, split_percentage: 0,
+            concepto: concepto || null, medio_pago: currency === "USD" ? "USD" : null,
+          } as Movement)
+          if (lineAcct?.owner && lineAcct.owner !== "nitia") {
+            await addRow("personal_finance_movements", {
+              id: generateId(), owner: lineAcct.owner, date,
+              description: `[Ganancia] ${desc}${projName ? ` — ${projName}` : ""}`,
+              amount: lineAmt, type: "ingreso", category: "Ingreso Nitia", is_fixed: false, active: true,
+              medio_pago: currency === "USD" ? "USD" : null, created_by: lineAcct.owner,
+            } as any, "personalFinanceMovements")
+          }
         }
       }
     }
